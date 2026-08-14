@@ -406,13 +406,11 @@ definition remain valid because each has its own closure.
 
 Runtime execution refuses an idempotent request if metadata is missing rather
 than falling back to the raw URL and silently changing storage identity. During
-build-time discovery, a route whose source conservatively appears to use the
-`idempotency` API must be evaluated successfully; the safety check covers
-property, bracket, whitespace, and comment-separated call forms. If Jiti
-evaluation fails, the module reports a build error instead of using the
-operation-only source fallback, because callbacks and metadata cannot be
-reconstructed safely. Route modules may import resolver functions but must not
-create storage clients or connections at top level.
+build-time discovery, every endpoint route must be evaluated successfully. If
+Jiti evaluation fails, or evaluated exports do not expose endpoint metadata,
+the module reports a build error because callbacks and metadata cannot be
+reconstructed safely from source text. Route modules may import resolver
+functions but must not create storage clients or connections at top level.
 
 ## Completion and failure policy
 

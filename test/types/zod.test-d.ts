@@ -3,14 +3,6 @@ import { z } from 'zod'
 import { defineEndpoint, defineEndpointHandler } from '../../src/runtime'
 import type { EndpointClient } from '../../src/runtime'
 
-declare module 'nitropack/types' {
-  interface InternalApi {
-    '/api/users/:id': {
-      get: { id: number; name: string }
-    }
-  }
-}
-
 type Client = EndpointClient<{
   path: '/api/users/:id'
   method: 'get'

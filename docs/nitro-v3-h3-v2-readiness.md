@@ -2,7 +2,7 @@
 
 Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
 
-Last verified: 2026-07-22
+Last verified: 2026-08-14
 
 ## Current support boundary
 
@@ -44,16 +44,17 @@ export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
 
 ## Completed preparation
 
-| Area                       | Current boundary                                                                                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| H3 runtime calls           | [`src/runtime/h3-runtime.ts`](../src/runtime/h3-runtime.ts) is the only production runtime file that imports H3 directly.               |
-| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                   |
-| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                       |
-| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape. |
-| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.   |
-| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                |
-| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                       |
-| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                     |
+| Area                       | Current boundary                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| H3 runtime calls           | [`src/runtime/h3-runtime.ts`](../src/runtime/h3-runtime.ts) is the only production runtime file that imports H3 directly.                                                      |
+| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                          |
+| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                              |
+| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                        |
+| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                          |
+| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                       |
+| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                              |
+| Client JSON wire types     | [`src/runtime/wire.ts`](../src/runtime/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`. |
+| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                            |
 
 The current Nitro 2/H3 1 implementation is covered by unit, type, build, and
 Nuxt end-to-end tests.
@@ -116,6 +117,12 @@ Other migration work:
   and H3 v2 verification;
 - ensure only one compatible H3 runtime is resolved into the server build.
 
+## Nuxt 5 typed-fetch boundary
+
+Nuxt Endpoints does not use Nitro 2 `InternalApi` as the source of request contracts or status-specific responses. It uses endpoint metadata for that richer surface and verifies that the successful JSON wire projection agrees with `InternalApi`.
+
+For Nuxt 5, the preferred path is to contribute endpoint metadata to Nuxt's `fetchdts`-based schema through a public module extension API. If no such hook is exposed, the module keeps its contract schema and may consume `fetchdts` utilities internally. See [Type Generation, Wire Responses, and Nuxt 5](./type-generation.md) for the current flow and acceptance conditions.
+
 ## Acceptance checklist
 
 - Existing endpoint handlers continue to return plain values without adopting
@@ -128,4 +135,5 @@ Other migration work:
 - Idempotency receives the final route method and route template.
 - The OpenAPI route is registered once and contains all endpoint operations.
 - Ordinary Nitro handlers are not mistaken for endpoint handlers.
+- Successful JSON client bodies match the platform's typed-fetch projection, including serialization boundaries such as `Date`.
 - Unit, type, build, and Nuxt end-to-end tests pass on every supported major.

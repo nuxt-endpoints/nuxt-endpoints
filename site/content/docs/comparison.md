@@ -16,11 +16,15 @@ Nuxt already infers server route return types for `$fetch`. What it does not pro
 
 Nuxt Endpoints keeps that workflow — routes stay ordinary files under `server/api`, and plain `$fetch` continues to work — and adds the contract on top for the routes that opt in. See [Incremental Adoption](/docs/incremental-adoption).
 
+On the current Nitro 2 support line, Nuxt Endpoints generates its richer contract types independently, then applies Nitro's JSON wire mapping to client responses. Integration tests compare every generated endpoint success body directly with Nitro's generated `InternalApi`. Status-specific non-2xx bodies remain available through `.result()` and `.raw()` because they are outside `InternalApi`'s success-return model.
+
 ## Nuxt typed fetch and fetchdts
 
 Nuxt's typed-fetch work and [`fetchdts`](https://github.com/unjs/fetchdts) are complementary to endpoint contracts. `fetchdts` is a type-generation engine, not by itself a Nuxt route declaration API: the detail it can generate depends on the contract metadata supplied by its integration.
 
 Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. Nuxt Endpoints owns that executable route contract. It can adopt a different typed-fetch generator later without changing what `defineEndpoint` means.
+
+The preferred Nuxt 5 direction is to contribute endpoint metadata to Nuxt's generated fetch schema through a public module hook, then let Nuxt clients and Nuxt Endpoints consume the same successful response projection. Until that hook and implementation exist, this is a migration direction rather than a Nuxt 5 support claim.
 
 ## tRPC
 

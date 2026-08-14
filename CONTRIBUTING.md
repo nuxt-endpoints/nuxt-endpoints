@@ -7,6 +7,7 @@ Thanks for your interest in contributing! The project is in early alpha, so issu
 - `src/` — the Nuxt module and its runtime (`src/runtime/`).
 - `playground/` — a Nuxt app used for manual testing (`vp run dev`).
 - `site/` — the documentation site (`vp run site:dev`).
+- `docs/` — maintainer architecture, migration, and release notes.
 - `test/` — unit tests and the Nuxt integration test fixture.
 
 ## Getting set up
@@ -45,7 +46,8 @@ vp run fmt             # apply formatting
 - Keep pull requests focused on one change. Small PRs get reviewed quickly.
 - Add or update tests for behavior changes; the integration fixture in `test/` verifies route discovery, generated types, client typing, runtime responses, and OpenAPI output.
 - Public API is not stable yet (pre-1.0). Breaking-change proposals are fine, but open an issue first so the design can be discussed.
-- Documentation lives in `site/content/docs/` and the README. Doc-only PRs are welcome.
+- User documentation lives in `site/content/docs/` and the README. Maintainer
+  architecture and migration notes live in `docs/`. Doc-only PRs are welcome.
 
 ## Reporting bugs
 

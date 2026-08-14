@@ -47,3 +47,5 @@ defineEndpoint({
   response: v.object({ id: Id }), // OpenAPI response schema: number
 })
 ```
+
+Response validation uses the validator output on the server. Generated clients then apply the JSON wire mapping used by the supported Nitro line. A response output containing `Date`, for example, is validated as `Date` but exposed to clients as `string`. Request inputs, server outputs, and client wire values are distinct boundaries.

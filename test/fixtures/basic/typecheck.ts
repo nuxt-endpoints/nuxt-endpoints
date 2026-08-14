@@ -82,6 +82,11 @@ async function checkClient() {
   const search = await client('/api/search', { method: 'get', query: { q: 'nuxt' } })
   search.items[0]?.toUpperCase()
 
+  const serialized = await client('getSerialized')
+  serialized.createdAt.toUpperCase()
+  // @ts-expect-error Date is serialized to a string on the HTTP wire.
+  serialized.createdAt.getTime()
+
   // @ts-expect-error operation calls are generated only when operation is declared.
   await client('search', { query: { q: 'nuxt' } })
 

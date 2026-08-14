@@ -11,27 +11,33 @@ Nuxt Endpoints currently targets Nuxt 4.5+ with Nitro 2 and H3 1. Nuxt 5, Nitro 
 
 ## Install
 
-Install with Zod:
+Add Nuxt Endpoints through the Nuxt CLI:
 
 ```bash
-vp add nuxt-endpoints zod
+npx nuxt module add nuxt-endpoints
+```
+
+Then install Zod:
+
+```bash
+npm install zod
 ```
 
 Install with Valibot:
 
 ```bash
-vp add nuxt-endpoints valibot
+npm install valibot
 ```
 
 Install with Effect Schema:
 
 ```bash
-vp add nuxt-endpoints effect
+npm install effect
 ```
 
 ## Configure Nuxt
 
-Add `nuxt-endpoints` to `modules`. The generated OpenAPI route and optional client helpers can be configured through `endpoints`.
+The Nuxt CLI adds `nuxt-endpoints` to `modules`. The generated OpenAPI route and optional client helpers can be configured through `endpoints`.
 
 ```ts
 export default defineNuxtConfig({

@@ -1,5 +1,4 @@
 import type {
-  DeepMutable,
   EndpointClientOptions,
   EndpointClientOptionsAreOptional,
   EndpointDefinition,
@@ -14,6 +13,7 @@ import type {
   UnknownIfNever,
 } from './contract'
 import type { StatusResponse } from './response'
+import type { EndpointWireValue } from './wire'
 
 export type EndpointRouteEntry = {
   path: string
@@ -337,7 +337,7 @@ export type EndpointResultValue<RESPONSES extends EndpointResponsesContract> = [
         ? {
             status: STATUS_NUMBER
             ok: IsSuccessStatus<STATUS_NUMBER>
-            body: ResponseBody<RESPONSES[STATUS]>
+            body: EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
             headers: Headers
           }
         : never
@@ -356,7 +356,7 @@ export type EndpointResultDataValue<RESPONSES extends EndpointResponsesContract>
         ? {
             status: STATUS_NUMBER
             ok: IsSuccessStatus<STATUS_NUMBER>
-            body: ResponseBody<RESPONSES[STATUS]>
+            body: EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
           }
         : never
     }[keyof RESPONSES]
@@ -370,7 +370,7 @@ export type EndpointRawResponseValue<RESPONSES extends EndpointResponsesContract
         ? TypedRawResponse<
             STATUS_NUMBER,
             IsSuccessStatus<STATUS_NUMBER>,
-            ResponseBody<RESPONSES[STATUS]>
+            EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
           >
         : never
     }[keyof RESPONSES]
@@ -386,7 +386,7 @@ export type TypedRawResponse<STATUS extends number, OK extends boolean, BODY> = 
 
 export type RouteResponseBody<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
-    ? EndpointSuccessBody<ROUTE['definition']>
+    ? EndpointWireValue<EndpointSuccessBody<ROUTE['definition']>>
     : InferredHandlerSuccessBody<RouteHandlerReturn<ROUTE>>
 
 type RouteHandlerReturn<ROUTE extends EndpointRouteEntry> = ROUTE extends {
@@ -405,13 +405,13 @@ type InferredHandlerSuccessBody<HANDLER_RETURN> = UnknownIfNever<
 type InferredDirectSuccessBody<VALUE> = VALUE extends unknown
   ? VALUE extends StatusResponse<number, unknown> | Response | void | undefined
     ? never
-    : DeepMutable<VALUE>
+    : EndpointWireValue<VALUE>
   : never
 
 type InferredStatusSuccessBody<VALUE> =
   VALUE extends StatusResponse<infer STATUS extends number, infer BODY>
     ? IsSuccessStatus<STATUS> extends true
-      ? DeepMutable<BODY>
+      ? EndpointWireValue<BODY>
       : never
     : never
 
@@ -438,12 +438,12 @@ type InferredEndpointRawResponseValue<HANDLER_RETURN> = UnknownRawResponseIfNeve
 type InferredDirectResult<VALUE, WITH_HEADERS extends boolean> = VALUE extends unknown
   ? VALUE extends StatusResponse<number, unknown> | Response | void | undefined
     ? never
-    : InferredResult<200, true, DeepMutable<VALUE>, WITH_HEADERS>
+    : InferredResult<200, true, EndpointWireValue<VALUE>, WITH_HEADERS>
   : never
 
 type InferredStatusResult<VALUE, WITH_HEADERS extends boolean> =
   VALUE extends StatusResponse<infer STATUS extends number, infer BODY>
-    ? InferredResult<STATUS, IsSuccessStatus<STATUS>, DeepMutable<BODY>, WITH_HEADERS>
+    ? InferredResult<STATUS, IsSuccessStatus<STATUS>, EndpointWireValue<BODY>, WITH_HEADERS>
     : never
 
 type InferredNativeResponseResult<VALUE, WITH_HEADERS extends boolean> = VALUE extends Response
@@ -471,12 +471,12 @@ type InferredResult<
 type InferredDirectRawResponse<VALUE> = VALUE extends unknown
   ? VALUE extends StatusResponse<number, unknown> | Response | void | undefined
     ? never
-    : TypedRawResponse<200, true, DeepMutable<VALUE>>
+    : TypedRawResponse<200, true, EndpointWireValue<VALUE>>
   : never
 
 type InferredStatusRawResponse<VALUE> =
   VALUE extends StatusResponse<infer STATUS extends number, infer BODY>
-    ? TypedRawResponse<STATUS, IsSuccessStatus<STATUS>, DeepMutable<BODY>>
+    ? TypedRawResponse<STATUS, IsSuccessStatus<STATUS>, EndpointWireValue<BODY>>
     : never
 
 type InferredNativeRawResponse<VALUE> = VALUE extends Response

@@ -1,6 +1,6 @@
 {
   "name": "nuxt-endpoints",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Runtime-validated contracts, status-typed clients, and OpenAPI for Nuxt server routes.",
   "keywords": [
     "api-contract",

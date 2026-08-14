@@ -9,6 +9,8 @@ The generated client exposes each route call with a few response shapes. Pick th
 
 Awaiting the call directly returns the declared success body. This is the smallest shape for UI code that only cares about a successful result.
 
+All JSON response helpers expose wire types. For example, a server response schema whose output contains `Date` is validated as `Date` in the handler and received as `string` by the client. The same conversion applies to status-specific error bodies.
+
 ```ts
 const user = await $endpoint('/api/users/:id', {
   method: 'get',
@@ -54,7 +56,7 @@ if (result.value?.status === 404) {
 
 ## Raw Web Response
 
-Use `.raw()` when code needs a native `Response` shape, such as streaming, headers-first logic, or passing the result into lower-level utilities. The `json()` return type still follows the endpoint response schema.
+Use `.raw()` when code needs a native `Response` shape, such as streaming, headers-first logic, or passing the result into lower-level utilities. For contracted JSON responses, the `json()` return type follows the serialized wire representation of the endpoint response schema.
 
 ```ts
 const response = await $endpoint('/api/users/:id', {

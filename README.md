@@ -95,22 +95,29 @@ if (result.status === 404) {
 Requires Nuxt 4.5 or newer on the Nitro 2 / H3 1 platform line. Nuxt 5, Nitro 3, and H3 2 support is not claimed yet.
 
 ```bash
-vp add nuxt-endpoints zod
+npx nuxt module add nuxt-endpoints
+```
+
+Then install the schema library used by your endpoint definitions. For Zod:
+
+```bash
+npm install zod
 ```
 
 Valibot and Effect Schema are also supported:
 
 ```bash
-vp add nuxt-endpoints valibot
+npm install valibot
 # or
-vp add nuxt-endpoints effect
+npm install effect
 ```
 
 `zod`, `valibot`, and `effect` are optional peer dependencies. Install the schema library you use in your endpoint definitions.
 
 ## Setup
 
-Add the module to `nuxt.config.ts`:
+The Nuxt CLI command adds the module to `nuxt.config.ts`. Configure its options
+there as needed:
 
 ```ts
 export default defineNuxtConfig({
@@ -254,7 +261,7 @@ const user = await $endpoint('/api/users/:id', {
 </script>
 ```
 
-The default call is a data client: `await` returns the success body and non-2xx responses follow `$fetch` error behavior.
+The default call is a data client: `await` returns the serialized success body and non-2xx responses follow `$fetch` error behavior. Response validation uses the schema output on the server; the client type follows the JSON wire representation, so a schema output such as `Date` is received as `string`.
 
 Add `operation` when you want a named call target such as `$endpoint('getUser', ...)`.
 
@@ -320,7 +327,7 @@ if (response.status === 200) {
 }
 ```
 
-The client input type is inferred from the endpoint request schema. The client response type is inferred from the endpoint response schema.
+The client input type is inferred from the endpoint request schema. The client response type is inferred from the endpoint response schema and converted to its JSON wire representation. See [Type Generation, Wire Responses, and Nuxt 5](./docs/type-generation.md) for the relationship with Nitro `InternalApi` and the planned Nuxt 5 boundary.
 
 To add Effect calls, install `effect` and enable the generated Effect adapter:
 
@@ -572,12 +579,13 @@ The integration test fixture verifies:
 - Generated `#endpoints` types.
 - Generated `$endpoint` client typing.
 - Runtime success and error responses through Nuxt.
+- JSON wire serialization and generated `InternalApi` response agreement.
 - OpenAPI document generation from endpoint definitions.
 
 ## Current Limitations
 
 - Endpoint discovery first evaluates server route modules during Nuxt/Nitro type generation and reads endpoint metadata from the exported handler. Keep route module top-level code lightweight and avoid side effects.
-- If route module evaluation fails, Nuxt Endpoints falls back to source parsing for literal `operation` values inside direct `defineEndpoint({ ... })` definitions. This fallback does not support variables, spreads, aliases, or factory wrappers.
+- If a route appears to define an endpoint but module evaluation fails or its exports do not expose endpoint metadata, generation fails with the route path and cause. Nuxt Endpoints does not reconstruct partial contracts from source text.
 - Request and response bodies currently use JSON by default. First-class multiple media types, request encodings, and content negotiation are not yet part of the endpoint definition.
 - OpenAPI `security`, cookies, examples, encoding, links, and some component-level details can be added through `document` / `extend`, but they are not first-class endpoint fields yet.
 - Validator-to-schema conversion is delegated to validator-specific libraries. Unsupported Zod, Valibot, or Effect Schema constructs fail according to those libraries' behavior.
@@ -595,6 +603,7 @@ Detailed priorities and design notes are tracked in the
 - Add better OpenAPI component/reference controls for shared schemas.
 - Expand the Effect adapter once the API shape is clear: fetcher/auth/baseURL/tracing injection through `Layer` / `Context`, test mock injection, Effect `Stream` support for SSE/binary/download responses, and automatic tracing/metrics annotations with endpoint operation names.
 - Add Nuxt 5, Nitro 3, and H3 2 coverage after their integration APIs stabilize.
+- Connect endpoint contract metadata to the Nuxt 5 typed-fetch schema if its public module extension API supports it; keep the current generated schema otherwise.
 
 ## License
 

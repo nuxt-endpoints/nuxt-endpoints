@@ -57,6 +57,20 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(response.status).toBe(201)
     })
 
+    it('serializes response-schema outputs to their JSON wire representation', async () => {
+      await expect($fetch('/api/serialized')).resolves.toEqual({
+        createdAt: '2026-08-14T00:00:00.000Z',
+      })
+
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const responseSchema =
+        schema.paths['/api/serialized'].get.responses[200].content['application/json'].schema
+
+      expect(responseSchema.properties.createdAt).toEqual(
+        expect.objectContaining({ type: 'string', format: 'date-time' }),
+      )
+    })
+
     it('injects route metadata and replays idempotent endpoint responses', async () => {
       const request = () =>
         fetch('/api/idempotent', {
@@ -107,6 +121,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointTypes).toContain("operation: 'getUser'")
       expect(endpointTypes).toContain("operation: 'createUser'")
       expect(endpointTypes).toContain("operation: 'getDynamic'")
+      expect(endpointTypes).toContain("operation: 'getSerialized'")
       expect(endpointTypes).toContain("path: '/api/search'")
       expect(endpointTypes).toContain('export type $UseEndpoint')
       expect(endpointTypes).toContain('export type $UseEndpointResult')
@@ -142,11 +157,19 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
     it('type-checks the generated #endpoints client against endpoint contracts', async () => {
       const buildDir = getBuildDir(useTestContext)
       const tsconfigPath = join(buildDir, 'endpoints-typecheck.json')
+      const internalApiAgreementPath = join(buildDir, 'internal-api-agreement.ts')
       const nuxtRoot = dirname(require.resolve('nuxt/package.json'))
+      const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
+      await writeFile(
+        internalApiAgreementPath,
+        generateInternalApiAgreementTypecheck(endpointTypes),
+        'utf8',
+      )
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
         join(buildDir, 'types/nitro-routes.d.ts'),
         join(buildDir, 'types/endpoints.d.ts'),
+        internalApiAgreementPath,
         join(fixtureRoot, 'typecheck.ts'),
       ])
 
@@ -219,6 +242,38 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
     throw new Error('Nuxt buildDir is not available')
   }
   return buildDir
+}
+
+function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
+  const routes = Array.from(
+    endpointTypes.matchAll(/\| \{ path: '([^']+)', method: '([^']+)'/g),
+    ([, path, method]) => ({ path, method }),
+  )
+  if (routes.length === 0) {
+    throw new Error('No generated endpoint routes were available for InternalApi comparison.')
+  }
+  const assertions = routes
+    .map(
+      ({ path, method }, index) =>
+        `type RouteAgreement${index} = Assert<Equal<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
+    )
+    .join('\n')
+
+  return `import type { $EndpointPathResponse } from '#endpoints'
+import type { InternalApi } from 'nitropack/types'
+
+type Equal<LEFT, RIGHT> =
+  (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends
+  (<VALUE>() => VALUE extends RIGHT ? 1 : 2)
+    ? (<VALUE>() => VALUE extends RIGHT ? 1 : 2) extends
+      (<VALUE>() => VALUE extends LEFT ? 1 : 2)
+      ? true
+      : false
+    : false
+type Assert<VALUE extends true> = VALUE
+
+${assertions}
+`
 }
 
 async function writeJson(path: string, value: unknown) {

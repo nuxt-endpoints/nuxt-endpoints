@@ -7,17 +7,6 @@ import type {
 } from '../../src/runtime/effect'
 import type { EndpointResult, StandardSchemaLike } from '../../src/runtime'
 
-declare module 'nitropack/types' {
-  interface InternalApi {
-    '/api/users/:id': {
-      get: { id: number; name: string }
-    }
-    '/api/payments': {
-      post: { id: string }
-    }
-  }
-}
-
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 
 type UserRoute = {

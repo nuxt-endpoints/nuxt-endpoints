@@ -127,11 +127,21 @@ export type EndpointResponseStatus<DEFINITION extends EndpointDefinition> = Stat
 
 type Check<ACTUAL, EXPECTED> = [DeepMutable<ACTUAL>] extends [EXPECTED] ? unknown : never
 
-export type DeepMutable<VALUE> = VALUE extends readonly (infer ITEM)[]
-  ? DeepMutable<ITEM>[]
-  : VALUE extends object
-    ? { -readonly [KEY in keyof VALUE]: DeepMutable<VALUE[KEY]> }
-    : VALUE
+export type DeepMutable<VALUE> = VALUE extends
+  | Date
+  | RegExp
+  | Error
+  | ((...args: never[]) => unknown)
+  ? VALUE
+  : VALUE extends ReadonlyMap<infer KEY, infer ITEM>
+    ? Map<DeepMutable<KEY>, DeepMutable<ITEM>>
+    : VALUE extends ReadonlySet<infer ITEM>
+      ? Set<DeepMutable<ITEM>>
+      : VALUE extends readonly (infer ITEM)[]
+        ? DeepMutable<ITEM>[]
+        : VALUE extends object
+          ? { -readonly [KEY in keyof VALUE]: DeepMutable<VALUE[KEY]> }
+          : VALUE
 
 export type UnknownIfNever<VALUE> = [VALUE] extends [never] ? unknown : VALUE
 

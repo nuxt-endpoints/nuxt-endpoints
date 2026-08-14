@@ -7,32 +7,6 @@ import type {
   UseEndpointResultClient,
 } from '../../src/runtime'
 
-declare module 'nitropack/types' {
-  interface InternalApi {
-    '/api/users/:id': {
-      get: { id: number; name: string }
-    }
-    '/api/users': {
-      post: { id: number; name: string } | { jobId: string }
-    }
-    '/api/health': {
-      get: { ok: true }
-    }
-    '/api/payments': {
-      post: { id: string }
-    }
-    '/api/retryable-health': {
-      post: { ok: true }
-    }
-    '/api/search': {
-      get: { items: string[] }
-    }
-    '/api/inferred/:id': {
-      get: { id: number; name: string }
-    }
-  }
-}
-
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 
 const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {

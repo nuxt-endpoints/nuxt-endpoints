@@ -1,80 +1,77 @@
 import { describe, expect, it } from 'vitest'
-import {
-  assertEndpointSourceFallbackSafe,
-  extractOperation,
-  hasEndpointDefinition,
-  hasIdempotencyDeclaration,
-} from '../src/operation'
+import { assertEndpointModuleEvaluated, hasEndpointDefinition } from '../src/operation'
 
-describe('extractOperation', () => {
-  it('extracts literal operation values from defineEndpoint calls', () => {
+describe('endpoint source detection', () => {
+  it('detects direct defineEndpoint calls', () => {
     expect(
-      extractOperation(`
+      hasEndpointDefinition(`
       export const endpoint = defineEndpoint({
         operation: 'getUser',
         response: UserSchema,
       })
     `),
-    ).toBe('getUser')
+    ).toBe(true)
   })
 
-  it('returns null when the file is not a endpoint contract', () => {
+  it('does not match ordinary handlers or defineEndpointHandler', () => {
     expect(
-      extractOperation(`
+      hasEndpointDefinition(`
       export default defineEventHandler(() => ({ ok: true }))
     `),
-    ).toBeNull()
-  })
-
-  it('returns null when operation is not a literal contract value', () => {
-    expect(
-      extractOperation(`
-      const operation = 'getUser'
-      export const endpoint = defineEndpoint({
-        response: UserSchema,
-      })
-    `),
-    ).toBeNull()
-  })
-
-  it('detects endpoint contracts without operation names', () => {
-    const source = `
-      export const endpoint = defineEndpoint({
-        response: UserSchema,
-      })
-    `
-
-    expect(hasEndpointDefinition(source)).toBe(true)
-    expect(extractOperation(source)).toBeNull()
-  })
-
-  it('does not confuse defineEndpointHandler with defineEndpoint', () => {
+    ).toBe(false)
     expect(
       hasEndpointDefinition(`
       export default defineEndpointHandler(endpoint, () => ({ ok: true }))
     `),
     ).toBe(false)
   })
-})
 
-describe('idempotent endpoint source fallback', () => {
-  it('conservatively detects property and bracket API call syntax', () => {
-    expect(hasIdempotencyDeclaration(`defineEndpoint({})\n.idempotency /* policy */ ({})`)).toBe(
-      true,
-    )
-    expect(hasIdempotencyDeclaration(`defineEndpoint({})['idempotency']({})`)).toBe(true)
-    expect(hasIdempotencyDeclaration(`defineEndpoint({ operation: 'plain' })`)).toBe(false)
+  it('allows comments between the identifier and call', () => {
+    expect(hasEndpointDefinition(`defineEndpoint /* contract */ ({})`)).toBe(true)
   })
 
-  it('rejects source fallback when idempotency policy cannot be evaluated', () => {
+  it('ignores comments, quoted values, templates, and member calls', () => {
+    expect(hasEndpointDefinition(`// defineEndpoint({})\ndefineEventHandler(() => ({}))`)).toBe(
+      false,
+    )
+    expect(hasEndpointDefinition(`/* defineEndpoint({}) */ defineEventHandler(() => ({}))`)).toBe(
+      false,
+    )
+    expect(hasEndpointDefinition(`const text = 'defineEndpoint({})'`)).toBe(false)
+    expect(hasEndpointDefinition('const text = `defineEndpoint({})`')).toBe(false)
+    expect(hasEndpointDefinition(`factory.defineEndpoint({})`)).toBe(false)
+  })
+})
+
+describe('endpoint module evaluation', () => {
+  it('ignores evaluation failures for ordinary Nitro routes', () => {
+    expect(() =>
+      assertEndpointModuleEvaluated(
+        `export default defineEventHandler(() => ({ ok: true }))`,
+        '/server/api/plain.get.ts',
+        new Error('route import failed'),
+      ),
+    ).not.toThrow()
+  })
+
+  it('fails closed when endpoint metadata cannot be evaluated', () => {
     const evaluationError = new Error('route import failed')
 
     expect(() =>
-      assertEndpointSourceFallbackSafe(
-        `defineEndpoint({})['idempotency']({ authorization: 'middleware' })`,
+      assertEndpointModuleEvaluated(
+        `export const endpoint = defineEndpoint({ operation: 'createItem' })`,
         '/server/api/items.post.ts',
         evaluationError,
       ),
-    ).toThrow(/cannot be recovered safely/i)
+    ).toThrow(/could not evaluate endpoint route.*items\.post\.ts/i)
+  })
+
+  it('fails closed when evaluated exports do not expose endpoint metadata', () => {
+    expect(() =>
+      assertEndpointModuleEvaluated(
+        `export const endpoint = defineEndpoint({ operation: 'getItem' })`,
+        '/server/api/items.get.ts',
+      ),
+    ).toThrow(/evaluated exports did not expose endpoint metadata/i)
   })
 })

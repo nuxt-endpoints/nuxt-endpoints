@@ -2,7 +2,7 @@
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-07-21
+Last consolidated: 2026-08-14
 
 This is the source of truth for product-level implementation priorities and
 for recommendations that are not specific to one client adapter. Detailed
@@ -11,20 +11,22 @@ without hiding the broader roadmap.
 
 ## Design document map
 
-| Document                                                        | Responsibility                                                                                                   |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions             |
-| [TanStack Query adapter](./tanstack-query-adapter.md)           | Query/Mutation factories, key design, error modes, SSR integration, test matrix, and the eight adapter decisions |
-| [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                         |
-| [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                           |
-| [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                          |
-| [Nitro v3 and H3 v2 readiness](./nitro-v3-h3-v2-readiness.md)   | Stable endpoint contract, completed preparation, adapter boundary, remaining risks, and acceptance checklist     |
+| Document                                                        | Responsibility                                                                                                                 |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions                           |
+| [TanStack Query adapter](./tanstack-query-adapter.md)           | Query/Mutation factories, key design, error modes, SSR integration, test matrix, and the eight adapter decisions               |
+| [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                                       |
+| [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                                         |
+| [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
+| [Nitro v3 and H3 v2 readiness](./nitro-v3-h3-v2-readiness.md)   | Stable endpoint contract, completed preparation, adapter boundary, remaining risks, and acceptance checklist                   |
+| [Type generation and Nuxt 5](./type-generation.md)              | Current contract markers, JSON wire types, `InternalApi` agreement, discovery failure policy, and Nuxt 5 typed-fetch migration |
 
 ## Current implementation status
 
 | Area                                                                  | Status                           | Next decision                                                               |
 | --------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------- |
 | Endpoint contracts, runtime validation, generated client, and OpenAPI | Implemented                      | Continue stabilization and compatibility work                               |
+| JSON wire response mapping and Nitro `InternalApi` agreement          | Implemented                      | Replace only through a tested Nuxt 5 typed-fetch adapter                    |
 | H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                |
 | Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain |
 | Shared fresh-request and fetcher extension boundary                   | Implemented                      | `createEndpointRequest`, fetcher injection, and shared key normalization    |
@@ -296,27 +298,24 @@ Current public guidance remains [Low-level HTTP](../site/content/docs/low-level-
 
 ## Overall delivery priority
 
-1. Establish the shared fresh-request, generated request-type, fetcher, and key
-   foundation.
-2. Implement the first optional consumer: typed TanStack Query and Mutation
-   option factories.
-3. Add request-safe Nuxt SSR integration for that adapter.
-4. Evaluate the endpoint context builder only after learning from the completed
-   H3 event integration.
-5. Design idempotency and operation-aware observability after middleware and
-   operation metadata boundaries stabilize.
-6. Add advanced adapter ergonomics such as infinite-query factories, prefetch
-   examples, optimistic-update recipes, and form-library examples.
-7. Add DevTools and scaffolding only after the public API stabilizes.
-8. Implement first-class multipart or typed streams only after concrete demand
+1. Stabilize the current Nuxt 4/Nitro 2 contract, wire response, discovery, and
+   package release surface.
+2. Track the Nuxt 5 typed-fetch and public route-metadata extension APIs; add a
+   compatibility adapter only against released, testable versions.
+3. Evaluate the endpoint context builder only after learning from real H3 event
+   usage.
+4. Add operation-aware observability after operation metadata boundaries
+   stabilize.
+5. Add advanced adapter ergonomics and DevTools only after the public API is
+   stable.
+6. Implement first-class multipart or typed streams only after concrete demand
    and a complete transport contract exist.
 
 ```text
-shared request foundation
--> TanStack query/mutation factories
--> Nuxt SSR
+Nuxt 4 / Nitro 2 contract stability
+-> Nuxt 5 typed-fetch and route-metadata adapter
 -> optional typed context builder
--> idempotency and observability
+-> operation-aware observability
 -> advanced adapter ergonomics
 -> DevTools and scaffolding
 -> multipart and typed streams

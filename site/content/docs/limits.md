@@ -15,13 +15,15 @@ The current release line targets Nuxt 4.5+ with Nitro 2 and H3 1. Nuxt 5, Nitro 
 
 During Nuxt and Nitro type generation, route modules are imported and endpoint metadata is read from the exported handler. Keep route top-level code lightweight.
 
-### Source parsing is only a fallback
+### Endpoint discovery fails closed
 
-If route module evaluation fails, literal `operation` values inside direct `defineEndpoint` calls can be parsed. Variables, spreads, aliases, and factory wrappers are not supported by that fallback.
+If route module evaluation fails, or a route calls `defineEndpoint` without exposing endpoint metadata through its evaluated exports, generation stops with an actionable error. Partial contracts are not reconstructed from source parsing because that could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes remain unaffected.
 
 ### JSON is the first-class body format for now
 
 Multiple media types, request encodings, and content negotiation are not first-class endpoint fields yet. Use [Low-level HTTP](/docs/low-level-http) for files, streams, multipart uploads, redirects, proxies, and native Web Responses.
+
+Contracted JSON responses use the supported Nitro line's wire-type mapping. Native `Response`, streams, files, and custom response parsers are outside the generated JSON body type.
 
 ### Schema conversion depends on converter support
 

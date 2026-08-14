@@ -7,7 +7,9 @@ Nuxt Endpoints generates `$endpoint` and `#endpoints` types from discovered endp
 
 ## Client calls
 
-The primary call uses the route path and HTTP method. The default call returns the success body. Request options are inferred from the endpoint request schemas, and the returned body follows the endpoint response schema.
+The primary call uses the route path and HTTP method. The default call returns the success body. Request options are inferred from the endpoint request schemas, and the returned body follows the JSON wire representation of the endpoint response schema.
+
+Response validation uses the schema output on the server before HTTP serialization. The client sees the parsed JSON value, so a schema output such as `Date` is typed as `string` on `$endpoint`, `useEndpoint`, Effect, and Vue Query clients.
 
 ```vue
 <script setup lang="ts">

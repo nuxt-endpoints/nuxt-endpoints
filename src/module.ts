@@ -21,11 +21,7 @@ import {
   type NitroRouteHandlerDescriptor,
   type NitroRouteHandlerSource,
 } from './nitro-route-handlers'
-import {
-  assertEndpointSourceFallbackSafe,
-  extractOperation,
-  hasEndpointDefinition,
-} from './operation'
+import { assertEndpointModuleEvaluated } from './operation'
 import { defineEndpoint, defineEndpointHandler } from './runtime/endpoint'
 import type { EndpointIdempotencyMetadata } from './runtime/contract'
 import { inspectValidatorInputObject } from './runtime/validator'
@@ -108,13 +104,9 @@ type RouteModuleLoadResult = {
   error?: unknown
 }
 type RouteModuleLoader = (path: string) => Promise<RouteModuleLoadResult>
-type FallbackReporter = (handlerPath: string, error?: unknown) => void
-type OperationSource = 'module' | 'source'
 type EndpointDetection = {
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
-  source: OperationSource
-  error?: unknown
 }
 
 type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
@@ -216,22 +208,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
     hook('nitro:init', async (nitro) => {
       const generateArtifacts = async () => {
-        const handlers = await composeHandlers(
-          collectNitroRouteHandlers(nitro),
-          loadRouteModule,
-          (handlerPath, error) => {
-            if (error) {
-              logger.warn(
-                `Falling back to source parsing for ${handlerPath}. Route module evaluation failed:`,
-                error,
-              )
-              return
-            }
-            logger.warn(
-              `Falling back to source parsing for ${handlerPath}. Route module evaluation did not expose endpoint metadata.`,
-            )
-          },
-        )
+        const handlers = await composeHandlers(collectNitroRouteHandlers(nitro), loadRouteModule)
         endpointHandlerManifest = handlers
         await generateEndpointTypes(resolve, typeFile, handlers, resolvedOptions)
         await generateEndpointClient(resolve, runtimeFile, handlers, resolvedOptions)
@@ -295,7 +272,6 @@ export default nuxtEndpointsModule
 async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],
   loadRouteModule: RouteModuleLoader,
-  reportFallback: FallbackReporter,
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
   const operations = new Map<string, string>()
@@ -309,10 +285,6 @@ async function composeHandlers(
     if (!detection) {
       continue
     }
-    if (detection.source === 'source') {
-      reportFallback(handler.handler, detection.error)
-    }
-
     const { operation, idempotency } = detection
     const existingHandlerPath = operation ? operations.get(operation) : undefined
     if (operation && existingHandlerPath) {
@@ -588,20 +560,12 @@ async function detectEndpoint(
   const loadResult = await loadRouteModule(handler.handler)
   const importedEndpoint = getImportedEndpoint(loadResult.module)
   if (importedEndpoint) {
-    return { ...importedEndpoint, source: 'module' }
+    return importedEndpoint
   }
 
   const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
-  if (!hasEndpointDefinition(fileContent)) {
-    return null
-  }
-  assertEndpointSourceFallbackSafe(fileContent, handler.handler, loadResult.error)
-
-  return {
-    operation: extractOperation(fileContent) || undefined,
-    source: 'source',
-    error: loadResult.error,
-  }
+  assertEndpointModuleEvaluated(fileContent, handler.handler, loadResult.error)
+  return null
 }
 
 function getImportedEndpoint(
