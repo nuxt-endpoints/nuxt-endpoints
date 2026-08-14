@@ -80,5 +80,5 @@ jobs:
           vp pm stage publish /tmp/nuxt-endpoints.tgz
           --access public
           --tag "$NPM_TAG"
-          --no-git-checks
           --registry https://registry.npmjs.org
+          -- --no-git-checks
