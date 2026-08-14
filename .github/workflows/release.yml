@@ -1,0 +1,83 @@
+name: Stage npm release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    if: vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true'
+    name: Verify and stage package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 22.19.0
+          cache: false
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install --frozen-lockfile
+
+      - name: Prepare module development files
+        run: vp run dev:prepare
+
+      - name: Verify release tag matches package version
+        env:
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: >-
+          vp node -e "const version = require('./package.json').version;
+          if (process.env.RELEASE_TAG !== 'v' + version) {
+            throw new Error('Release tag ' + process.env.RELEASE_TAG +
+            ' does not match package version v' + version)
+          }
+          const packageIsPrerelease = version.includes('-');
+          const releaseIsPrerelease = process.env.GITHUB_PRERELEASE === 'true';
+          if (packageIsPrerelease !== releaseIsPrerelease) {
+            throw new Error('GitHub prerelease flag does not match package version ' + version)
+          }"
+
+      - name: Verify release commit is on main
+        run: git merge-base --is-ancestor HEAD refs/remotes/origin/main
+
+      - name: Check
+        run: vp run check
+
+      - name: Build package
+        run: vp run build
+
+      - name: Pack release artifact
+        run: vp pm pack --out /tmp/nuxt-endpoints.tgz
+
+      - name: Inspect release artifact
+        run: tar -tzf /tmp/nuxt-endpoints.tgz
+
+      - name: Test release artifact
+        run: vp run test:package /tmp/nuxt-endpoints.tgz 4.5.0
+
+      - name: Stage package on npm
+        env:
+          NPM_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+        run: >-
+          vp pm stage publish /tmp/nuxt-endpoints.tgz
+          --access public
+          --tag "$NPM_TAG"
+          --registry https://registry.npmjs.org

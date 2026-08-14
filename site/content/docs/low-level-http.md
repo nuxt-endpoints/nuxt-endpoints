@@ -1,0 +1,250 @@
+---
+title: Low-level HTTP
+description: Handle files, streams, redirects, proxies, raw Responses, and 204 routes.
+---
+
+Nuxt Endpoints is strongest for JSON REST APIs. Use `response` or `responses` when the route returns typed JSON bodies.
+
+For lower-level HTTP behavior, omit `response` and `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
+
+Response type checking only applies when a route opts into a response contract. If a route needs to return a file, stream, redirect, proxy response, or another native `Response`, leave the response contract out and handle the client side as raw HTTP.
+
+```ts
+export const endpoint = defineEndpoint({
+  params: z.object({ id: z.string() }),
+})
+
+export default defineEndpointHandler(endpoint, ({ params }) => {
+  return new Response(`raw response for ${params.id}`)
+})
+```
+
+```ts
+const response = await $endpoint('/api/raw/:id', {
+  method: 'get',
+  params: { id: 'abc' },
+}).raw()
+const text = await response.text()
+```
+
+There is intentionally no `useEndpointRaw`. Native `Response`, `Headers`, and streams do not serialize cleanly into Nuxt async-data payloads.
+
+## File downloads
+
+Return a native `Response` with download headers. Keep the request side typed, and read the body from `.raw()` on the client.
+
+```ts
+// server/api/files/[id].get.ts
+export const endpoint = defineEndpoint({
+  params: z.object({ id: z.string() }),
+})
+
+export default defineEndpointHandler(endpoint, async ({ params }) => {
+  const file = await loadFile(params.id)
+
+  return new Response(file.bytes, {
+    headers: {
+      'content-type': file.contentType,
+      'content-disposition': `attachment; filename="${file.name}"`,
+    },
+  })
+})
+```
+
+```ts
+const response = await $endpoint('/api/files/:id', {
+  method: 'get',
+  params: { id: 'invoice-1' },
+}).raw()
+const blob = await response.blob()
+const url = URL.createObjectURL(blob)
+
+const link = document.createElement('a')
+link.href = url
+link.download = 'invoice.pdf'
+link.click()
+URL.revokeObjectURL(url)
+```
+
+## Multipart uploads
+
+Multipart parsing currently needs the raw Nuxt event. Use a native Nuxt server route for this shape.
+
+```ts
+// server/api/uploads.post.ts
+export default defineEventHandler(async (event) => {
+  const parts = await readMultipartFormData(event)
+  const file = parts?.find((part) => part.name === 'file')
+
+  if (!file?.data) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing file' })
+  }
+
+  const uploaded = await saveUpload(file)
+  return { id: uploaded.id }
+})
+```
+
+```ts
+const form = new FormData()
+form.append('file', file)
+
+const uploaded = await $fetch<{ id: string }>('/api/uploads', {
+  method: 'POST',
+  body: form,
+})
+```
+
+This route is outside the generated endpoint client until multipart request contracts become first-class.
+
+## Streaming and SSE
+
+Streaming routes should return a native `Response`. Use `.raw()` when client code needs the stream.
+
+```ts
+// server/api/events.get.ts
+export const endpoint = defineEndpoint({})
+
+export default defineEndpointHandler(endpoint, () => {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+    },
+  })
+})
+```
+
+```ts
+const response = await $endpoint('/api/events', { method: 'get' }).raw()
+const reader = response.body?.getReader()
+```
+
+For browser SSE, `EventSource` is usually simpler:
+
+```ts
+const events = new EventSource('/api/events')
+events.addEventListener('message', (event) => {
+  console.log(event.data)
+})
+```
+
+## Redirects
+
+For API redirects, return a native redirect response. Browser fetch follows redirects by default, so client code usually sees the final response.
+
+```ts
+// server/api/auth/callback.get.ts
+export const endpoint = defineEndpoint({
+  query: z.object({ next: z.string().optional() }),
+})
+
+export default defineEndpointHandler(endpoint, ({ query }) => {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: query.next ?? '/dashboard',
+    },
+  })
+})
+```
+
+```ts
+const response = await $endpoint('/api/auth/callback', {
+  method: 'get',
+  query: { next: '/dashboard' },
+}).raw()
+
+if (response.redirected) {
+  await navigateTo(response.url, { external: true })
+}
+```
+
+For UI navigation, prefer `navigateTo` directly from the page or middleware instead of hiding navigation behind an API request.
+
+## Proxy routes
+
+Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `.raw()` from the client.
+
+```ts
+// server/api/proxy/[id].get.ts
+export const endpoint = defineEndpoint({
+  params: z.object({ id: z.string() }),
+})
+
+export default defineEndpointHandler(endpoint, async ({ params }) => {
+  return await fetch(`https://api.example.com/files/${params.id}`)
+})
+```
+
+```ts
+const response = await $endpoint('/api/proxy/:id', {
+  method: 'get',
+  params: { id: 'asset-1' },
+}).raw()
+const contentType = response.headers.get('content-type')
+const data = await response.arrayBuffer()
+```
+
+## Raw Web Responses
+
+Use raw `Response` returns when the route owns status, headers, cookies, or a body shape that should not be modeled as JSON.
+
+```ts
+// server/api/report.get.ts
+export const endpoint = defineEndpoint({})
+
+export default defineEndpointHandler(endpoint, () => {
+  return new Response('created', {
+    status: 201,
+    headers: {
+      'x-report-id': 'report_123',
+    },
+  })
+})
+```
+
+```ts
+const response = await $endpoint('/api/report', { method: 'get' }).raw()
+const reportId = response.headers.get('x-report-id')
+const text = await response.text()
+```
+
+## 204 No Content
+
+For no-content JSON API routes, keep the response contract. Declare `204` and return it with `respond`.
+
+```ts
+// server/api/sessions/current.delete.ts
+export const endpoint = defineEndpoint({
+  responses: {
+    204: z.undefined(),
+  },
+})
+
+export default defineEndpointHandler(endpoint, ({ respond }) => {
+  clearSession()
+  return respond(204, undefined)
+})
+```
+
+```ts
+const result = await $endpoint('/api/sessions/current', { method: 'delete' }).result()
+
+if (result.status === 204) {
+  result.body // undefined
+}
+```
+
+Use `.raw()` when the caller only needs the native status:
+
+```ts
+const response = await $endpoint('/api/sessions/current', { method: 'delete' }).raw()
+response.status // 204
+```

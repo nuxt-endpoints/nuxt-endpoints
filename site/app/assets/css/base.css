@@ -1,0 +1,414 @@
+/*
+ * Global base layer — design tokens, document resets, and non-owned rendered
+ * output (Shiki syntax highlighting). It holds document-level styling that is
+ * not part of any component surface. Component styles live in each SFC's
+ * scoped block.
+ */
+
+:root {
+  color-scheme: light;
+  --page-max: 1360px;
+  --page-gutter: 2rem;
+
+  /* Shared spacing, type, stroke, and radius scales used by owned surfaces. */
+  --space-025: 0.125rem;
+  --space-050: 0.25rem;
+  --space-075: 0.375rem;
+  --space-100: 0.5rem;
+  --space-125: 0.625rem;
+  --space-150: 0.75rem;
+  --space-200: 1rem;
+  --space-250: 1.25rem;
+  --space-300: 1.5rem;
+  --space-350: 1.75rem;
+  --space-400: 2rem;
+  --space-500: 2.5rem;
+  --space-600: 3rem;
+  --space-700: 3.5rem;
+  --space-800: 4rem;
+  --space-1000: 5rem;
+  --text-2xs: 0.66rem;
+  --text-xs: 0.76rem;
+  --text-sm: 0.84rem;
+  --text-md: 0.92rem;
+  --text-lg: 1.04rem;
+  --text-xl: 1.16rem;
+  --text-2xl: 1.55rem;
+  --text-3xl: 1.9rem;
+  --text-4xl: 2.55rem;
+  --text-5xl: 3rem;
+  --text-hero: 3.45rem;
+  --text-hero-mobile-min: 2rem;
+  --text-hero-mobile-max: 2rem;
+  --tracking-brand: 0.04em;
+  --tracking-label: 0.06em;
+  --stroke-default: 1px;
+  --stroke-accent: 3px;
+  --focus-ring-width: 2px;
+  --focus-offset: 2px;
+  --focus-offset-lg: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-pill: 999px;
+
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-soft: #fff3ea;
+  --ink: #16211d;
+  --muted: #5f6f68;
+  --line: #d7e0dc;
+  --header-bg: rgba(248, 250, 252, 0.92);
+  --header-border: rgba(215, 224, 220, 0.9);
+  --button-bg: rgba(255, 255, 255, 0.78);
+  --button-hover-border: #f0b58f;
+  --brand-bg: #e36002;
+  --brand-ink: #ffffff;
+  --accent: #e36002;
+  --accent-strong: #c2410c;
+  --accent-secondary: #047857;
+  --accent-warm: #e36002;
+  --accent-blue: #d97706;
+  --hero-gradient-start: #e36002;
+  --hero-gradient-mid: #ff8a00;
+  --hero-gradient-rose: #f43f5e;
+  --hero-gradient-violet: #8b5cf6;
+  --hero-gradient-cyan: #06b6d4;
+  --hero-gradient-end: #16a34a;
+  --hero-code-glass-bg: rgba(255, 255, 255, 0.58);
+  --hero-code-glass-title-bg: rgba(255, 255, 255, 0.34);
+  --hero-code-glass-border: rgba(255, 255, 255, 0.86);
+  --hero-code-glass-line: rgba(15, 23, 42, 0.08);
+  --hero-code-glass-sheen: rgba(255, 255, 255, 0.62);
+  --hero-code-glass-shadow: rgba(15, 23, 42, 0.18);
+  --hero-wash-grid: rgba(22, 33, 29, 0.045);
+  --hero-wash-shadow: rgba(15, 23, 42, 0.08);
+  --code-bg: #ffffff;
+  --code-border: #d0d7de;
+  --code-ink: #1f2328;
+  --code-muted: #59636e;
+  --inline-code-bg: rgba(227, 96, 2, 0.1);
+  --shadow: 0 18px 42px rgba(31, 41, 55, 0.08);
+  --diagnostic-item-bg: rgba(227, 96, 2, 0.04);
+  --diagnostic-border: rgba(227, 96, 2, 0.24);
+  --indicator-active-bg: rgba(227, 96, 2, 0.16);
+  --panel-shadow: 0 16px 36px rgba(13, 17, 23, 0.12);
+  --playground-panel-shadow: 0 16px 36px rgba(13, 17, 23, 0.1);
+  --code-glass-line: rgba(255, 255, 255, 0.12);
+  --hero-step-bg: rgba(15, 23, 42, 0.88);
+  --hero-step-border: rgba(255, 255, 255, 0.16);
+  --hero-step-body: rgba(226, 232, 240, 0.82);
+  --hero-step-emphasis: #ffb020;
+  --hero-step-ink: #f8fafc;
+  --hero-step-shadow: 0 18px 42px rgba(15, 23, 42, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --hero-mask-soft: rgba(0, 0, 0, 0.1);
+  --hero-mask-strong: rgba(0, 0, 0, 0.9);
+  --hero-mask-mid: rgba(0, 0, 0, 0.74);
+  --hero-image-shadow: rgb(15 23 42 / 0.16);
+  --hero-step-glass: rgba(255, 255, 255, 0.12);
+  --hero-step-glow: rgba(255, 176, 32, 0.12);
+  --stack-nuxt: #00a76f;
+  --stack-zod: #285c9f;
+  --stack-valibot: #f59e0b;
+  --stack-effect: #6d5dfc;
+  --stack-query: #ff4154;
+  --stack-openapi: #6ba539;
+  --code-theme-light-display: block;
+  --code-theme-dark-display: none;
+  --ew-highlight-bg: rgba(227, 96, 2, 0.08);
+  --ew-panel-shadow:
+    0 30px 72px color-mix(in srgb, var(--hero-code-glass-shadow) 92%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76), inset 0 -1px 0 rgba(15, 23, 42, 0.05);
+  --ew-panel-sheen-opacity: 0.46;
+  --ew-panel-edge-color: rgba(255, 255, 255, 0.2);
+  --ew-stripe: rgba(255, 255, 255, 0.52);
+  --ew-panel-flare: rgba(255, 255, 255, 0.5);
+  --ew-panel-edge-top: rgba(255, 255, 255, 0.18);
+  --ew-panel-edge-start: rgba(255, 255, 255, 0.1);
+  --ew-panel-edge-end: rgba(255, 255, 255, 0.08);
+  --ew-panel-edge-opacity: 0.78;
+  --ew-title-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), transparent),
+    color-mix(in srgb, var(--hero-code-glass-title-bg) 76%, transparent);
+  --ew-scroll-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5)),
+    color-mix(in srgb, var(--hero-code-glass-bg) 68%, transparent);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --surface: #121a20;
+  --surface-soft: #2b1d16;
+  --ink: #e6edf3;
+  --muted: #9aa8a3;
+  --line: #283832;
+  --header-bg: rgba(13, 17, 23, 0.92);
+  --header-border: rgba(40, 56, 50, 0.92);
+  --button-bg: rgba(18, 26, 32, 0.78);
+  --button-hover-border: #7a4b2e;
+  --brand-bg: #ff7a1a;
+  --brand-ink: #111827;
+  --accent: #ff7a1a;
+  --accent-strong: #ffb020;
+  --accent-secondary: #34d399;
+  --accent-warm: #ff7a1a;
+  --accent-blue: #ffb020;
+  --hero-gradient-start: #ff7a1a;
+  --hero-gradient-mid: #ffb020;
+  --hero-gradient-rose: #ff4d6d;
+  --hero-gradient-violet: #a78bfa;
+  --hero-gradient-cyan: #22d3ee;
+  --hero-gradient-end: #34d399;
+  --hero-code-glass-bg: rgba(9, 13, 18, 0.62);
+  --hero-code-glass-title-bg: rgba(18, 26, 32, 0.48);
+  --hero-code-glass-border: rgba(255, 255, 255, 0.14);
+  --hero-code-glass-line: rgba(255, 255, 255, 0.1);
+  --hero-code-glass-sheen: rgba(255, 255, 255, 0.09);
+  --hero-code-glass-shadow: rgba(0, 0, 0, 0.34);
+  --hero-wash-grid: rgba(255, 255, 255, 0.055);
+  --hero-wash-shadow: rgba(0, 0, 0, 0.24);
+  --code-bg: #090d12;
+  --code-border: #31423b;
+  --code-ink: #e6edf3;
+  --code-muted: #9fb7ae;
+  --inline-code-bg: rgba(255, 122, 26, 0.16);
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  --diagnostic-item-bg: rgba(255, 122, 26, 0.08);
+  --code-theme-light-display: none;
+  --code-theme-dark-display: block;
+  --ew-highlight-bg: rgba(255, 122, 26, 0.12);
+  --ew-panel-shadow:
+    0 26px 62px var(--hero-code-glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --ew-panel-sheen-opacity: 0.16;
+  --ew-panel-edge-color: rgba(255, 255, 255, 0.08);
+  --ew-panel-edge-opacity: 0.44;
+  --ew-title-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+    color-mix(in srgb, var(--hero-code-glass-title-bg) 82%, transparent);
+  --ew-scroll-bg:
+    linear-gradient(180deg, rgba(18, 26, 32, 0.7), rgba(9, 13, 18, 0.56)),
+    color-mix(in srgb, var(--hero-code-glass-bg) 72%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.6;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+figure {
+  margin: 0;
+}
+
+/* Cross-surface layout belongs outside each reusable surface. */
+.ne-docs-page {
+  margin: 0 auto;
+}
+
+.ne-index-page {
+  position: relative;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  max-width: 18ch;
+  margin-bottom: 1.45rem;
+  color: var(--ink);
+  font-size: 3.65rem;
+  line-height: 1.03;
+  font-weight: 830;
+}
+
+h2 {
+  margin-bottom: 0.75rem;
+  font-size: 2rem;
+  line-height: 1.16;
+}
+
+h3 {
+  margin-bottom: 0.45rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem;
+  white-space: pre;
+}
+
+pre code {
+  display: block;
+  min-width: max-content;
+  color: inherit;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: inherit;
+}
+
+/* Shiki syntax-highlight output is rendered (v-html / ContentRenderer) and is
+   not owned surface markup; it is themed globally here. */
+.shiki {
+  background-color: var(--code-bg) !important;
+  color: var(--code-ink) !important;
+}
+
+.shiki span {
+  color: var(--shiki-light, inherit);
+  background-color: var(--shiki-light-bg, transparent);
+  font-style: var(--shiki-light-font-style, inherit);
+  font-weight: var(--shiki-light-font-weight, inherit);
+  text-decoration: var(--shiki-light-text-decoration, inherit);
+}
+
+:root[data-theme='dark'] .shiki {
+  background-color: var(--shiki-dark-bg, var(--code-bg)) !important;
+  color: var(--shiki-dark, var(--code-ink)) !important;
+}
+
+:root[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark, inherit);
+  background-color: var(--shiki-dark-bg, transparent);
+  font-style: var(--shiki-dark-font-style, inherit);
+  font-weight: var(--shiki-dark-font-weight, inherit);
+  text-decoration: var(--shiki-dark-text-decoration, inherit);
+}
+
+.shiki-block pre code .line {
+  display: inline;
+}
+
+/* Framework-generated <Transition name="hero-step-fade"> classes are not owned
+   surface vocabulary; their transition styling lives globally here. */
+.hero-step-fade-enter-active,
+.hero-step-fade-leave-active {
+  transition:
+    opacity 0.42s ease,
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-step-fade-enter-from {
+  opacity: 0;
+  transform: translateX(0.7rem);
+}
+
+.hero-step-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-0.3rem);
+}
+
+@media (max-width: 960px) {
+  h1 {
+    font-size: 2.55rem;
+  }
+}
+
+@media (max-width: 620px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  h2 {
+    font-size: 1.45rem;
+  }
+
+  pre {
+    padding: 0.85rem;
+  }
+
+  pre code {
+    font-size: 0.78rem;
+  }
+}
+
+/* Hero background animations (referenced by the home page surface; kept global
+   so keyframe percentage selectors are not treated as owned markup). */
+@keyframes hero-grid-drift {
+  from {
+    background-position:
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+
+  to {
+    background-position:
+      0 38px,
+      38px 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+}
+
+@keyframes hero-bg-wave-primary {
+  0%,
+  100% {
+    opacity: 0.56;
+    transform: translate3d(-1.6rem, 1.4rem, 0) scaleY(0.98);
+  }
+
+  50% {
+    opacity: 0.76;
+    transform: translate3d(1.6rem, -1.6rem, 0) scaleY(1.04);
+  }
+}
+
+@keyframes hero-bg-wave-secondary {
+  0%,
+  100% {
+    opacity: 0.36;
+    transform: translate3d(1.4rem, -1rem, 0) scaleY(1.01);
+  }
+
+  50% {
+    opacity: 0.54;
+    transform: translate3d(-1.4rem, 1.8rem, 0) scaleY(1.045);
+  }
+}

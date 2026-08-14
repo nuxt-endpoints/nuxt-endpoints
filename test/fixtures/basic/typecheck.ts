@@ -1,0 +1,163 @@
+import type {
+  $EndpointClient,
+  $EndpointPathResponse,
+  $EndpointResponse,
+  $UseEndpoint,
+  $UseEndpointResult,
+  EndpointMethod,
+  EndpointPath,
+} from '#endpoints'
+
+declare const client: $EndpointClient
+declare const useClient: $UseEndpoint
+declare const useResultClient: $UseEndpointResult
+
+async function checkClient() {
+  const user = await client('/api/users/:id', { method: 'get', params: { id: '1' } })
+  user.id.toFixed()
+  user.name.toUpperCase()
+
+  const userAlias = await client('getUser', { params: { id: '1' } })
+  userAlias.name.toUpperCase()
+
+  const userPropertyAlias = await client.getUser({ params: { id: '1' } })
+  userPropertyAlias.name.toUpperCase()
+
+  const userResult = await client('/api/users/:id', {
+    method: 'get',
+    params: { id: '1' },
+  }).result()
+  if (userResult.status === 200) {
+    userResult.body.id.toFixed()
+  }
+  if (userResult.status === 404) {
+    userResult.body.message.toUpperCase()
+  }
+
+  const userRawResponse = await client('/api/users/:id', {
+    method: 'get',
+    params: { id: '1' },
+  }).raw()
+  if (userRawResponse.status === 200) {
+    const body = await userRawResponse.json()
+    body.id.toFixed()
+  }
+
+  const userCall = client('/api/users/:id', { method: 'get', params: { id: '1' } })
+
+  // @ts-expect-error effect is only available when endpoints.client.effect is enabled.
+  userCall.effect()
+  // @ts-expect-error resultEffect is not part of the client surface.
+  userCall.resultEffect()
+  // @ts-expect-error rawEffect is not part of the client surface.
+  userCall.rawEffect()
+
+  // @ts-expect-error params.id must use the validator input type.
+  await client('/api/users/:id', { method: 'get', params: { id: 1 } })
+  // @ts-expect-error params.id must use the validator input type.
+  await client('getUser', { params: { id: 1 } })
+  // @ts-expect-error params.id must use the validator input type.
+  await client.getUser({ params: { id: 1 } })
+
+  const created = await client('/api/users', { method: 'post', body: { name: 'Sid' } })
+  created.id.toFixed()
+
+  const createdByMethod = await client('createUser', { body: { name: 'Sid' } })
+  createdByMethod.id.toFixed()
+
+  const idempotent = await client('createIdempotentItem', {
+    body: { amount: 100 },
+    idempotencyKey: 'request-1',
+  })
+  idempotent.id.toFixed()
+
+  // @ts-expect-error idempotencyKey is required by endpoint metadata.
+  await client('createIdempotentItem', { body: { amount: 100 } })
+
+  // @ts-expect-error body.name is required.
+  await client('/api/users', { method: 'post', body: {} })
+  // @ts-expect-error body.name is required.
+  await client('createUser', { body: {} })
+
+  const search = await client('/api/search', { method: 'get', query: { q: 'nuxt' } })
+  search.items[0]?.toUpperCase()
+
+  // @ts-expect-error operation calls are generated only when operation is declared.
+  await client('search', { query: { q: 'nuxt' } })
+
+  const userState = await useClient('/api/users/:id', {
+    method: 'get',
+    params: { id: '1' },
+    key: 'user:1',
+  })
+  userState.data.value?.name.toUpperCase()
+  userState.pending.value.valueOf()
+  await userState.refresh()
+
+  const userOperationState = await useClient('getUser', {
+    params: { id: '1' },
+    key: 'user-operation:1',
+  })
+  userOperationState.data.value?.name.toUpperCase()
+
+  // @ts-expect-error useEndpoint does not expose property aliases.
+  await useClient.getUser({ params: { id: '1' } })
+
+  const userResultState = await useResultClient('/api/users/:id', {
+    method: 'get',
+    params: { id: '1' },
+    key: 'user-result:1',
+  })
+  if (userResultState.data.value?.status === 404) {
+    userResultState.data.value.body.message.toUpperCase()
+  }
+  if (userResultState.data.value?.status === 200) {
+    userResultState.data.value.body.name.toUpperCase()
+  }
+  // @ts-expect-error useEndpointResult does not expose non-serializable Headers in async data.
+  void userResultState.data.value?.headers
+
+  const userResultOperationState = await useResultClient('getUser', {
+    params: { id: '1' },
+    key: 'user-result-operation:1',
+  })
+  if (userResultOperationState.data.value?.status === 200) {
+    userResultOperationState.data.value.body.id.toFixed()
+  }
+
+  const searchState = await useClient('/api/search', {
+    method: 'get',
+    query: { q: 'nuxt' },
+    key: 'search:nuxt',
+  })
+  searchState.data.value?.items[0]?.toUpperCase()
+
+  // @ts-expect-error useEndpoint keeps endpoint request options strict.
+  await useClient('/api/users/:id', { method: 'get', params: { id: 1 } })
+}
+
+const userResponse: $EndpointResponse<'getUser'> = {
+  id: 1,
+  name: 'Tom',
+}
+
+const userPathResponse: $EndpointPathResponse<'/api/users/:id', 'get'> = {
+  id: 1,
+  name: 'Tom',
+}
+
+const searchPath: EndpointPath = '/api/search'
+const searchMethod: EndpointMethod<'/api/search'> = 'get'
+
+const invalidUserResponse: $EndpointResponse<'getUser'> = {
+  // @ts-expect-error response id is generated from the endpoint response schema and must be a number.
+  id: 'wrong',
+  name: 'Tom',
+}
+
+void checkClient
+void userResponse
+void userPathResponse
+void searchPath
+void searchMethod
+void invalidUserResponse

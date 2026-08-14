@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "plugins": ["oxc", "typescript", "unicorn", "vue"],
+  "globals": {
+    "defineEndpoint": "readonly",
+    "defineNuxtConfig": "readonly"
+  },
+  "overrides": [
+    {
+      "files": ["test/types/*.test-d.ts"],
+      "rules": {
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ]
+}

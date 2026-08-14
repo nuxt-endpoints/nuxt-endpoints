@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+  <defs>
+    <linearGradient id="valibot-edge" x1="7" x2="57" y1="48" y2="16" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eab308" />
+      <stop offset="1" stop-color="#fde68a" />
+    </linearGradient>
+    <linearGradient id="valibot-eye" x1="21" x2="46" y1="26" y2="38" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee" />
+      <stop offset="1" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <path
+    fill="#d6a000"
+    d="M10.7 26.4c0-7.7 6.2-13.9 13.9-13.9h22c7.7 0 13.9 6.2 13.9 13.9v11.2c0 7.7-6.2 13.9-13.9 13.9h-22c-7.7 0-13.9-6.2-13.9-13.9V26.4Z"
+  />
+  <path
+    fill="#0f172a"
+    d="M15.2 26.4c0-5.2 4.2-9.4 9.4-9.4h22c5.2 0 9.4 4.2 9.4 9.4v11.2c0 5.2-4.2 9.4-9.4 9.4h-22c-5.2 0-9.4-4.2-9.4-9.4V26.4Z"
+  />
+  <path
+    fill="none"
+    stroke="url(#valibot-edge)"
+    stroke-linecap="round"
+    stroke-width="4.3"
+    d="M25.1 14.7h21.5c6.4 0 11.7 5.2 11.7 11.7v11.2c0 6.4-5.2 11.7-11.7 11.7h-22c-6.4 0-11.7-5.2-11.7-11.7V26.4c0-6.4 5.2-11.7 11.7-11.7h.5Z"
+  />
+  <circle cx="27" cy="32" r="3.8" fill="url(#valibot-eye)" />
+  <circle cx="44.2" cy="32" r="3.8" fill="url(#valibot-eye)" />
+</svg>
