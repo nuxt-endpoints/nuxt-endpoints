@@ -71,6 +71,43 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       )
     })
 
+    it('serves an endpoint whose contract is defined in a separate module', async () => {
+      await expect($fetch('/api/separated')).resolves.toEqual({
+        name: 'separated',
+        separated: true,
+      })
+      await expect($fetch('/api/separated', { query: { name: 'custom' } })).resolves.toEqual({
+        name: 'custom',
+        separated: true,
+      })
+    })
+
+    it('includes separated-contract routes in the OpenAPI document', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+
+      expect(schema.paths['/api/separated']).toBeDefined()
+      expect(schema.paths['/api/separated'].get.operationId).toBe('getSeparated')
+    })
+
+    it('serves an endpoint whose contract is a sibling .endpoint-contract file', async () => {
+      await expect($fetch('/api/sibling')).resolves.toEqual({
+        name: 'sibling',
+        sibling: true,
+      })
+      await expect($fetch('/api/sibling', { query: { name: 'custom' } })).resolves.toEqual({
+        name: 'custom',
+        sibling: true,
+      })
+
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      expect(schema.paths['/api/sibling'].get.operationId).toBe('getSibling')
+    })
+
+    it('does not register sibling contract files as Nitro routes', async () => {
+      const response = await fetch('/api/sibling.get.endpoint-contract')
+      expect(response.status).toBe(404)
+    })
+
     it('injects route metadata and replays idempotent endpoint responses', async () => {
       const request = () =>
         fetch('/api/idempotent', {
@@ -89,6 +126,35 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(second.status).toBe(201)
       await expect(first.json()).resolves.toEqual({ id: 1, amount: 100 })
       await expect(second.json()).resolves.toEqual({ id: 1, amount: 100 })
+    })
+
+    it('replays idempotent responses for an endpoint backed by the central policy', async () => {
+      const request = () =>
+        fetch('/api/idempotent-central', {
+          method: 'POST',
+          body: JSON.stringify({ amount: 100 }),
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'integration-central-request-1',
+          },
+        })
+
+      const first = await request()
+      const second = await request()
+
+      expect(first.status).toBe(201)
+      expect(second.status).toBe(201)
+      await expect(first.json()).resolves.toEqual(await second.json())
+    })
+
+    it('requires the idempotency key for the central-policy-backed endpoint', async () => {
+      const response = await fetch('/api/idempotent-central', {
+        method: 'POST',
+        body: JSON.stringify({ amount: 100 }),
+        headers: { 'content-type': 'application/json' },
+      })
+
+      expect(response.status).toBe(400)
     })
 
     it('includes idempotency metadata in generated clients and OpenAPI', async () => {

@@ -1,0 +1,32 @@
+import type { NitroRouteHandlerDescriptor } from '../nitro-route-handlers'
+import type { EndpointIdempotencyMetadata } from '../runtime/contract'
+
+// Mirrors `resolver.resolve` (from `@nuxt/kit`'s `createResolver`), which every
+// codegen builder receives so generated import specifiers stay relative to
+// the module's own location rather than to whichever file calls the builder.
+export type ResolvePath = (path: string) => string
+
+// The composed handler shape build-time endpoint detection produces (a Nitro
+// route handler augmented with the operation name and idempotency metadata
+// read from its `.idempotency()` call, once known). Every codegen builder
+// consumes this same shape, so it is the one export both module.ts and the
+// generators below share instead of redeclaring it.
+export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
+  route: string
+  method: string
+  operation?: string
+  idempotency?: EndpointIdempotencyMetadata
+}
+
+// The slice of `ResolvedEndpointsModuleOptions` (module.ts) the type/client
+// generators need: just the client feature toggles, not query or OpenAPI
+// settings. Kept narrow so codegen has no reason to import module.ts's option
+// type back, which would create a cycle; `resolvedOptions` in module.ts is a
+// structural superset and is passed in as-is.
+export type EndpointClientCodegenOptions = {
+  client: {
+    result: boolean
+    raw: boolean
+    effect: boolean
+  }
+}

@@ -7,17 +7,21 @@ The core endpoint flow is usable, but OpenAPI metadata, discovery, and release p
 
 ## Supported platform line
 
-The current release line targets Nuxt 4.5+ with Nitro 2 and H3 1. Nuxt 5, Nitro 3, and H3 2 are outside the tested support boundary for now. This is a support statement, not a claim that every future combination is known to fail.
+See [Compatibility](/docs/getting-started#compatibility) for the currently supported Nuxt, Nitro, and H3 versions and what that support statement does and does not claim.
 
 ## Known constraints
 
-### Endpoint discovery evaluates route modules
+### Endpoint discovery evaluates contract-defining modules
 
-During Nuxt and Nitro type generation, route modules are imported and endpoint metadata is read from the exported handler. Keep route top-level code lightweight.
+During Nuxt and Nitro type generation, the module that defines each endpoint contract is imported and its metadata is read. For a co-located contract that is the route file itself, so keep route top-level code lightweight. Routes that import their contract from a [separate contract file](/docs/endpoints#separate-contract-files) are not evaluated — only the contract module is. Routes that define no endpoint are never evaluated.
 
 ### Endpoint discovery fails closed
 
 If route module evaluation fails, or a route calls `defineEndpoint` without exposing endpoint metadata through its evaluated exports, generation stops with an actionable error. Partial contracts are not reconstructed from source parsing because that could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes remain unaffected.
+
+### Catch-all and optional-parameter routes cannot declare endpoints
+
+A route whose template contains a catch-all (`[...slug]`) or optional parameter cannot export an endpoint definition: the generated client cannot build those URLs correctly and OpenAPI has no honest representation for them, so the build fails with an explanation instead of producing silently broken output. Keep such routes as plain `defineEventHandler` handlers. Catch-all support is a designed-but-deferred candidate in the roadmap; optional path parameters are rejected permanently because OpenAPI cannot express them.
 
 ### JSON is the first-class body format for now
 

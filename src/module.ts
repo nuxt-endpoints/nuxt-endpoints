@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   addImports,
   addPluginTemplate,
@@ -10,26 +11,65 @@ import {
   addServerTemplate,
   createResolver,
   defineNuxtModule,
+  findPath,
   useLogger,
 } from '@nuxt/kit'
-import type { NuxtModule } from '@nuxt/schema'
+import type { Nuxt, NuxtModule } from '@nuxt/schema'
 import { createJiti } from 'jiti'
 import { camelCase } from 'scule'
 import {
-  collectNitroRouteHandlers,
+  generateEndpointClient,
   generateEndpointHandlerManifest,
-  type NitroRouteHandlerDescriptor,
-  type NitroRouteHandlerSource,
-} from './nitro-route-handlers'
-import { assertEndpointModuleEvaluated } from './operation'
-import { defineEndpoint, defineEndpointHandler } from './runtime/endpoint'
-import type { EndpointIdempotencyMetadata } from './runtime/contract'
+  generateEndpointQueryClient,
+  generateEndpointQueryPlugin,
+  generateEndpointQueryTypes,
+  generateEndpointTypes,
+  toImportPath,
+} from './codegen'
+import type { EndpointRouteHandler } from './codegen'
+import { assertEndpointModuleEvaluated, resolveEndpointCarrierSource } from './discovery'
+import type { ContractModuleLoaders } from './discovery'
+import { collectNitroRouteHandlers } from './nitro-route-handlers'
+import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
+import {
+  defineEndpoint,
+  defineEndpointHandler,
+  idempotencyMetadataWithoutRuntimeMessage,
+  idempotencyRuntimeOptionKeys,
+} from './runtime/endpoint'
+import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
+import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
+import { mutationHttpMethodList, queryHttpMethodList } from './runtime/tanstack-query'
 import { inspectValidatorInputObject } from './runtime/validator'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
   client?: EndpointsClientModuleOptions
+  idempotency?: EndpointsIdempotencyModuleOptions
 }
+
+export type EndpointsIdempotencyModuleOptions = {
+  /**
+   * Path to the central idempotency policy module, resolved from the
+   * project root. Defaults to `server/endpoints/idempotency`.
+   */
+  policy?: string
+}
+
+const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
+
+// Set form of the query/mutation HTTP method lists, for O(1) membership
+// checks against a handler's (plain string) method below.
+const queryHttpMethods = new Set<string>(queryHttpMethodList)
+const mutationHttpMethods = new Set<string>(mutationHttpMethodList)
+
+// Helpers that discovery-evaluated modules (route and contract files) may use
+// through Nuxt auto-imports. Each needs a matching global shim while jiti
+// evaluates those modules, where Nuxt auto-imports do not exist.
+const discoveryEvaluatedServerHelpers = [
+  { name: 'defineEndpoint', value: defineEndpoint },
+  { name: 'defineEndpointHandler', value: defineEndpointHandler },
+] as const
 
 export type EndpointsOpenApiModuleOptions = {
   enabled?: boolean
@@ -67,31 +107,21 @@ type ResolvedEndpointsModuleOptions = {
   }
 }
 
-type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
-  route: string
-  method: string
-  operation?: string
-  idempotency?: EndpointIdempotencyMetadata
+// The definition fields a discovery-evaluated module's carrier exposes.
+// Derived (rather than hand-declared) so a shape change to `EndpointDefinition`
+// surfaces here as a compile error instead of silently going unread.
+type EndpointCarrierDefinition = Pick<EndpointDefinition, 'operation' | 'idempotency' | 'headers'>
+
+// `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
+// (rejected by `parseIdempotencyRuntimeMarker` below) may omit it entirely.
+type EndpointExport = Partial<
+  Pick<DefinedEndpoint<EndpointDefinition>, '__idempotency_runtime_marker__'>
+> & {
+  definition?: EndpointCarrierDefinition
 }
 
 type EndpointCarrier = {
-  __endpoint_contract__?: {
-    __idempotency_runtime__?: unknown
-    definition?: {
-      operation?: unknown
-      idempotency?: unknown
-      headers?: unknown
-    }
-  }
-}
-
-type EndpointExport = {
-  __idempotency_runtime__?: unknown
-  definition?: {
-    operation?: unknown
-    idempotency?: unknown
-    headers?: unknown
-  }
+  __endpoint_contract__?: EndpointExport
 }
 
 type EndpointRouteModule = {
@@ -99,26 +129,33 @@ type EndpointRouteModule = {
   endpoint?: EndpointExport
 }
 
-type RouteModuleLoadResult = {
-  module?: EndpointRouteModule
-  error?: unknown
-}
-type RouteModuleLoader = (path: string) => Promise<RouteModuleLoadResult>
 type EndpointDetection = {
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
+  /** Runtime options (storage/scope/authorization) the endpoint itself did not provide. */
+  idempotencyRuntimeGaps?: readonly string[]
 }
 
 type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
+  options: {
+    scanDirs: string[]
+  }
   hooks: {
     hook: (name: 'types:extend', listener: () => void | Promise<void>) => void
   }
 }
 
-type EndpointsNuxtHook = (
+type EndpointsNuxtHook = ((
   name: 'nitro:init',
   listener: (nitro: NitroWithEndpointHandlers) => void | Promise<void>,
-) => void
+) => void) &
+  ((name: 'nitro:config', listener: (config: { ignore?: string[] }) => void) => void)
+
+// Sibling contract files live next to their route inside server/api, so Nitro
+// must be told not to register them as routes. The pattern also excludes
+// matching filenames from Nitro's public-asset copying — documented in the
+// contract-file docs.
+const endpointContractIgnorePattern = '**/*.endpoint-contract.*'
 
 const moduleName = 'endpoints'
 
@@ -136,7 +173,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
   // source of truth; a `defaults` block here would duplicate those values and
   // pre-fill `options.openApi`, making the `options.openApi === undefined`
   // branch below unreachable.
-  setup(options, nuxt) {
+  async setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
     const resolve = (...paths: string[]) => resolver.resolve(...paths)
     const typeFile = resolve(nuxt.options.buildDir, `types/${moduleName}.d.ts`)
@@ -146,6 +183,14 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const resolvedOptions = resolveModuleOptions(options, nuxt.options.dev)
     const logger = useLogger('nuxt-endpoints')
     let endpointHandlerManifest: EndpointRouteHandler[] | undefined
+    // An explicit module option resolves immediately; the convention lookup is
+    // deferred to `nitro:init` so it can walk Nitro's own resolved scanDirs
+    // (project server dir, layer server dirs, custom scanDirs) instead of
+    // re-deriving that list here.
+    let idempotencyPolicyPath = options.idempotency?.policy
+      ? await resolveExplicitIdempotencyPolicyPath(nuxt, options.idempotency.policy)
+      : undefined
+    let idempotencyPolicyPathResolved = options.idempotency?.policy !== undefined
 
     if (resolvedOptions.client.query && !isTanstackVueQueryResolvable(nuxt.options.rootDir)) {
       if (resolvedOptions.client.querySetup === 'auto') {
@@ -178,15 +223,25 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       alias: nuxt.options.alias,
       moduleCache: false,
     })
-    const loadRouteModule: RouteModuleLoader = async (path) => {
-      const restoreGlobals = installEndpointServerImportGlobals()
-      try {
-        return { module: await jiti.import<EndpointRouteModule>(path) }
-      } catch (error) {
-        return { error }
-      } finally {
-        restoreGlobals()
-      }
+    const loaders: ContractModuleLoaders = {
+      loadModule: async (path) => {
+        const restoreGlobals = installEndpointServerImportGlobals()
+        try {
+          return { module: await jiti.import<EndpointRouteModule>(path) }
+        } catch (error) {
+          return { error }
+        } finally {
+          restoreGlobals()
+        }
+      },
+      resolveImport: (specifier, parentPath) => {
+        try {
+          const resolved = jiti.esmResolve(specifier, parentPath)
+          return resolved.startsWith('file:') ? fileURLToPath(resolved) : resolved
+        } catch {
+          return undefined
+        }
+      },
     }
 
     addServerTemplate({
@@ -204,17 +259,56 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         return generateEndpointHandlerManifest(endpointHandlerManifest)
       },
     })
+    addServerTemplate({
+      filename: `#nuxt-${moduleName}/idempotency-policy`,
+      // A namespace import (rather than `export { default } from '...'`) so a
+      // policy file that forgets its default export still bundles cleanly;
+      // Nitro startup validation reports that mistake with a clear message
+      // instead of Rollup failing the build on a missing default export.
+      getContents: () => {
+        if (!idempotencyPolicyPathResolved) {
+          throw new Error(
+            '[nuxt-endpoints] Idempotency policy template was requested before Nitro route discovery completed.',
+          )
+        }
+        return idempotencyPolicyPath
+          ? `import * as policyModule from '${toImportPath(idempotencyPolicyPath)}'\nexport default policyModule.default\n`
+          : 'export default undefined\n'
+      },
+    })
 
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
+    hook('nitro:config', (nitroConfig) => {
+      nitroConfig.ignore = [...(nitroConfig.ignore ?? []), endpointContractIgnorePattern]
+    })
     hook('nitro:init', async (nitro) => {
       const generateArtifacts = async () => {
-        const handlers = await composeHandlers(collectNitroRouteHandlers(nitro), loadRouteModule)
+        if (!options.idempotency?.policy) {
+          idempotencyPolicyPath = await resolveConventionIdempotencyPolicyPath(
+            nuxt.options.rootDir,
+            nitro.options.scanDirs,
+          )
+          idempotencyPolicyPathResolved = true
+        }
+        const handlers = await composeHandlers(
+          collectNitroRouteHandlers(nitro),
+          loaders,
+          idempotencyPolicyPath !== undefined,
+          resolvedOptions.client.query,
+          (message) => logger.warn(message),
+        )
         endpointHandlerManifest = handlers
-        await generateEndpointTypes(resolve, typeFile, handlers, resolvedOptions)
-        await generateEndpointClient(resolve, runtimeFile, handlers, resolvedOptions)
+        await writeGenerated(typeFile, generateEndpointTypes(resolve, handlers, resolvedOptions))
+        await writeGenerated(
+          runtimeFile,
+          generateEndpointClient(resolve, handlers, resolvedOptions),
+        )
         if (resolvedOptions.client.query) {
-          await generateEndpointQueryTypes(resolve, queryTypeFile, handlers)
-          await generateEndpointQueryClient(resolve, queryRuntimeFile, queryTypeFile, handlers)
+          await writeGenerated(queryTypeFile, generateEndpointQueryTypes(resolve, handlers))
+          await writeGenerated(
+            queryRuntimeFile,
+            generateEndpointQueryClient(resolve, queryTypeFile, handlers),
+          )
         }
       }
 
@@ -232,8 +326,11 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     }
 
     addServerImports([
-      { from: resolve('./runtime'), name: 'defineEndpoint' },
-      { from: resolve('./runtime'), name: 'defineEndpointHandler' },
+      ...discoveryEvaluatedServerHelpers.map(({ name }) => ({ from: resolve('./runtime'), name })),
+      // defineIdempotencyPolicy needs no jiti shim: the central policy file
+      // is not a discovery-evaluated module (route or contract file), so
+      // this auto-import is only ever exercised through Nitro's own bundling.
+      { from: resolve('./runtime'), name: 'defineIdempotencyPolicy' },
     ])
 
     addImports([
@@ -271,7 +368,10 @@ export default nuxtEndpointsModule
 
 async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],
-  loadRouteModule: RouteModuleLoader,
+  loaders: ContractModuleLoaders,
+  policyFileExists: boolean,
+  queryClientEnabled: boolean,
+  warn: (message: string) => void,
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
   const operations = new Map<string, string>()
@@ -281,11 +381,24 @@ async function composeHandlers(
       continue
     }
 
-    const detection = await detectEndpoint(handler, loadRouteModule)
+    const detection = await detectEndpoint(handler, loaders)
     if (!detection) {
       continue
     }
-    const { operation, idempotency } = detection
+
+    const unsupportedSyntax = findUnsupportedRouteTemplateSyntax(handler.route)
+    if (unsupportedSyntax) {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${handler.route}) declares an endpoint on a ${unsupportedSyntax} route. The generated client and OpenAPI document cannot represent it correctly yet; keep this route as a plain defineEventHandler.`,
+      )
+    }
+
+    const { operation, idempotency, idempotencyRuntimeGaps } = detection
+    if (idempotencyRuntimeGaps?.length && !policyFileExists) {
+      throw new Error(
+        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no idempotency policy file was found. Add them to .idempotency() or create server/endpoints/idempotency.ts.`,
+      )
+    }
     const existingHandlerPath = operation ? operations.get(operation) : undefined
     if (operation && existingHandlerPath) {
       throw new Error(
@@ -294,6 +407,17 @@ async function composeHandlers(
     }
     if (operation) {
       operations.set(operation, handler.handler)
+    }
+
+    if (
+      operation &&
+      queryClientEnabled &&
+      !queryHttpMethods.has(handler.method) &&
+      !mutationHttpMethods.has(handler.method)
+    ) {
+      warn(
+        `Operation "${operation}" uses method "${handler.method}", which is not a query (${queryHttpMethodList.join(', ')}) or mutation (${mutationHttpMethodList.join(', ')}) method. No Vue Query option factory is generated for it.`,
+      )
     }
 
     endpointHandlers.push({
@@ -308,270 +432,69 @@ async function composeHandlers(
   return endpointHandlers
 }
 
-function buildEndpointRouteEntryUnion(handlers: EndpointRouteHandler[]): string {
-  return handlers.length
-    ? handlers
-        .map((handler) => {
-          const operation = handler.operation ? `, operation: '${handler.operation}'` : ''
-          return `  | { path: '${handler.route}', method: '${handler.method}'${operation}, definition: typeof import('${toImportPath(handler.handler)}').default['__endpoint_contract__']['definition'], handlerReturn: typeof import('${toImportPath(handler.handler)}').default['__endpoint_handler_return__'] }`
-        })
-        .join('\n')
-    : '  | never'
-}
-
-async function generateEndpointTypes(
-  resolve: (path: string) => string,
-  filePath: string,
-  handlers: EndpointRouteHandler[],
-  options: ResolvedEndpointsModuleOptions,
-) {
-  const endpointUnion = buildEndpointRouteEntryUnion(handlers)
-  const effectImport = options.client.effect
-    ? `import type { EffectEndpointClient, EffectEndpointOperationCall, EffectEndpointPathCall, UseEndpointEffectClient, UseEndpointEffectClientMethod } from '${toImportPath(resolve('./runtime/effect'))}'\n`
-    : ''
-  const clientFeatures = `{
-  result: ${options.client.result ? 'true' : 'false'}
-  raw: ${options.client.raw ? 'true' : 'false'}
-}`
-  const endpointClientType = options.client.effect
-    ? 'EffectEndpointClient<EndpointRouteEntry, EndpointClientFeatures>'
-    : 'EndpointClient<EndpointRouteEntry, EndpointClientFeatures>'
-  const endpointOperationCallType = options.client.effect
-    ? 'EffectEndpointOperationCall'
-    : 'EndpointOperationCall'
-  const endpointPathCallType = options.client.effect ? 'EffectEndpointPathCall' : 'EndpointPathCall'
-  const resultType = options.client.result
-    ? "\nexport type $EndpointResult<OPERATION extends EndpointOperation> = Awaited<ReturnType<$EndpointCall<OPERATION>['result']>>\nexport type $EndpointPathResult<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Awaited<ReturnType<$EndpointPathCall<PATH, METHOD>['result']>>"
-    : '\nexport type $EndpointResult<OPERATION extends EndpointOperation> = never\nexport type $EndpointPathResult<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never'
-  const rawResponseType = options.client.raw
-    ? "\nexport type $EndpointRawResponse<OPERATION extends EndpointOperation> = Awaited<ReturnType<$EndpointCall<OPERATION>['raw']>>\nexport type $EndpointPathRawResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Awaited<ReturnType<$EndpointPathCall<PATH, METHOD>['raw']>>"
-    : '\nexport type $EndpointRawResponse<OPERATION extends EndpointOperation> = never\nexport type $EndpointPathRawResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never'
-  const useEndpointResultType = options.client.result
-    ? '\nexport type $UseEndpointResult = UseEndpointResultClient<EndpointRouteEntry, EndpointClientFeatures>\nexport type $UseEndpointResultPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointResultClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>'
-    : '\nexport type $UseEndpointResult = never\nexport type $UseEndpointResultPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never'
-  const useEndpointEffectType = options.client.effect
-    ? '\nexport type $UseEndpointEffect = UseEndpointEffectClient<EndpointRouteEntry, EndpointClientFeatures>\nexport type $UseEndpointEffectPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointEffectClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>'
-    : '\nexport type $UseEndpointEffect = never\nexport type $UseEndpointEffectPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never'
-
-  const content = `
-import type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from '${toImportPath(resolve('./runtime'))}'
-${effectImport}
-
-type EndpointRouteEntry =
-${endpointUnion}
-
-type EndpointClientFeatures = ${clientFeatures}
-type EndpointOperationFrom<ROUTE> = ROUTE extends { operation: infer OPERATION extends string } ? OPERATION : never
-type EndpointRouteForPath<PATH extends EndpointPath> = Extract<EndpointRouteEntry, { path: PATH }>
-type EndpointRouteForPathMethod<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Extract<EndpointRouteEntry, { path: PATH, method: METHOD }>
-
-export type $EndpointClient = ${endpointClientType}
-export type EndpointOperation = EndpointOperationFrom<EndpointRouteEntry>
-export type EndpointPath = EndpointRouteEntry['path']
-export type EndpointMethod<PATH extends EndpointPath> = EndpointRouteForPath<PATH>['method']
-export type $EndpointResponse<OPERATION extends EndpointOperation> = Awaited<$EndpointCall<OPERATION>>
-export type $EndpointCall<OPERATION extends EndpointOperation> = ${endpointOperationCallType}<EndpointRouteEntry, OPERATION, EndpointClientFeatures>
-export type $EndpointPathResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Awaited<$EndpointPathCall<PATH, METHOD>>
-export type $EndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ${endpointPathCallType}<EndpointRouteEntry, PATH, METHOD, EndpointClientFeatures>
-export type $UseEndpoint = UseEndpointClient<EndpointRouteEntry, EndpointClientFeatures>
-export type $UseEndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>
-${useEndpointResultType}${useEndpointEffectType}${resultType}${rawResponseType}
-export type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod }
-`.trimStart()
-
-  await fsp.mkdir(dirname(filePath), { recursive: true })
-  await fsp.writeFile(filePath, content)
-}
-
-async function generateEndpointClient(
-  resolve: (path: string) => string,
-  filePath: string,
-  handlers: EndpointRouteHandler[],
-  options: ResolvedEndpointsModuleOptions,
-) {
-  const routes = handlers.map((handler) => {
-    return {
-      path: handler.route,
-      method: handler.method,
-      ...(handler.operation ? { operation: handler.operation } : {}),
-      ...(handler.idempotency
-        ? {
-            idempotency: {
-              headerName: handler.idempotency.headerName,
-              required: handler.idempotency.required,
-            },
-          }
-        : {}),
+// Exported for focused unit testing of route-template rejection without a
+// full Nitro route-discovery pipeline. Catch-all (`**`/`**:name`) and optional
+// (`:name?`) segments cannot yet be represented in the generated client or
+// OpenAPI document, so endpoints on those routes are rejected at build time.
+export function findUnsupportedRouteTemplateSyntax(
+  route: string,
+): 'catch-all' | 'optional-parameter' | undefined {
+  for (const segment of route.split('/')) {
+    if (segment === '**' || segment.startsWith('**:')) {
+      return 'catch-all'
     }
-  })
-  const effectImport = options.client.effect
-    ? `import { createEndpointEffectExtension, createUseEndpointEffect } from '${toImportPath(resolve('./runtime/effect'))}'\n`
-    : ''
-  const useEndpointResultRuntimeImport = options.client.result ? ', createUseEndpointResult' : ''
-  const useEndpointResultTypeImport = options.client.result ? ', $UseEndpointResult' : ''
-  const useEndpointEffectTypeImport = options.client.effect ? ', $UseEndpointEffect' : ''
-  const clientFeatures = {
-    result: options.client.result,
-    raw: options.client.raw,
-  }
-  const clientOptions = options.client.effect
-    ? `, { features: ${JSON.stringify(clientFeatures)}, extensions: [createEndpointEffectExtension()] }`
-    : `, { features: ${JSON.stringify(clientFeatures)} }`
-  const asyncDataClientOptions = `, { features: ${JSON.stringify(clientFeatures)} }`
-  const asyncDataRuntime = '__useEndpointAsyncData'
-  const useEndpointResultExport = options.client.result
-    ? `\nexport const useEndpointResult = createUseEndpointResult(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpointResult`
-    : ''
-  const useEndpointEffectExport = options.client.effect
-    ? `\nexport const useEndpointEffect = createUseEndpointEffect(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpointEffect`
-    : ''
-
-  const content = `
-import { createUseAsyncData } from '#app/composables/asyncData'
-import { createEndpointClient, createUseEndpoint${useEndpointResultRuntimeImport} } from '${toImportPath(resolve('./runtime/client'))}'
-${effectImport}
-import type { $EndpointClient, $UseEndpoint${useEndpointResultTypeImport}${useEndpointEffectTypeImport} } from '#endpoints'
-
-const routes = ${JSON.stringify(routes, null, 2)} as const
-export const __useEndpointAsyncData = createUseAsyncData()
-
-export const $endpoint = createEndpointClient(routes${clientOptions}) as unknown as $EndpointClient
-export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint${useEndpointResultExport}${useEndpointEffectExport}
-`.trimStart()
-
-  await fsp.mkdir(dirname(filePath), { recursive: true })
-  await fsp.writeFile(filePath, content)
-}
-
-async function generateEndpointQueryTypes(
-  resolve: (path: string) => string,
-  filePath: string,
-  handlers: EndpointRouteHandler[],
-) {
-  const endpointUnion = buildEndpointRouteEntryUnion(handlers)
-
-  const content = `
-import type { EndpointInfiniteQueryOptionsClient, EndpointMutationOptionsClient, EndpointQueryOptionsClient } from '${toImportPath(resolve('./runtime/query'))}'
-
-type EndpointRouteEntry =
-${endpointUnion}
-
-export type $EndpointQueryOptions = EndpointQueryOptionsClient<EndpointRouteEntry>
-export type $EndpointMutationOptions = EndpointMutationOptionsClient<EndpointRouteEntry>
-export type $EndpointInfiniteQueryOptions = EndpointInfiniteQueryOptionsClient<EndpointRouteEntry>
-`.trimStart()
-
-  await fsp.mkdir(dirname(filePath), { recursive: true })
-  await fsp.writeFile(filePath, content)
-}
-
-async function generateEndpointQueryClient(
-  resolve: (path: string) => string,
-  filePath: string,
-  queryTypeFile: string,
-  handlers: EndpointRouteHandler[],
-) {
-  const routes = handlers.map((handler) => {
-    return {
-      path: handler.route,
-      method: handler.method,
-      ...(handler.operation ? { operation: handler.operation } : {}),
-      ...(handler.idempotency
-        ? {
-            idempotency: {
-              headerName: handler.idempotency.headerName,
-              required: handler.idempotency.required,
-            },
-          }
-        : {}),
+    if (segment.startsWith(':') && segment.endsWith('?')) {
+      return 'optional-parameter'
     }
-  })
-  const queryRuntimeImportPath = toImportPath(resolve('./runtime/query'))
-  const queryTypeImportPath = toImportPath(queryTypeFile.replace(/\.d\.ts$/, ''))
-
-  const content = `
-import { useRequestFetch } from 'nuxt/app'
-import { createEndpointInfiniteQueryOptions, createEndpointMutationOptions, createEndpointQueryOptions } from '${queryRuntimeImportPath}'
-
-import type { EndpointFetcherRuntime } from '${queryRuntimeImportPath}'
-import type { $EndpointInfiniteQueryOptions, $EndpointMutationOptions, $EndpointQueryOptions } from '${queryTypeImportPath}'
-
-const routes = ${JSON.stringify(routes, null, 2)} as const
-
-const captureFetcher = () => {
-  try {
-    return useRequestFetch() as unknown as EndpointFetcherRuntime
-  } catch (error) {
-    if (import.meta.server) {
-      throw new Error(
-        '[nuxt-endpoints] endpointQueryOptions/endpointMutationOptions/endpointInfiniteQueryOptions factories must be called while Nuxt context is available (component setup, plugins, or route middleware), so the request-aware fetcher can be captured for SSR.',
-        { cause: error },
-      )
-    }
-    return undefined
   }
+  return undefined
 }
 
-export const endpointQueryOptions = createEndpointQueryOptions(routes, { captureFetcher }) as unknown as $EndpointQueryOptions
-export const endpointMutationOptions = createEndpointMutationOptions(routes, { captureFetcher }) as unknown as $EndpointMutationOptions
-export const endpointInfiniteQueryOptions = createEndpointInfiniteQueryOptions(routes, { captureFetcher }) as unknown as $EndpointInfiniteQueryOptions
-`.trimStart()
-
+// Small shared helper so every codegen builder above stays a pure
+// content-in/string-out function; only this module writes to disk.
+async function writeGenerated(filePath: string, content: string): Promise<void> {
   await fsp.mkdir(dirname(filePath), { recursive: true })
   await fsp.writeFile(filePath, content)
-}
-
-function generateEndpointQueryPlugin(staleTime: number): string {
-  return `
-import type { DehydratedState } from '@tanstack/vue-query'
-import { QueryClient, VueQueryPlugin, dehydrate, hydrate } from '@tanstack/vue-query'
-import { defineNuxtPlugin, useState } from 'nuxt/app'
-
-export default defineNuxtPlugin((nuxtApp) => {
-  const vueQueryState = useState<DehydratedState | null>('nuxt-endpoints-vue-query', () => null)
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: ${staleTime},
-      },
-    },
-  })
-  nuxtApp.vueApp.use(VueQueryPlugin, { queryClient })
-
-  if (import.meta.server) {
-    nuxtApp.hooks.hook('app:rendered', () => {
-      vueQueryState.value = dehydrate(queryClient)
-      queryClient.clear()
-    })
-  }
-
-  if (import.meta.client) {
-    hydrate(queryClient, vueQueryState.value)
-  }
-})
-`.trimStart()
 }
 
 async function detectEndpoint(
   handler: NitroRouteHandlerDescriptor,
-  loadRouteModule: RouteModuleLoader,
+  loaders: ContractModuleLoaders,
 ): Promise<EndpointDetection | null> {
-  const loadResult = await loadRouteModule(handler.handler)
-  const importedEndpoint = getImportedEndpoint(loadResult.module)
-  if (importedEndpoint) {
-    return importedEndpoint
+  const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
+  const source = await resolveEndpointCarrierSource(fileContent, handler.handler, loaders)
+
+  if (source.kind === 'skip') {
+    return null
+  }
+  if (source.kind === 'contract') {
+    return getEndpointFromCarrier(source.carrier as EndpointExport | undefined)
   }
 
-  const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
+  const loadResult = await loaders.loadModule(handler.handler)
+  const routeModuleEndpoint = getEndpointFromRouteModule(
+    loadResult.module as EndpointRouteModule | undefined,
+  )
+  if (routeModuleEndpoint) {
+    return routeModuleEndpoint
+  }
+
   assertEndpointModuleEvaluated(fileContent, handler.handler, loadResult.error)
   return null
 }
 
-function getImportedEndpoint(
+function getEndpointFromRouteModule(
   routeModule: EndpointRouteModule | undefined,
-): { operation?: string; idempotency?: EndpointIdempotencyMetadata } | null {
+): EndpointDetection | null {
   const carrier = routeModule?.default?.__endpoint_contract__ || routeModule?.endpoint
+  return getEndpointFromCarrier(carrier)
+}
+
+// Exported for focused unit testing of the build-time idempotency gap
+// computation without needing a full Nitro route-discovery/jiti pipeline.
+export function getEndpointFromCarrier(
+  carrier: EndpointExport | undefined,
+): EndpointDetection | null {
   const definition = carrier?.definition
 
   if (!definition) {
@@ -580,10 +503,13 @@ function getImportedEndpoint(
 
   const operation = typeof definition.operation === 'string' ? definition.operation : undefined
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
-  if (idempotency && carrier.__idempotency_runtime__ !== true) {
-    throw new Error(
-      '[nuxt-endpoints] Endpoint idempotency metadata has no matching server runtime policy. Use DefinedEndpoint.idempotency() instead of writing metadata directly.',
-    )
+  let idempotencyRuntimeGaps: readonly string[] | undefined
+  if (idempotency) {
+    const marker = parseIdempotencyRuntimeMarker(carrier.__idempotency_runtime_marker__)
+    if (!marker) {
+      throw new Error(idempotencyMetadataWithoutRuntimeMessage('on this endpoint'))
+    }
+    idempotencyRuntimeGaps = idempotencyRuntimeOptionKeys.filter((key) => !marker[key])
   }
   if (idempotency && definition.headers) {
     assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
@@ -591,7 +517,30 @@ function getImportedEndpoint(
   return {
     ...(operation ? { operation } : {}),
     ...(idempotency ? { idempotency } : {}),
+    ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
   }
+}
+
+// `false` marks an endpoint with hand-written (unsupported) idempotency
+// metadata; anything else that doesn't match the marker shape is treated the
+// same way so hand-written metadata is always rejected rather than silently
+// skipping the runtime-option build check.
+function parseIdempotencyRuntimeMarker(
+  value: unknown,
+): EndpointIdempotencyRuntimeMarker | false | undefined {
+  if (value === false) {
+    return false
+  }
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    idempotencyRuntimeOptionKeys.every(
+      (key) => key in value && typeof (value as Record<string, unknown>)[key] === 'boolean',
+    )
+  ) {
+    return value as EndpointIdempotencyRuntimeMarker
+  }
+  return undefined
 }
 
 function assertNoIdempotencyHeaderSchemaCollision(headers: unknown, headerName: string): void {
@@ -629,23 +578,16 @@ function parseEndpointIdempotencyMetadata(value: unknown): EndpointIdempotencyMe
 
 function installEndpointServerImportGlobals(): () => void {
   const globalObject = globalThis as typeof globalThis & Record<string, unknown>
-  const previous = {
-    defineEndpoint: {
-      exists: 'defineEndpoint' in globalObject,
-      value: globalObject.defineEndpoint,
-    },
-    defineEndpointHandler: {
-      exists: 'defineEndpointHandler' in globalObject,
-      value: globalObject.defineEndpointHandler,
-    },
-  }
-
-  globalObject.defineEndpoint = defineEndpoint
-  globalObject.defineEndpointHandler = defineEndpointHandler
+  const restorations = discoveryEvaluatedServerHelpers.map(({ name, value }) => {
+    const previous = { exists: name in globalObject, value: globalObject[name] }
+    globalObject[name] = value
+    return { name, previous }
+  })
 
   return () => {
-    restoreGlobalValue(globalObject, 'defineEndpoint', previous.defineEndpoint)
-    restoreGlobalValue(globalObject, 'defineEndpointHandler', previous.defineEndpointHandler)
+    for (const { name, previous } of restorations) {
+      restoreGlobalValue(globalObject, name, previous)
+    }
   }
 }
 
@@ -661,7 +603,10 @@ function restoreGlobalValue(
   delete globalObject[key]
 }
 
-function resolveModuleOptions(
+// Exported for focused unit testing of option defaulting/normalization
+// (openApi true/false/object, client/query combinations) without needing a
+// full Nuxt module setup pass.
+export function resolveModuleOptions(
   options: EndpointsModuleOptions,
   isDev: boolean,
 ): ResolvedEndpointsModuleOptions {
@@ -726,7 +671,11 @@ function resolveModuleOptions(
   }
 }
 
-function resolveQueryClientOption(query: boolean | EndpointsQueryClientModuleOptions | undefined): {
+// Exported for focused unit testing of the `client.query` boolean/object
+// normalization in isolation from `resolveModuleOptions`.
+export function resolveQueryClientOption(
+  query: boolean | EndpointsQueryClientModuleOptions | undefined,
+): {
   query: boolean
   querySetup: 'external' | 'auto'
   queryStaleTime: number
@@ -746,6 +695,47 @@ function resolveQueryClientOption(query: boolean | EndpointsQueryClientModuleOpt
   }
 }
 
+// Exported for focused unit testing of the "explicit policy path must exist"
+// rejection without a full Nuxt module setup pass.
+export async function resolveExplicitIdempotencyPolicyPath(
+  nuxt: Nuxt,
+  policy: string,
+): Promise<string> {
+  const resolved = await findPath(join(nuxt.options.rootDir, policy), {
+    cwd: nuxt.options.rootDir,
+    extensions: idempotencyPolicyExtensions,
+  })
+  if (!resolved) {
+    throw new Error(
+      `[nuxt-endpoints] endpoints.idempotency.policy is set to "${policy}", but no matching file was found.`,
+    )
+  }
+  return resolved
+}
+
+// Endpoint routes can come from the project server directory, extended Nuxt
+// layers, and custom Nitro scanDirs. Nitro's resolved `options.scanDirs` is
+// the exact directory list its route scanning uses, so walking it keeps the
+// policy convention discoverable from every root that can contribute routes
+// without re-deriving that list here.
+// Exported for focused unit testing of the "first scanDir match wins" and
+// "no policy file found" behavior without a full Nuxt module setup pass.
+export async function resolveConventionIdempotencyPolicyPath(
+  rootDir: string,
+  scanDirs: readonly string[],
+): Promise<string | undefined> {
+  for (const scanDir of scanDirs) {
+    const resolved = await findPath(join(scanDir, 'endpoints/idempotency'), {
+      cwd: rootDir,
+      extensions: idempotencyPolicyExtensions,
+    })
+    if (resolved) {
+      return resolved
+    }
+  }
+  return undefined
+}
+
 function isTanstackVueQueryResolvable(rootDir: string): boolean {
   try {
     const require = createRequire(`${rootDir}/package.json`)
@@ -759,8 +749,4 @@ function isTanstackVueQueryResolvable(rootDir: string): boolean {
 
 function normalizePath(path: string): string {
   return path.startsWith('/') ? path : `/${path}`
-}
-
-function toImportPath(path: string): string {
-  return path.replace(/\\/g, '/')
 }

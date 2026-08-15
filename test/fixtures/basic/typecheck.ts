@@ -74,6 +74,15 @@ async function checkClient() {
   // @ts-expect-error idempotencyKey is required by endpoint metadata.
   await client('createIdempotentItem', { body: { amount: 100 } })
 
+  const idempotentCentral = await client('createIdempotentCentralItem', {
+    body: { amount: 100 },
+    idempotencyKey: 'request-1',
+  })
+  idempotentCentral.id.toFixed()
+
+  // @ts-expect-error idempotencyKey is required by endpoint metadata.
+  await client('createIdempotentCentralItem', { body: { amount: 100 } })
+
   // @ts-expect-error body.name is required.
   await client('/api/users', { method: 'post', body: {} })
   // @ts-expect-error body.name is required.
@@ -81,6 +90,20 @@ async function checkClient() {
 
   const search = await client('/api/search', { method: 'get', query: { q: 'nuxt' } })
   search.items[0]?.toUpperCase()
+
+  const separated = await client('/api/separated', {
+    method: 'get',
+    query: { name: 'nuxt' },
+  })
+  separated.name.toUpperCase()
+  separated.separated.valueOf()
+
+  const separatedByOperation = await client('getSeparated', { query: { name: 'nuxt' } })
+  separatedByOperation.name.toUpperCase()
+
+  const sibling = await client('getSibling', { query: { name: 'nuxt' } })
+  sibling.name.toUpperCase()
+  sibling.sibling.valueOf()
 
   const serialized = await client('getSerialized')
   serialized.createdAt.toUpperCase()

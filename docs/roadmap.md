@@ -2,7 +2,7 @@
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-08-14
+Last consolidated: 2026-08-15
 
 This is the source of truth for product-level implementation priorities and
 for recommendations that are not specific to one client adapter. Detailed
@@ -23,20 +23,24 @@ without hiding the broader roadmap.
 
 ## Current implementation status
 
-| Area                                                                  | Status                           | Next decision                                                               |
-| --------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------- |
-| Endpoint contracts, runtime validation, generated client, and OpenAPI | Implemented                      | Continue stabilization and compatibility work                               |
-| JSON wire response mapping and Nitro `InternalApi` agreement          | Implemented                      | Replace only through a tested Nuxt 5 typed-fetch adapter                    |
-| H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                |
-| Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain |
-| Shared fresh-request and fetcher extension boundary                   | Implemented                      | `createEndpointRequest`, fetcher injection, and shared key normalization    |
-| TanStack Query adapter                                                | Phases 1-3 implemented           | Initial public decisions confirmed; monitor adoption and compatibility      |
-| Idempotency-Key helper                                                | Implemented                      | Application-owned durable adapters must pass the conformance contract       |
-| Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                            |
-| Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                      |
-| Multipart request contracts                                           | Candidate for later              | Design runtime parsing, client serialization, and OpenAPI together          |
-| First-class typed streaming/SSE                                       | Deferred                         | Require a complete chunk, cancellation, and error contract                  |
-| Low-level files, streams, redirects, and proxies                      | Available                        | Keep native HTTP escape hatches documented                                  |
+| Area                                                                  | Status                           | Next decision                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Endpoint contracts, runtime validation, generated client, and OpenAPI | Implemented                      | Continue stabilization and compatibility work                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Contract-file separation for build-time discovery                     | Implemented                      | Discovery statically resolves the handler's contract import and evaluates only the contract module; non-endpoint routes are never evaluated. Standard placement is a sibling `*.endpoint-contract.*` file, excluded from Nitro scanning through the public `ignore` option; the suffix is deliberately fixed (not configurable) because it exists only for that ignore pattern — contracts placed outside route directories need no suffix at all |
+| JSON wire response mapping and Nitro `InternalApi` agreement          | Implemented                      | Replace only through a tested Nuxt 5 typed-fetch adapter                                                                                                                                                                                                                                                                                                                                                                                          |
+| H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                                                                                                                                                                                                                                                                                                                                                                                      |
+| Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain                                                                                                                                                                                                                                                                                                                                                                       |
+| Shared fresh-request and fetcher extension boundary                   | Implemented                      | `createEndpointRequest`, fetcher injection, and shared key normalization                                                                                                                                                                                                                                                                                                                                                                          |
+| TanStack Query adapter                                                | Phases 1-3 implemented           | Initial public decisions confirmed; monitor adoption and compatibility                                                                                                                                                                                                                                                                                                                                                                            |
+| Idempotency-Key helper                                                | Implemented                      | Application-owned durable adapters must pass the conformance contract                                                                                                                                                                                                                                                                                                                                                                             |
+| Idempotency central runtime policy                                    | Implemented                      | `server/endpoints/idempotency.ts` supplies storage/scope/authorization defaults; endpoints keep contract metadata and overrides                                                                                                                                                                                                                                                                                                                   |
+| Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Multipart request contracts                                           | Candidate for later              | Design runtime parsing, client serialization, and OpenAPI together                                                                                                                                                                                                                                                                                                                                                                                |
+| Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                               |
+| Optional path-parameter contracts                                     | Rejected                         | OpenAPI has no honest representation for optional path parameters; declare two routes instead. Build-time rejection shipped                                                                                                                                                                                                                                                                                                                       |
+| First-class typed streaming/SSE                                       | Deferred                         | Require a complete chunk, cancellation, and error contract                                                                                                                                                                                                                                                                                                                                                                                        |
+| Low-level files, streams, redirects, and proxies                      | Available                        | Keep native HTTP escape hatches documented                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 The H3 event change is covered by runtime and type tests and is now part of the
 core endpoint handler context.
@@ -224,6 +228,23 @@ Implemented design points:
 - endpoint metadata or OpenAPI documentation where useful;
 - concurrency tests across duplicate requests and multiple server instances.
 
+Deliberate first-version omissions, recorded in the design document and
+collected here so their triggers stay discoverable. None is scheduled; all are
+demand- or externally-driven:
+
+- Strict IETF Structured Fields key syntax — revisit if the expired draft
+  advances or ecosystem behavior converges (design doc, header syntax note).
+- Lease heartbeat/cancellation — only if post-expiry handler overlap becomes a
+  real operational problem for long-running handlers.
+- Waiting/polling on in-flight requests instead of an immediate `409` — only
+  on real retry-UX demand.
+- Merging helper-generated `400`/`409`/`422` problems into the typed
+  `.result()` union — on demand for typed handling of those failures.
+
+The first two would rework the claim/complete execution path inside
+`DefinedEndpoint.handler()`; that is the moment to also extract that path into
+its own module (see Deferred internal refactorings).
+
 ## Operation-aware observability
 
 Named operations provide stable labels for tracing and metrics. Shared
@@ -295,6 +316,21 @@ Current public guidance remains [Low-level HTTP](../site/content/docs/low-level-
   semantics.
 - Grouped action namespaces are not currently justified because named endpoint
   operations and explicit generated helpers provide the useful ergonomics.
+
+## Deferred internal refactorings
+
+Recorded so the "why not" survives; none of these block current work.
+
+- Extracting the idempotency execution path (~150 lines) out of
+  `DefinedEndpoint.handler()` requires reworking the late-injection closures
+  (`routeIdentity`, `idempotencyPolicy`). Do it together with the next
+  substantial idempotency change, not on its own.
+- Splitting `runtime/client.ts` into type and implementation files adds imports
+  without adding testability: the boundary is already clear inside the file and
+  the type surface has a dedicated `.test-d.ts` suite.
+- The landing page's pitch copy lives inside `site/app/pages/index.vue`;
+  extracting it into data modules and card components is worthwhile only once
+  marketing copy churn becomes frequent.
 
 ## Overall delivery priority
 
