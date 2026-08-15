@@ -20,8 +20,15 @@ The current build flow is:
 
 1. [`collectNitroRouteHandlers`](../src/nitro-route-handlers.ts) reads Nitro's
    discovered and configured route handlers.
-2. The module evaluates each route module with Jiti and reads metadata from the
-   exported endpoint definition or handler.
+2. The module statically inspects each route source to decide what to evaluate
+   with Jiti: nothing for routes without endpoint calls, only the imported
+   contract module when `defineEndpointHandler` receives a statically imported
+   identifier, and the route module itself for co-located contracts. Metadata
+   is read from the evaluated endpoint definition or handler. Separated
+   contracts conventionally live in a sibling `*.endpoint-contract.*` file;
+   the module adds that pattern to Nitro's `ignore` option so those files are
+   never scanned as routes, which also excludes matching filenames from
+   Nitro's public-asset copying.
 3. The generated `EndpointRouteEntry` imports the handler's
    `__endpoint_contract__` and `__endpoint_handler_return__` type markers.
 4. Nitro independently generates `InternalApi` from the same route handler's
@@ -86,19 +93,28 @@ They are exposed by `.result()` and `.raw()` and are not merged into
 
 ## Discovery failure policy
 
-Route-module evaluation is required for endpoint metadata. If a source file
-appears to call `defineEndpoint` but evaluation fails, or its evaluated exports
-do not expose endpoint metadata, the build fails with the route path and an
-actionable explanation.
+Evaluation of the contract-defining module is required for endpoint metadata.
+If a source file appears to call `defineEndpoint` but evaluation fails, or its
+evaluated exports do not expose endpoint metadata, the build fails with the
+route path and an actionable explanation. Routes that import their contract
+fail the same way when the contract import cannot be resolved, the contract
+module cannot be evaluated, or the imported value does not expose endpoint
+metadata — discovery never falls back to evaluating the route module in that
+case, because silently running the route's top-level code is exactly what the
+separation exists to avoid.
 
 Nuxt Endpoints does not reconstruct operation names, callbacks, schemas, or
-metadata from source text. Continuing from partial source inference could make
-the generated client, runtime handler manifest, and OpenAPI document disagree.
-Ordinary Nitro routes that do not define an endpoint remain unaffected.
+metadata from source text. The only static inference is syntactic: whether
+`defineEndpoint` is called, and which static import binds the identifier
+passed to `defineEndpointHandler`. Continuing from partial source inference of
+contract contents could make the generated client, runtime handler manifest,
+and OpenAPI document disagree. Ordinary Nitro routes that do not define an
+endpoint are skipped without being imported.
 
-Keep server-route top-level code lightweight, avoid opening connections or
-performing application work during import, and ensure imports resolve during
-Nuxt type generation.
+Keep contract-defining top-level code (the route module for co-located
+contracts, the contract module for separated ones) lightweight, avoid opening
+connections or performing application work during import, and ensure imports
+resolve during Nuxt type generation.
 
 ## Nuxt 5 and `fetchdts`
 

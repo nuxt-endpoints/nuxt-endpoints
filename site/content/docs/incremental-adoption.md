@@ -9,8 +9,8 @@ Nuxt Endpoints is opt-in per route. A server route joins the endpoint system onl
 
 During build, the module inspects each scanned server route:
 
-- If the route module exports `endpoint` (created with `defineEndpoint`), the route joins the generated client, the `#endpoints` types, and the OpenAPI document.
-- If it does not, the route is skipped entirely. No validation is added, no types are generated for it, and its runtime behavior does not change.
+- If the route uses an endpoint definition (created with `defineEndpoint`, co-located or imported from a [contract file](/docs/endpoints#separate-contract-files)), the route joins the generated client, the `#endpoints` types, and the OpenAPI document.
+- If it does not, the route is skipped entirely — it is not even imported during discovery. No validation is added, no types are generated for it, and its runtime behavior does not change.
 
 There is no global middleware and no route allowlist to maintain. The export itself is the opt-in switch.
 

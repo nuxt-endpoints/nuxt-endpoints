@@ -152,3 +152,39 @@ export const endpoint = defineEndpoint(
   },
 )
 ```
+
+## Separate contract files
+
+Endpoint metadata is collected during Nuxt type generation by evaluating the module that defines the contract. With a co-located contract, that module is the route file itself — so its top-level code runs at build time too. Routes whose top-level code is heavy (opens connections, reads required environment) can move the contract to a sibling `.endpoint-contract` file instead, keeping it right next to the handler:
+
+```ts
+// server/api/users/[id].get.endpoint-contract.ts — evaluated during type generation; keep it side-effect free
+import { z } from 'zod'
+
+export const getUserEndpoint = defineEndpoint({
+  operation: 'getUser',
+  params: z.object({ id: z.coerce.number() }),
+  response: z.object({ id: z.number(), name: z.string() }),
+})
+```
+
+```ts
+// server/api/users/[id].get.ts — never evaluated at build time
+import { getUserEndpoint } from './[id].get.endpoint-contract'
+
+const db = await connectToDatabase() // top-level code is now safe
+
+export default defineEndpointHandler(getUserEndpoint, ({ params }) => {
+  return db.users.find(params.id)
+})
+```
+
+The module registers `**/*.endpoint-contract.*` in Nitro's `ignore` option, so these files never become Nitro routes even though they live inside `server/api`. (The same pattern also excludes matching filenames from Nitro's public-asset copying — avoid naming files under `public/` this way.)
+
+When the value passed to `defineEndpointHandler` is a statically imported identifier, discovery evaluates only the contract module and never imports the route file. Rules:
+
+- The import must be a plain static `import` of the identifier (named, aliased, or default). Namespace access (`contracts.getUser`), locally computed values, and auto-imports fall back to evaluating the route module.
+- The contract module's own import graph is evaluated with it, so keep it to schema definitions. Watch out for barrel files that re-export server runtime code.
+- Contracts can also live at any importable path outside `server/api` and `server/routes` if you prefer collecting them elsewhere — the `.endpoint-contract` suffix is only required inside route directories, where every ordinary file becomes a route. Note the ownership split: contracts are your application's code wherever they live, while `server/endpoints/` is where this module looks for its own convention files, such as the [central idempotency policy](/docs/idempotency#central-policy).
+
+Routes that define no endpoint at all are never evaluated during discovery, so this only matters for endpoint routes with heavy top-level code.
