@@ -71,6 +71,37 @@ describe('endpoint idempotency runtime', () => {
     })
   })
 
+  it('defaults to Idempotency-Key/optional metadata and an all-false runtime marker without options', () => {
+    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency()
+    const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
+
+    expect(endpoint.definition.idempotency).toEqual({
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: false,
+    })
+    expect(handler.__endpoint_contract__.__idempotency_runtime_marker__).toEqual({
+      storage: false,
+      scope: false,
+      authorization: false,
+    })
+  })
+
+  it('records exactly which runtime options .idempotency() itself received', () => {
+    const storage = createMemoryIdempotencyStorage()
+    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+      storage: () => storage,
+      required: true,
+    })
+    const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
+
+    expect(handler.__endpoint_contract__.__idempotency_runtime_marker__).toEqual({
+      storage: true,
+      scope: false,
+      authorization: false,
+    })
+  })
+
   it('bypasses storage when an optional key is absent', async () => {
     const storage = createMemoryIdempotencyStorage()
     const claim = vi.spyOn(storage, 'claim')
@@ -470,6 +501,119 @@ describe('endpoint idempotency runtime', () => {
     expect(() =>
       attachRoute(handler, { method: 'post', routeTemplate: '/api/other-items' }),
     ).toThrow(/multiple route identities/i)
+  })
+
+  describe('central policy injection', () => {
+    it('uses the injected policy entirely when the endpoint supplies no runtime options', async () => {
+      const storage = createMemoryIdempotencyStorage()
+      const authorize = vi.fn()
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ required: true })
+      const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+      handler.__set_idempotency_policy__({
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: authorize,
+      })
+
+      await expect(
+        handler(
+          createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
+        ),
+      ).resolves.toEqual({ id: 1 })
+      expect(authorize).toHaveBeenCalledOnce()
+    })
+
+    it('prefers the endpoint storage resolver over the central policy', async () => {
+      const endpointStorage = createMemoryIdempotencyStorage()
+      const policyStorage = createMemoryIdempotencyStorage()
+      const endpointClaim = vi.spyOn(endpointStorage, 'claim')
+      const policyClaim = vi.spyOn(policyStorage, 'claim')
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+        storage: () => endpointStorage,
+        scope: () => 'public',
+        authorization: 'middleware',
+        required: true,
+      })
+      const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+      handler.__set_idempotency_policy__({
+        storage: () => policyStorage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      })
+
+      await expect(
+        handler(
+          createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
+        ),
+      ).resolves.toEqual({ id: 1 })
+      expect(endpointClaim).toHaveBeenCalledOnce()
+      expect(policyClaim).not.toHaveBeenCalled()
+    })
+
+    it('prefers the endpoint leaseTtlMs over the central policy', async () => {
+      const storage = createMemoryIdempotencyStorage()
+      const claim = vi.spyOn(storage, 'claim')
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+        required: true,
+        leaseTtlMs: 5_000,
+      })
+      const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+      handler.__set_idempotency_policy__({
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+        leaseTtlMs: 99_000,
+      })
+
+      await handler(
+        createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
+      )
+      expect(claim).toHaveBeenCalledWith(expect.objectContaining({ leaseTtlMs: 5_000 }))
+    })
+
+    it('falls back to the central policy leaseTtlMs when the endpoint omits it', async () => {
+      const storage = createMemoryIdempotencyStorage()
+      const claim = vi.spyOn(storage, 'claim')
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+        scope: () => 'public',
+        authorization: 'middleware',
+        required: true,
+      })
+      const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+      handler.__set_idempotency_policy__({
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+        leaseTtlMs: 12_345,
+      })
+
+      await handler(
+        createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
+      )
+      expect(claim).toHaveBeenCalledWith(expect.objectContaining({ leaseTtlMs: 12_345 }))
+    })
+
+    it('throws a defensive runtime error when nothing resolves storage/scope/authorization', async () => {
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ scope: () => 'public' })
+      const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+
+      await expect(
+        handler(
+          createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        statusMessage: 'Idempotency Runtime Options Error',
+      })
+    })
   })
 })
 

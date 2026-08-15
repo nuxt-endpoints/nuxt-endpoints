@@ -127,6 +127,16 @@ export function validateIdempotencyTtl(value: number, name: string): number {
   return value
 }
 
+export function hasHttpControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit <= 31 || codeUnit === 127) {
+      return true
+    }
+  }
+  return false
+}
+
 /**
  * Process-local storage for development and tests only.
  *

@@ -2,7 +2,7 @@
 
 Status: implemented; production durability remains application-owned.
 
-Last consolidated: 2026-07-21
+Last consolidated: 2026-08-15
 
 This document defines the guarantees, ownership boundary, and state model for
 optional `Idempotency-Key` replay protection in Nuxt Endpoints. The public API,
@@ -394,6 +394,54 @@ merged into the declared `.result()` union in the first version. OpenAPI lists
 their `application/problem+json` representation while preserving any declared
 application response with the same status and a different media type.
 
+### Central runtime policy
+
+Decision (2026-08-15): the runtime options of `.idempotency()` are optional and
+resolve per item as endpoint override → central policy → library default.
+
+The original shape required `storage`, `scope`, and `authorization` on every
+endpoint. Those are application-wide in practice, and repeating them per route
+multiplies opportunities for security-relevant mistakes such as a mistyped
+scope resolver. It also pulled infrastructure references into contract-defining
+modules, which conflicts with build-time discovery evaluating those modules
+(see the contract-file separation decision in type-generation.md).
+
+The central policy is a convention file, `server/endpoints/idempotency.ts`,
+default-exporting `defineIdempotencyPolicy({ storage, scope, authorization,
+leaseTtlMs?, replayTtlMs? })`. The path can be overridden through the module
+option `endpoints.idempotency.policy`. The file is Nitro runtime code: it is
+bundled into the server and never evaluated by build-time discovery, so it can
+create real storage connections. `nuxt.config.ts` was rejected as the policy
+location because module options reach the runtime only through JSON
+serialization and cannot carry functions or closures; this matches the Nuxt
+convention split used by `app/router.options.ts`.
+
+Layering is deliberate:
+
+- Contract-side metadata stays endpoint-only: `headerName`, `required`,
+  `replayStatuses`, and `fingerprint` affect generated client types, OpenAPI,
+  or route-specific behavior. The policy cannot set them.
+- Runtime wiring is policy-defaulted and endpoint-overridable: `storage`,
+  `scope`, `authorization`, `leaseTtlMs`, `replayTtlMs`. Authorization remains
+  required at the policy level, so "no implicit authorization default" is
+  preserved — the explicitness moves to exactly one reviewed place, and
+  route-specific permission checks stay available as endpoint overrides.
+
+The "metadata implies a matching runtime policy" guarantee is preserved but
+relocated. The `__idempotency_runtime_marker__` property records which runtime options
+the endpoint provided. Build-time discovery fails when an endpoint has gaps and
+no policy file exists (the policy file's contents are not inspected at build
+time because it is never evaluated there). Nitro startup verifies the merged
+configuration and fails when `storage`, `scope`, or `authorization` is still
+missing, or when the policy file does not default-export a valid policy.
+Supplying idempotency metadata directly to `defineEndpoint()` remains
+rejected for the same reasons as before.
+
+Deferred extensions, recorded as open questions: an application-wide
+`headerName` default (conflicts with literal-type inference from the method),
+a policy-level `fingerprint` default (invites implicit global behavior), and
+multiple named policies (endpoint-level overrides cover the known cases).
+
 ## Runtime route metadata
 
 The always-installed Nuxt Endpoints server plugin resolves endpoint handlers at
@@ -406,11 +454,15 @@ definition remain valid because each has its own closure.
 
 Runtime execution refuses an idempotent request if metadata is missing rather
 than falling back to the raw URL and silently changing storage identity. During
-build-time discovery, every endpoint route must be evaluated successfully. If
+build-time discovery, the module that defines each endpoint contract must be
+evaluated successfully — the route module for co-located contracts, or only
+the imported contract module when the route uses a separate contract file. If
 Jiti evaluation fails, or evaluated exports do not expose endpoint metadata,
 the module reports a build error because callbacks and metadata cannot be
-reconstructed safely from source text. Route modules may import resolver
-functions but must not create storage clients or connections at top level.
+reconstructed safely from source text. Contract-defining modules may import
+resolver functions but must not create storage clients or connections at top
+level; with a central policy, contract-side `.idempotency()` arguments are
+fully serializable and this constraint becomes easy to satisfy.
 
 ## Completion and failure policy
 

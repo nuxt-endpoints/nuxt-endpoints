@@ -106,10 +106,13 @@ export type {
   EndpointEventHandler,
   EndpointIdempotencyContext,
   EndpointIdempotencyOptions,
+  EndpointIdempotencyRuntimeMarker,
   EndpointRouteIdentity,
   EndpointRuntimeOptions,
   IdempotencyProblem,
 } from './endpoint'
+export { defineIdempotencyPolicy } from './idempotency-policy'
+export type { EndpointIdempotencyPolicy } from './idempotency-policy'
 export { createOpenApiDocument } from './openapi'
 export type {
   OpenApiComponents,
