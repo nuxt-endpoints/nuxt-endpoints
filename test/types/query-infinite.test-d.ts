@@ -2,7 +2,7 @@ import type { InfiniteData, QueryClient } from '@tanstack/vue-query'
 import { useInfiniteQuery } from '@tanstack/vue-query'
 import { describe, expectTypeOf, it } from 'vitest'
 import type { EndpointResultData } from '../../src/runtime/client'
-import type { EndpointInfiniteQueryOptionsClient } from '../../src/runtime/query'
+import type { EndpointInfiniteQueryOptionsClient } from '../../src/runtime/tanstack-query'
 import type { StandardSchemaLike } from '../../src/runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
@@ -173,7 +173,7 @@ describe('EndpointInfiniteQueryOptionsClient types', () => {
     const query = useInfiniteQuery(options, queryClientInstance)
 
     // Known caveat, STILL PRESENT after the `queryKey` was branded with `DataTag`
-    // (see EndpointTaggedQueryKey in src/runtime/query.ts): vue-query's
+    // (see EndpointTaggedQueryKey in src/runtime/tanstack-query.ts): vue-query's
     // `UseInfiniteQueryOptions` is a mapped type keyed over
     // `InfiniteQueryObserverOptions<TQueryFnData, TError, TData, TQueryKey, TPageParam>`,
     // not over `keyof typeof options` directly, so it is non-homomorphic and blocks

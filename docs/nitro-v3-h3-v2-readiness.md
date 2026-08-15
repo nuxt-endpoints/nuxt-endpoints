@@ -46,7 +46,7 @@ export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
 
 | Area                       | Current boundary                                                                                                                                                               |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| H3 runtime calls           | [`src/runtime/h3-runtime.ts`](../src/runtime/h3-runtime.ts) is the only production runtime file that imports H3 directly.                                                      |
+| H3 runtime calls           | [`src/runtime/h3-adapter.ts`](../src/runtime/h3-adapter.ts) is the only production runtime file that imports H3 directly.                                                      |
 | Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                          |
 | Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                              |
 | Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                        |
@@ -87,13 +87,13 @@ H3 v2 it is the canonical Web `Request`. Therefore checks such as
 ### H3 v2-only release
 
 The preferred migration path is to replace the implementation of
-`h3-runtime.ts`, update dependency ranges, and run the complete compatibility
+`h3-adapter.ts`, update dependency ranges, and run the complete compatibility
 matrix. Endpoint definitions and handlers should not need to change.
 
 ### Simultaneous H3 v1 and v2 support
 
 If one package release must support both majors, provide separate
-implementations such as `h3-runtime-v1.ts` and `h3-runtime-v2.ts`, then select
+implementations such as `h3-adapter-v1.ts` and `h3-adapter-v2.ts`, then select
 one at build or module-setup time from the resolved H3 major. Do not import both
 implementations into the server bundle and do not infer the H3 major for each
 request from the event shape.

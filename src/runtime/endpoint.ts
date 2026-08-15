@@ -12,6 +12,7 @@ import type {
 import {
   createIdempotencyFingerprint,
   createIdempotencyStorageKey,
+  hasHttpControlCharacter,
   validateIdempotencyTtl,
 } from './idempotency'
 import {
@@ -23,8 +24,9 @@ import {
   readRuntimeBody,
   setRuntimeResponseHeaders,
   setRuntimeResponseStatus,
-} from './h3-runtime'
-import type { RuntimeEvent } from './h3-runtime'
+} from './h3-adapter'
+import type { RuntimeEvent } from './h3-adapter'
+import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type {
   IdempotencyReleaseInput,
   IdempotencyStorage,
@@ -48,11 +50,20 @@ export type EndpointIdempotencyContext<DEFINITION extends EndpointDefinition> = 
   'respond'
 >
 
+/**
+ * Sentinel authorization value meaning "handled outside `.idempotency()`,
+ * typically by server middleware that runs before this handler."
+ */
+export type IdempotencyAuthorizationDelegation = 'middleware'
+
 export type EndpointIdempotencyOptions<DEFINITION extends EndpointDefinition> = {
-  storage: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<IdempotencyStorage>
-  scope: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<string>
-  authorization:
-    | 'middleware'
+  // storage/scope/authorization may instead be supplied by the central policy
+  // in server/endpoints/idempotency.ts, so they are optional here; build-time
+  // and startup validation enforce that every endpoint ends up with all three.
+  storage?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<IdempotencyStorage>
+  scope?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<string>
+  authorization?:
+    | IdempotencyAuthorizationDelegation
     | ((context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<void>)
   fingerprint?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<unknown>
   headerName?: string
@@ -111,36 +122,73 @@ type BuildContextResult<DEFINITION extends EndpointDefinition> =
   | RequestValidationFailure
 
 type NormalizedEndpointIdempotencyOptions = {
-  storage: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope: (context: RuntimeIdempotencyContext) => MaybePromise<string>
-  authorization: 'middleware' | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
+  storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
+  scope?: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  authorization?:
+    | IdempotencyAuthorizationDelegation
+    | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
   fingerprint?: (context: RuntimeIdempotencyContext) => MaybePromise<unknown>
   headerName: string
   required: boolean
-  leaseTtlMs: number
-  replayTtlMs: number
+  leaseTtlMs?: number
+  replayTtlMs?: number
   replayStatuses: readonly number[]
 }
 
+// Single source of truth for which runtime options an endpoint can either
+// supply itself (in `.idempotency()`) or delegate to the central policy.
+export const idempotencyRuntimeOptionKeys = ['storage', 'scope', 'authorization'] as const
+export type IdempotencyRuntimeOptionKey = (typeof idempotencyRuntimeOptionKeys)[number]
+
+/**
+ * Records, per `.idempotency()` call, which runtime options the endpoint
+ * itself supplied. Nitro startup fills the rest from the central policy (if
+ * any) and rejects endpoints that still have gaps afterward.
+ */
+export type EndpointIdempotencyRuntimeMarker = Record<IdempotencyRuntimeOptionKey, boolean>
+
+// Shared by module.ts (build-time detection) and server-plugin.ts (startup
+// validation), which both reject hand-written idempotency metadata that
+// bypassed `.idempotency()` and therefore carries no runtime marker.
+export function idempotencyMetadataWithoutRuntimeMessage(subject: string): string {
+  return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Use DefinedEndpoint.idempotency() instead of writing metadata directly.`
+}
+
+const defaultIdempotencyHeaderName = 'Idempotency-Key'
+
 type HeaderNameFromOptions<OPTIONS> = OPTIONS extends { headerName: infer NAME extends string }
   ? NAME
-  : 'Idempotency-Key'
+  : typeof defaultIdempotencyHeaderName
 
 type RequiredFromOptions<OPTIONS> = OPTIONS extends { required: infer REQUIRED extends boolean }
   ? REQUIRED
   : false
 
 export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
-  public readonly __idempotency_runtime__: boolean
+  public readonly __idempotency_runtime_marker__: false | EndpointIdempotencyRuntimeMarker
 
   constructor(
     public readonly definition: DEFINITION,
     private readonly options: EndpointRuntimeOptions = {},
     private readonly idempotencyOptions?: NormalizedEndpointIdempotencyOptions,
+    idempotencyRuntimeMarker?: EndpointIdempotencyRuntimeMarker,
   ) {
-    this.__idempotency_runtime__ = idempotencyOptions !== undefined
+    this.__idempotency_runtime_marker__ =
+      idempotencyOptions !== undefined
+        ? (idempotencyRuntimeMarker ?? createIdempotencyRuntimeMarker(() => false))
+        : false
   }
 
+  // Two overloads (rather than one generic signature with a default type
+  // param) because a default type param on an optional parameter defeats
+  // inference from a passed argument in TypeScript's checker: calling
+  // `.idempotency({ required: true })` would otherwise resolve OPTIONS to
+  // the default instead of the argument.
+  idempotency(): DefinedEndpoint<
+    DEFINITION & {
+      idempotency: EndpointIdempotencyMetadata<typeof defaultIdempotencyHeaderName, false>
+    }
+  >
   idempotency<const OPTIONS extends EndpointIdempotencyOptions<DEFINITION>>(
     options: OPTIONS,
   ): DefinedEndpoint<
@@ -150,18 +198,22 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
         RequiredFromOptions<OPTIONS>
       >
     }
-  > {
-    const normalized = normalizeIdempotencyOptions(options)
+  >
+  idempotency(
+    options?: EndpointIdempotencyOptions<DEFINITION>,
+  ): DefinedEndpoint<DEFINITION & { idempotency: EndpointIdempotencyMetadata }> {
+    const normalized = normalizeIdempotencyOptions(options ?? {})
+    const marker = createIdempotencyRuntimeMarker((key) => options?.[key] !== undefined)
     const definition = {
       ...this.definition,
       idempotency: {
         enabled: true as const,
-        headerName: normalized.headerName as HeaderNameFromOptions<OPTIONS>,
-        required: normalized.required as RequiredFromOptions<OPTIONS>,
+        headerName: normalized.headerName,
+        required: normalized.required,
       },
     }
 
-    return new DefinedEndpoint(definition, this.options, normalized)
+    return new DefinedEndpoint(definition, this.options, normalized, marker)
   }
 
   handler<const HANDLER extends (context: EndpointContext<DEFINITION>) => unknown>(
@@ -176,6 +228,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     handler: (context: EndpointContext<DEFINITION>) => unknown,
   ): EndpointEventHandler<DEFINITION, unknown> {
     let routeIdentity: EndpointRouteIdentity | undefined
+    let idempotencyPolicy: EndpointIdempotencyPolicy | undefined
     const eventHandler = defineRuntimeHandler(
       async (event: RuntimeEvent): Promise<EndpointHandlerSuccessBody<DEFINITION, unknown>> => {
         const contextResult = await buildContext(
@@ -225,9 +278,10 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
         }
 
+        const runtime = resolveIdempotencyRuntimeOptions(idempotency, idempotencyPolicy)
         const runtimeContext = context as unknown as RuntimeIdempotencyContext
-        if (idempotency.authorization !== 'middleware') {
-          await idempotency.authorization(runtimeContext)
+        if (runtime.authorization !== 'middleware') {
+          await runtime.authorization(runtimeContext)
         }
 
         if (key.outcome === 'missing') {
@@ -245,9 +299,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           })
         }
 
-        const storage = await idempotency.storage(runtimeContext)
+        const storage = await runtime.storage(runtimeContext)
         assertIdempotencyStorage(storage)
-        const scope = await idempotency.scope(runtimeContext)
+        const scope = await runtime.scope(runtimeContext)
         if (typeof scope !== 'string' || scope.length === 0) {
           throw createRuntimeError({
             statusCode: 500,
@@ -271,7 +325,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           storageKey,
           fingerprint,
           lease,
-          leaseTtlMs: idempotency.leaseTtlMs,
+          leaseTtlMs: runtime.leaseTtlMs,
         })
 
         if (claim.outcome === 'completed') {
@@ -345,7 +399,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
               serializedBody: snapshot.serializedBody,
               headers: filterReplaySafeHeaders(response.headers),
             },
-            replayTtlMs: idempotency.replayTtlMs,
+            replayTtlMs: runtime.replayTtlMs,
           })
         } catch (error) {
           await releaseLeaseAfterFailure(storage, leaseInput)
@@ -394,6 +448,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           )
         }
         routeIdentity = normalized
+      },
+      __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => {
+        idempotencyPolicy = policy
       },
     })
   }
@@ -457,6 +514,7 @@ export type EndpointEventHandler<
   __endpoint_contract__: DefinedEndpoint<DEFINITION>
   __endpoint_handler_return__: HANDLER_RETURN
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
+  __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => void
 }
 
 type EndpointHandlerSuccessBody<DEFINITION extends EndpointDefinition, HANDLER_RETURN> =
@@ -606,10 +664,27 @@ const replaySafeResponseHeaders = new Set([
   'retry-after',
 ])
 
+function createIdempotencyRuntimeMarker(
+  predicate: (key: IdempotencyRuntimeOptionKey) => boolean,
+): EndpointIdempotencyRuntimeMarker {
+  return Object.fromEntries(
+    idempotencyRuntimeOptionKeys.map((key) => [key, predicate(key)]),
+  ) as EndpointIdempotencyRuntimeMarker
+}
+
+// A type predicate (rather than a plain boolean check) so the key-array-driven
+// gap check also narrows each field to non-nullable for the caller, the way
+// `!storage || !scope || !authorization` used to narrow them individually.
+function hasAllIdempotencyRuntimeOptions<T extends Record<IdempotencyRuntimeOptionKey, unknown>>(
+  value: T,
+): value is { [KEY in keyof T]: NonNullable<T[KEY]> } {
+  return idempotencyRuntimeOptionKeys.every((key) => value[key] !== undefined)
+}
+
 function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
   options: EndpointIdempotencyOptions<DEFINITION>,
 ): NormalizedEndpointIdempotencyOptions {
-  const headerName = options.headerName ?? 'Idempotency-Key'
+  const headerName = options.headerName ?? defaultIdempotencyHeaderName
   if (!isValidHttpHeaderName(headerName)) {
     throw new TypeError('Idempotency headerName must be a valid HTTP header field name')
   }
@@ -621,16 +696,81 @@ function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
     }
   }
 
+  // The endpoint-validated context types (`EndpointIdempotencyContext<DEFINITION>`)
+  // are erased to the runtime's untyped context at this boundary; the actual
+  // object handed to these callbacks at request time is identical either way.
+  const runtimeCallbacks = options as unknown as Pick<
+    NormalizedEndpointIdempotencyOptions,
+    'storage' | 'scope' | 'authorization' | 'fingerprint'
+  >
+
   return {
-    ...(options as unknown as Omit<
-      NormalizedEndpointIdempotencyOptions,
-      'headerName' | 'required' | 'leaseTtlMs' | 'replayTtlMs' | 'replayStatuses'
-    >),
+    storage: runtimeCallbacks.storage,
+    scope: runtimeCallbacks.scope,
+    authorization: runtimeCallbacks.authorization,
+    fingerprint: runtimeCallbacks.fingerprint,
     headerName,
     required: options.required ?? false,
-    leaseTtlMs: validateIdempotencyTtl(options.leaseTtlMs ?? 60_000, 'leaseTtlMs'),
-    replayTtlMs: validateIdempotencyTtl(options.replayTtlMs ?? 86_400_000, 'replayTtlMs'),
+    leaseTtlMs:
+      options.leaseTtlMs !== undefined
+        ? validateIdempotencyTtl(options.leaseTtlMs, 'leaseTtlMs')
+        : undefined,
+    replayTtlMs:
+      options.replayTtlMs !== undefined
+        ? validateIdempotencyTtl(options.replayTtlMs, 'replayTtlMs')
+        : undefined,
     replayStatuses: [...replayStatuses],
+  }
+}
+
+type ResolvedIdempotencyRuntimeOptions = {
+  storage: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
+  scope: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  authorization:
+    | IdempotencyAuthorizationDelegation
+    | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
+  leaseTtlMs: number
+  replayTtlMs: number
+}
+
+const defaultIdempotencyLeaseTtlMs = 60_000
+const defaultIdempotencyReplayTtlMs = 86_400_000
+
+// Startup validation (server-plugin.ts) guarantees every idempotent endpoint
+// resolves storage/scope/authorization from itself or the central policy, so
+// this is a defensive fallback rather than a path exercised in practice.
+function resolveIdempotencyRuntimeOptions(
+  endpointOptions: NormalizedEndpointIdempotencyOptions,
+  policy: EndpointIdempotencyPolicy | undefined,
+): ResolvedIdempotencyRuntimeOptions {
+  // The policy's context type (`EndpointIdempotencyContext<EndpointDefinition>`)
+  // is erased the same way as in `normalizeIdempotencyOptions`.
+  const runtimePolicy = policy as unknown as Partial<ResolvedIdempotencyRuntimeOptions> | undefined
+  const resolved = {
+    storage: endpointOptions.storage ?? runtimePolicy?.storage,
+    scope: endpointOptions.scope ?? runtimePolicy?.scope,
+    authorization: endpointOptions.authorization ?? runtimePolicy?.authorization,
+  }
+
+  if (!hasAllIdempotencyRuntimeOptions(resolved)) {
+    throw createRuntimeError({
+      statusCode: 500,
+      statusMessage: 'Idempotency Runtime Options Error',
+      data: {
+        message:
+          'The endpoint and its central policy together did not provide storage, scope, and authorization.',
+      },
+    })
+  }
+
+  return {
+    storage: resolved.storage,
+    scope: resolved.scope,
+    authorization: resolved.authorization,
+    leaseTtlMs:
+      endpointOptions.leaseTtlMs ?? runtimePolicy?.leaseTtlMs ?? defaultIdempotencyLeaseTtlMs,
+    replayTtlMs:
+      endpointOptions.replayTtlMs ?? runtimePolicy?.replayTtlMs ?? defaultIdempotencyReplayTtlMs,
   }
 }
 
@@ -666,16 +806,6 @@ function readIdempotencyKey(event: RuntimeEvent, headerName: string): Idempotenc
     return { outcome: 'invalid' }
   }
   return { outcome: 'value', value }
-}
-
-function hasHttpControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index++) {
-    const codeUnit = value.charCodeAt(index)
-    if (codeUnit <= 31 || codeUnit === 127) {
-      return true
-    }
-  }
-  return false
 }
 
 function omitRequestHeader(

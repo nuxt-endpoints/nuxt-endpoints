@@ -53,8 +53,8 @@
       "import": "./dist/runtime/effect.js"
     },
     "./query": {
-      "types": "./dist/runtime/query.d.ts",
-      "import": "./dist/runtime/query.js"
+      "types": "./dist/runtime/tanstack-query.d.ts",
+      "import": "./dist/runtime/tanstack-query.js"
     }
   },
   "publishConfig": {

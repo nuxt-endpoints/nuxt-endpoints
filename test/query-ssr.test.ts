@@ -4,8 +4,8 @@ import type {
   EndpointFetcherRuntime,
   EndpointQueryKey,
   EndpointQueryOptionsClient,
-} from '../src/runtime/query'
-import { createEndpointQueryOptions } from '../src/runtime/query'
+} from '../src/runtime/tanstack-query'
+import { createEndpointQueryOptions } from '../src/runtime/tanstack-query'
 import type { StandardSchemaLike } from '../src/runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>

@@ -26,11 +26,12 @@ const queryVersion = 'v1'
 
 type EndpointQueryMode = 'data' | 'result'
 
-// Single source for the runtime classification below and the compile-time
-// query/mutation operation unions, so both agree on which HTTP methods are
-// queries and which are mutations.
-const queryHttpMethodList = ['get', 'head'] as const
-const mutationHttpMethodList = ['delete', 'patch', 'post', 'put'] as const
+// Single source for the runtime classification below, the compile-time
+// query/mutation operation unions, and the build-time unclassified-method
+// warning in module.ts, so all three agree on which HTTP methods are queries
+// and which are mutations.
+export const queryHttpMethodList = ['get', 'head'] as const
+export const mutationHttpMethodList = ['delete', 'patch', 'post', 'put'] as const
 
 const queryHttpMethods = new Set<string>(queryHttpMethodList)
 const mutationHttpMethods = new Set<string>(mutationHttpMethodList)
@@ -45,8 +46,8 @@ export type EndpointKeyScope =
   | readonly unknown[]
   | Record<string, unknown>
 
-type EndpointQueryHttpMethod = 'get' | 'head'
-type EndpointMutationHttpMethod = 'delete' | 'patch' | 'post' | 'put'
+type EndpointQueryHttpMethod = (typeof queryHttpMethodList)[number]
+type EndpointMutationHttpMethod = (typeof mutationHttpMethodList)[number]
 
 export type EndpointQueryOperation<ROUTES extends EndpointRouteEntry> = EndpointOperation<
   Extract<ROUTES, { method: EndpointQueryHttpMethod }>

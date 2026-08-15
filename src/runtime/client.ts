@@ -12,6 +12,8 @@ import type {
   StatusNumber,
   UnknownIfNever,
 } from './contract'
+import { hasHttpControlCharacter } from './idempotency'
+import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
 import type { EndpointWireValue } from './wire'
 
@@ -970,16 +972,6 @@ function throwDuplicateIdempotencyHeader(headerName: string): never {
   throw new Error(`Do not supply both idempotencyKey and ${headerName} in endpoint request headers`)
 }
 
-function hasHttpControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index++) {
-    const codeUnit = value.charCodeAt(index)
-    if (codeUnit <= 31 || codeUnit === 127) {
-      return true
-    }
-  }
-  return false
-}
-
 function createEndpointCall(
   route: EndpointClientRouteConfig,
   options: Record<string, unknown>,
@@ -1326,7 +1318,7 @@ function replaceParams(path: string, params: unknown): string {
   const values =
     params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined
 
-  return path.replace(/:([^/]+)/g, (_, key: string) => {
+  return replacePathParams(path, (key) => {
     const value = values?.[key]
     if (value === undefined || value === null) {
       throw new Error(`Missing path parameter "${key}" for endpoint path: ${path}`)

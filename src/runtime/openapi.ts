@@ -1,4 +1,5 @@
 import type { EndpointDefinition, EndpointResponsesContract, ResponseContract } from './contract'
+import { isPathParamSegment, pathParamNames, replacePathParams } from './path-template'
 import {
   createJsonSchemaContext,
   getJsonSchemaComponents,
@@ -175,7 +176,7 @@ export function createOpenApiDocument(
 }
 
 function openApiPath(path: string): string {
-  return path.replace(/:([^/]+)/g, '{$1}')
+  return replacePathParams(path, (name) => `{${name}}`)
 }
 
 function fallbackOperationId(endpoint: OpenApiRoute): string {
@@ -183,7 +184,7 @@ function fallbackOperationId(endpoint: OpenApiRoute): string {
     .split('/')
     .filter(Boolean)
     .map((part) => {
-      return part.startsWith(':') ? `by-${part.slice(1)}` : part
+      return isPathParamSegment(part) ? `by-${part.slice(1)}` : part
     })
 
   return toCamelIdentifier([endpoint.method, ...parts].join('-'))
@@ -210,7 +211,7 @@ function createParameters(
     ...createParameterList(
       endpoint.definition.params,
       'path',
-      pathParameterNames(endpoint.path),
+      pathParamNames(endpoint.path),
       schemaContext,
     ),
     ...createParameterList(endpoint.definition.query, 'query', [], schemaContext),
@@ -432,17 +433,6 @@ function responseHeaders(
     }),
   )
   return Object.keys(headers).length > 0 ? headers : undefined
-}
-
-function pathParameterNames(path: string): string[] {
-  const names: string[] = []
-  const pattern = /:([^/]+)/g
-  let match = pattern.exec(path)
-  while (match) {
-    names.push(match[1])
-    match = pattern.exec(path)
-  }
-  return names
 }
 
 function unique(values: string[]): string[] {

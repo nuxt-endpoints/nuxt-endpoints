@@ -6,11 +6,11 @@ import type {
   EndpointQueryKey,
   EndpointQueryOptionsClient,
   EndpointQueryOptionsObject,
-} from '../src/runtime/query'
+} from '../src/runtime/tanstack-query'
 import {
   createEndpointInfiniteQueryOptions,
   createEndpointQueryOptions,
-} from '../src/runtime/query'
+} from '../src/runtime/tanstack-query'
 import type { StandardSchemaLike } from '../src/runtime'
 
 const fetchMock = vi.fn()

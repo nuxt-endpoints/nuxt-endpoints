@@ -42,13 +42,40 @@ describe('defineEndpoint handler types', () => {
     expectTypeOf(base.definition).not.toHaveProperty('idempotency')
   })
 
-  it('requires an explicit authorization policy for idempotent endpoints', () => {
+  it('defaults every runtime option to the central policy when .idempotency() is called without any', () => {
+    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+    const central = endpoint.idempotency()
+
+    expectTypeOf(central.definition.idempotency).toEqualTypeOf<
+      EndpointIdempotencyMetadata<'Idempotency-Key', false>
+    >()
+  })
+
+  it('allows storage, scope, and authorization to be omitted individually', () => {
+    const storage = {} as import('../../src/runtime').IdempotencyStorage
     const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
 
-    // @ts-expect-error authorization must explicitly be middleware or a callback.
+    // Every runtime option may come from the central policy instead, so any
+    // subset (including none) of storage/scope/authorization is valid here.
+    endpoint.idempotency({})
+    endpoint.idempotency({ storage: () => storage })
+    endpoint.idempotency({ scope: () => 'public' })
+    endpoint.idempotency({ authorization: 'middleware' })
+    const partial = endpoint.idempotency({ required: true })
+
+    expectTypeOf(partial.definition.idempotency).toEqualTypeOf<
+      EndpointIdempotencyMetadata<'Idempotency-Key', true>
+    >()
+  })
+
+  it('still rejects an authorization value that is not middleware or a callback', () => {
+    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+
     endpoint.idempotency({
       storage: () => ({}) as import('../../src/runtime').IdempotencyStorage,
       scope: () => 'public',
+      // @ts-expect-error authorization must be 'middleware' or a callback.
+      authorization: 'not-middleware',
     })
   })
 
