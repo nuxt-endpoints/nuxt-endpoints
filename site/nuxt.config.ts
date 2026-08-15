@@ -1,3 +1,5 @@
+import { docsNav } from './app/utils/docs'
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-08-24',
   devtools: { enabled: false },
@@ -45,19 +47,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     prerender: {
-      routes: [
-        '/',
-        '/docs',
-        '/docs/getting-started',
-        '/docs/incremental-adoption',
-        '/docs/endpoints',
-        '/docs/client',
-        '/docs/responses-and-effect',
-        '/docs/openapi',
-        '/docs/schema-libraries',
-        '/docs/comparison',
-        '/docs/limits',
-      ],
+      // Derived from the sidebar definition so navigation, prerendered pages,
+      // and content files cannot drift apart silently.
+      routes: ['/', ...docsNav.map((item) => item.to)],
     },
   },
   mdc: {

@@ -1,54 +1,44 @@
-export const docsNav = [
-  {
-    label: 'Overview',
-    to: '/docs',
-  },
+export interface DocsNavItem {
+  label: string
+  to: string
+}
+
+export interface DocsNavSection {
+  label: string
+  items: readonly DocsNavItem[]
+}
+
+export const docsNavSections = [
   {
     label: 'Getting Started',
-    to: '/docs/getting-started',
+    items: [
+      { label: 'Introduction', to: '/docs' },
+      { label: 'Getting Started', to: '/docs/getting-started' },
+    ],
   },
   {
-    label: 'Incremental Adoption',
-    to: '/docs/incremental-adoption',
+    label: 'Guides',
+    items: [
+      { label: 'Define Endpoints', to: '/docs/endpoints' },
+      { label: 'Generated Client', to: '/docs/client' },
+      { label: 'Responses & Effect', to: '/docs/responses-and-effect' },
+      { label: 'Vue Query', to: '/docs/tanstack-query' },
+      { label: 'OpenAPI', to: '/docs/openapi' },
+      { label: 'Schema Libraries', to: '/docs/schema-libraries' },
+      { label: 'Idempotency', to: '/docs/idempotency' },
+      { label: 'Low-level HTTP', to: '/docs/low-level-http' },
+      { label: 'Incremental Adoption', to: '/docs/incremental-adoption' },
+    ],
   },
   {
-    label: 'Define Endpoints',
-    to: '/docs/endpoints',
+    label: 'Concepts',
+    items: [
+      { label: 'Mental Model', to: '/docs/mental-model' },
+      { label: 'Why Nuxt Endpoints?', to: '/docs/why-nuxt-endpoints' },
+      { label: 'Comparison', to: '/docs/comparison' },
+      { label: 'Limits', to: '/docs/limits' },
+    ],
   },
-  {
-    label: 'Generated Client',
-    to: '/docs/client',
-  },
-  {
-    label: 'Vue Query',
-    to: '/docs/tanstack-query',
-  },
-  {
-    label: 'Responses & Effect',
-    to: '/docs/responses-and-effect',
-  },
-  {
-    label: 'Low-level HTTP',
-    to: '/docs/low-level-http',
-  },
-  {
-    label: 'Idempotency',
-    to: '/docs/idempotency',
-  },
-  {
-    label: 'OpenAPI',
-    to: '/docs/openapi',
-  },
-  {
-    label: 'Schema Libraries',
-    to: '/docs/schema-libraries',
-  },
-  {
-    label: 'Comparison',
-    to: '/docs/comparison',
-  },
-  {
-    label: 'Limits',
-    to: '/docs/limits',
-  },
-] as const
+] as const satisfies readonly DocsNavSection[]
+
+export const docsNav = docsNavSections.flatMap((section) => section.items)

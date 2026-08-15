@@ -1,43 +1,65 @@
 ---
-title: Docs
-description: One route definition powers the server, client, and documentation.
+title: Introduction
+description: Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one endpoint definition.
 ---
 
-## Mental model
+Nuxt Endpoints lets you describe an HTTP endpoint once, next to its handler, with the schema library you already use — Zod, Valibot, or Effect Schema. Everything else is derived from that single definition:
 
-Nuxt Endpoints adds a typed contract around ordinary Nuxt server routes. That contract is the source for runtime validation, generated client calls, and OpenAPI output.
+- **Runtime validation** — `params`, `query`, `headers`, and `body` are validated before your handler runs. Handler code sees parsed schema output, so coercion and transforms are already applied.
+- **A fully typed client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses are all inferred. No codegen step, no types to import.
+- **OpenAPI 3.1** — a document generated from the same schemas, served at `/_endpoints/schema`. There is no separate spec to maintain, so it cannot go stale.
 
-### 1. Route files stay Nuxt-native
+## Show me
 
-You still write ordinary files under `server/api` and export an event handler. The endpoint definition wraps the HTTP boundary.
+One route file declares the contract and the handler:
 
-### 2. Schemas describe HTTP input and output
+```ts
+// server/api/users/[id].get.ts
+import { z } from 'zod'
 
-Zod, Valibot, and Effect Schema definitions describe the data that crosses the HTTP boundary. Handler context types use parsed schema output, so coercion and transforms are reflected in application code.
+export const endpoint = defineEndpoint({
+  summary: 'Get a user',
+  params: z.object({ id: z.coerce.number() }),
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
+  },
+})
 
-### 3. Route paths become client calls
+export default defineEndpointHandler(endpoint, ({ params, respond }) => {
+  const user = findUser(params.id) // params.id is a number — validated and coerced
+  if (!user) return respond(404, { message: 'Not found' })
+  return user
+})
+```
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options, a default success-body call, typed result helpers, raw Web Response helpers, and optional Effect calls. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
+Every component can now call it with full inference — including typed error branches:
 
-### 4. Response handling is explicit
+```vue
+<script setup lang="ts">
+const result = await $endpoint('/api/users/:id', {
+  method: 'get',
+  params: { id: '1' },
+}).result()
 
-Use the default call when app code only needs the success body. Use `.result()` for typed status and body handling, `.raw()` only when code needs a low-level Web `Response`, and `.effect()` when typed status results should compose with Effect retry and interruption.
+if (result.status === 404) {
+  result.body.message // typed as the 404 schema
+}
+</script>
+```
 
-### 5. OpenAPI is generated from the same source
+Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, other services, or `curl`, and documented via the generated OpenAPI document.
 
-The module can serve an OpenAPI 3.1 document without maintaining a separate route registry.
+## Adopt at your own pace
 
-### 6. Server-state adapters remain optional
+Adding the module changes nothing by itself. Only routes that export an endpoint definition are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
-Named endpoint contracts can generate ordinary query, mutation, and infinite-query options for Vue Query. Vue Query owns cache behavior while Nuxt Endpoints keeps request and response types aligned with the server contract.
+> Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
 
-## Recommended reading order
+## Next steps
 
-1. Install and configure the module in [Getting Started](/docs/getting-started).
-2. Export an endpoint definition next to a Nuxt route handler in [Define Endpoints](/docs/endpoints).
-3. Call routes by typed path, method, or operation name with [Generated Client](/docs/client).
-4. Add server-state caching when needed with [Vue Query](/docs/tanstack-query).
-5. Choose response helpers in [Responses & Effect](/docs/responses-and-effect).
-6. Use escape hatches for files, streams, redirects, and raw responses in [Low-level HTTP](/docs/low-level-http).
-7. Publish schema output with [OpenAPI](/docs/openapi).
-8. Check the current compatibility surface in [Limits](/docs/limits).
+- [Getting Started](/docs/getting-started) — install the module and define your first endpoint.
+- [Define Endpoints](/docs/endpoints) — the full contract surface: request parts, multiple responses, validation options.
+- [Generated Client](/docs/client) — everything `$endpoint` and `useEndpoint` can do.
+
+Curious how it works and why it is designed this way? Read the [Mental Model](/docs/mental-model) and [Why Nuxt Endpoints?](/docs/why-nuxt-endpoints), or see how it [compares to alternatives](/docs/comparison).

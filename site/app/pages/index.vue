@@ -13,7 +13,17 @@ useHead({
   ],
 })
 
-const starterLinks = docsNav.filter((item) => item.to !== '/docs')
+// Card descriptions come from each page's content frontmatter so the landing
+// page cannot drift from what the docs pages say about themselves.
+const { data: docsDescriptions } = await useAsyncData('docs-topic-descriptions', async () => {
+  const pages = await queryCollection('docs').select('path', 'description').all()
+  return Object.fromEntries(pages.map((page) => [page.path, page.description]))
+})
+const starterLinks = computed(() =>
+  docsNav
+    .filter((item) => item.to !== '/docs')
+    .map((item) => ({ ...item, description: docsDescriptions.value?.[item.to] ?? '' })),
+)
 const activeStepIndex = ref(0)
 const activeStep = computed(() => contractSteps[activeStepIndex.value] ?? contractSteps[0])
 
@@ -309,7 +319,10 @@ const stackItems = [
 
         <p class="text -readiness">
           <Icon name="lucide:shield-check" size="0.95rem" aria-hidden="true" />
-          <span>Supports Nuxt 4.5+ with Nitro 2 and H3 1</span>
+          <span>
+            Supports Nuxt 4.5+ —
+            <NuxtLink to="/docs/getting-started#compatibility">see compatibility</NuxtLink>
+          </span>
         </p>
 
         <div class="seg -step">
@@ -379,10 +392,7 @@ const stackItems = [
         <article v-for="item in starterLinks" :key="item.to" class="article">
           <div class="seg">
             <h3 class="title">{{ item.label }}</h3>
-            <p class="text">
-              Open the dedicated guide for this part of the module instead of scanning a single long
-              page.
-            </p>
+            <p class="text">{{ item.description }}</p>
           </div>
           <NuxtLink class="pv-nuxt-link" :to="item.to">Open guide</NuxtLink>
         </article>

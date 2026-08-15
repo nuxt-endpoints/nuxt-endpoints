@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { docsNav } from '../utils/docs'
+import { docsNavSections } from '../utils/docs'
 
 const route = useRoute()
 const path = computed(() => route.path.replace(/\/$/, '') || '/')
@@ -24,12 +24,14 @@ useSeoMeta({
 <template>
   <div class="ne-docs-page">
     <aside class="aside" aria-label="Documentation navigation">
-      <p class="text -caps">Documentation</p>
-      <nav class="nav">
-        <NuxtLink v-for="item in docsNav" :key="item.to" class="pv-nuxt-link" :to="item.to">
-          {{ item.label }}
-        </NuxtLink>
-      </nav>
+      <section v-for="section in docsNavSections" :key="section.label" class="group">
+        <p class="text -caps">{{ section.label }}</p>
+        <nav class="nav">
+          <NuxtLink v-for="item in section.items" :key="item.to" class="pv-nuxt-link" :to="item.to">
+            {{ item.label }}
+          </NuxtLink>
+        </nav>
+      </section>
     </aside>
 
     <main class="main">
@@ -62,32 +64,38 @@ useSeoMeta({
     align-self: start;
     padding-right: var(--space-200);
 
-    > .text.-caps {
-      margin: 0 0 var(--space-150);
-      color: var(--muted);
-      font-size: var(--text-xs);
-      font-weight: 780;
-      text-transform: uppercase;
-    }
+    > .group {
+      &:not(:first-child) {
+        margin-top: var(--space-300);
+      }
 
-    > .nav {
-      display: grid;
-      gap: var(--space-050);
-
-      > .pv-nuxt-link {
-        border-radius: var(--radius-md);
+      > .text.-caps {
+        margin: 0 0 var(--space-150);
         color: var(--muted);
-        padding: var(--space-100) var(--space-125);
-        font-size: var(--text-md);
-        font-weight: 650;
+        font-size: var(--text-xs);
+        font-weight: 780;
+        text-transform: uppercase;
+      }
 
-        &:hover {
-          color: var(--ink);
-        }
+      > .nav {
+        display: grid;
+        gap: var(--space-050);
 
-        &[aria-current='page'] {
-          background: var(--surface-soft);
-          color: var(--accent-strong);
+        > .pv-nuxt-link {
+          border-radius: var(--radius-md);
+          color: var(--muted);
+          padding: var(--space-100) var(--space-125);
+          font-size: var(--text-md);
+          font-weight: 650;
+
+          &:hover {
+            color: var(--ink);
+          }
+
+          &[aria-current='page'] {
+            background: var(--surface-soft);
+            color: var(--accent-strong);
+          }
         }
       }
     }
@@ -132,7 +140,7 @@ useSeoMeta({
       position: static;
       padding-right: 0;
 
-      > .nav {
+      > .group > .nav {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
@@ -145,7 +153,7 @@ useSeoMeta({
   @media (max-width: 620px) {
     width: min(var(--page-max), calc(100% - var(--page-gutter)));
 
-    > .aside > .nav {
+    > .aside > .group > .nav {
       grid-template-columns: 1fr;
     }
 
