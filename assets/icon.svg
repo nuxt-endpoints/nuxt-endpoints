@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nuxt Endpoints">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7a1a" />
+      <stop offset="1" stop-color="#d94f00" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <path
+    d="M212 168 L128 256 L212 344"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="44"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M300 168 L384 256 L300 344"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="44"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="256" cy="256" r="38" fill="#ffffff" />
+</svg>
