@@ -73,6 +73,8 @@
   --hero-gradient-cyan: #06b6d4;
   --hero-title-start: #00a869;
   --hero-title-end: #047857;
+  --brand-wordmark-start: #020420;
+  --brand-wordmark-end: #0a4634;
   --hero-code-glass-bg: rgba(255, 255, 255, 0.58);
   --hero-code-glass-title-bg: rgba(255, 255, 255, 0.34);
   --hero-code-glass-border: rgba(255, 255, 255, 0.86);
@@ -157,6 +159,8 @@
   --hero-gradient-cyan: #22d3ee;
   --hero-title-start: #00dc82;
   --hero-title-end: #34d399;
+  --brand-wordmark-start: #00dc82;
+  --brand-wordmark-end: #36e4da;
   --hero-code-glass-bg: rgba(9, 13, 18, 0.62);
   --hero-code-glass-title-bg: rgba(18, 26, 32, 0.48);
   --hero-code-glass-border: rgba(255, 255, 255, 0.14);

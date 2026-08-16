@@ -125,7 +125,16 @@ function applyTheme(value: Theme) {
         }
 
         > .value {
-          color: var(--brand-bg);
+          /* Matches the logomark: midnight ink on light, the icon's green
+             gradient on dark. */
+          background: linear-gradient(
+            100deg,
+            var(--brand-wordmark-start),
+            var(--brand-wordmark-end)
+          );
+          background-clip: text;
+          -webkit-background-clip: text;
+          color: transparent;
         }
 
         > .note {
