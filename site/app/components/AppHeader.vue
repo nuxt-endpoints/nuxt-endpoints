@@ -39,7 +39,19 @@ function applyTheme(value: Theme) {
     <div class="unit">
       <NuxtLink class="pv-nuxt-link -brand" to="/" aria-label="Nuxt Endpoints home">
         <span class="nuxt-link-default">
-          <span class="media">NE</span>
+          <span class="media">
+            <svg viewBox="0 0 512 512" aria-hidden="true">
+              <defs>
+                <linearGradient id="ne-brand-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#00dc82" />
+                  <stop offset="1" stop-color="#36e4da" />
+                </linearGradient>
+              </defs>
+              <polygon points="180,132 400,132 372,196 152,196" fill="url(#ne-brand-grad)" />
+              <polygon points="166,224 320,224 292,288 138,288" fill="url(#ne-brand-grad)" />
+              <polygon points="152,316 372,316 344,380 124,380" fill="url(#ne-brand-grad)" />
+            </svg>
+          </span>
           <span class="value">Nuxt Endpoints</span>
           <small class="note">alpha</small>
         </span>
@@ -102,10 +114,14 @@ function applyTheme(value: Theme) {
           height: 2rem;
           place-items: center;
           border-radius: var(--radius-md);
-          background: var(--brand-bg);
-          color: var(--brand-ink);
-          font-size: var(--text-xs);
-          letter-spacing: 0;
+          /* The logomark keeps the icon's midnight tile in both themes. */
+          background: #020420;
+
+          > svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+          }
         }
 
         > .value {

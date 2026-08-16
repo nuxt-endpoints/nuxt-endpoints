@@ -295,8 +295,6 @@ const stackItems = [
   <main class="ne-index-page">
     <div class="media" aria-hidden="true">
       <span class="value -grid"></span>
-      <span class="value -primary"></span>
-      <span class="value -secondary"></span>
     </div>
 
     <section class="section -hero">
@@ -422,40 +420,10 @@ const stackItems = [
         inset: 10rem 0 0;
         background:
           linear-gradient(var(--hero-wash-grid) 1px, transparent 1px),
-          linear-gradient(90deg, var(--hero-wash-grid) 1px, transparent 1px),
-          radial-gradient(
-            ellipse 34% 42% at 14% 54%,
-            color-mix(in srgb, var(--hero-gradient-start) 24%, transparent) 0%,
-            transparent 72%
-          ),
-          radial-gradient(
-            ellipse 36% 46% at 34% 78%,
-            color-mix(in srgb, var(--hero-gradient-mid) 18%, transparent) 0%,
-            transparent 70%
-          ),
-          radial-gradient(
-            ellipse 40% 52% at 58% 58%,
-            color-mix(in srgb, var(--hero-gradient-rose) 16%, transparent) 0%,
-            transparent 72%
-          ),
-          radial-gradient(
-            ellipse 36% 44% at 76% 76%,
-            color-mix(in srgb, var(--hero-gradient-cyan) 16%, transparent) 0%,
-            transparent 68%
-          ),
-          radial-gradient(
-            ellipse 32% 42% at 98% 52%,
-            color-mix(in srgb, var(--hero-gradient-end) 18%, transparent) 0%,
-            transparent 70%
-          );
+          linear-gradient(90deg, var(--hero-wash-grid) 1px, transparent 1px);
         background-size:
           38px 38px,
-          38px 38px,
-          112% 112%,
-          116% 116%,
-          114% 114%,
-          116% 116%,
-          112% 112%;
+          38px 38px;
         mask-image: linear-gradient(
           to bottom,
           transparent 0%,
@@ -477,48 +445,6 @@ const stackItems = [
         will-change: opacity, transform;
       }
 
-      &.-primary {
-        background:
-          radial-gradient(
-            ellipse 28% 44% at 18% 62%,
-            color-mix(in srgb, var(--hero-gradient-start) 30%, transparent) 0%,
-            transparent 76%
-          ),
-          radial-gradient(
-            ellipse 32% 50% at 48% 70%,
-            color-mix(in srgb, var(--hero-gradient-rose) 24%, transparent) 0%,
-            transparent 74%
-          ),
-          radial-gradient(
-            ellipse 30% 48% at 78% 64%,
-            color-mix(in srgb, var(--hero-gradient-cyan) 26%, transparent) 0%,
-            transparent 76%
-          );
-        animation: hero-bg-wave-primary 18s ease-in-out infinite;
-        opacity: 0.7;
-      }
-
-      &.-secondary {
-        inset: 8.5rem -38vw -21rem;
-        background:
-          radial-gradient(
-            ellipse 36% 48% at 22% 72%,
-            color-mix(in srgb, var(--hero-gradient-mid) 20%, transparent) 0%,
-            transparent 76%
-          ),
-          radial-gradient(
-            ellipse 32% 48% at 66% 58%,
-            color-mix(in srgb, var(--hero-gradient-violet) 19%, transparent) 0%,
-            transparent 76%
-          ),
-          radial-gradient(
-            ellipse 34% 50% at 92% 76%,
-            color-mix(in srgb, var(--hero-gradient-end) 18%, transparent) 0%,
-            transparent 78%
-          );
-        animation: hero-bg-wave-secondary 23s ease-in-out infinite;
-        opacity: 0.5;
-      }
     }
   }
 
@@ -555,12 +481,8 @@ const stackItems = [
             max-width: none;
             background: linear-gradient(
               100deg,
-              var(--hero-gradient-start) 0%,
-              var(--hero-gradient-mid) 24%,
-              var(--hero-gradient-rose) 45%,
-              var(--hero-gradient-violet) 64%,
-              var(--hero-gradient-cyan) 82%,
-              var(--hero-gradient-end) 100%
+              var(--hero-title-start) 0%,
+              var(--hero-title-end) 100%
             );
             background-clip: text;
             color: transparent;
