@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0 - 2026-08-16
+
+### Added
+
+- Endpoint contracts can live in separate modules, including sibling
+  `*.endpoint-contract.ts` files that are automatically excluded from Nitro
+  route scanning.
+- Central idempotency runtime policies can provide shared storage, scope,
+  authorization, and TTL defaults from `server/endpoints/idempotency.ts` or a
+  configured policy path.
+
+### Changed
+
+- Build-time discovery now evaluates only modules that define endpoint
+  contracts, skips non-endpoint routes, and fails closed when an imported
+  contract cannot be resolved safely.
+- Catch-all and optional-parameter endpoint routes now fail during generation
+  instead of producing invalid client and OpenAPI paths.
+- The README and documentation site now follow a benefits-first introduction
+  with dedicated mental-model and adoption guidance.
+
 ## 0.1.1 - 2026-08-15
 
 ### Fixed
