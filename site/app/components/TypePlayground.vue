@@ -202,16 +202,16 @@ const playgroundEditorTheme = EditorView.theme({
     backgroundColor: 'transparent',
   },
   '&.cm-focused .cm-activeLine': {
-    backgroundColor: 'rgba(227, 96, 2, 0.06)',
+    backgroundColor: 'rgba(5, 150, 105, 0.06)',
   },
   '&.cm-focused .cm-activeLineGutter': {
-    backgroundColor: 'rgba(227, 96, 2, 0.08)',
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
   },
   '&.cm-focused': {
-    outline: '2px solid rgba(227, 96, 2, 0.2)',
+    outline: '2px solid rgba(5, 150, 105, 0.2)',
   },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(227, 96, 2, 0.18)',
+    backgroundColor: 'rgba(5, 150, 105, 0.18)',
   },
 })
 
