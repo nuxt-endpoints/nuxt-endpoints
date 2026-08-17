@@ -128,4 +128,5 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, checks, and guidelines
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE). See [Third-Party Notices](./THIRD_PARTY_NOTICES.md) for
+attributions that apply to bundled documentation assets.
