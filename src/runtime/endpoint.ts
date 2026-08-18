@@ -366,7 +366,9 @@ export type EndpointEventHandler<
   __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => void
 }
 
-type EndpointHandlerSuccessBody<DEFINITION extends EndpointDefinition, HANDLER_RETURN> =
+// Exported so endpoint-methods.ts can compute the same success-body type for
+// each method member instead of redefining this branching logic.
+export type EndpointHandlerSuccessBody<DEFINITION extends EndpointDefinition, HANDLER_RETURN> =
   HasEndpointResponses<DEFINITION> extends true
     ? EndpointSuccessBody<DEFINITION>
     : InferredEndpointHandlerSuccessBody<Awaited<HANDLER_RETURN>>
@@ -654,7 +656,9 @@ function omitRequestHeader(
   )
 }
 
-function normalizeRouteIdentity(identity: EndpointRouteIdentity): EndpointRouteIdentity {
+// Exported so endpoint-methods.ts's dispatcher can normalize the identity it
+// forwards to each sub-handler the same way a single-method route does.
+export function normalizeRouteIdentity(identity: EndpointRouteIdentity): EndpointRouteIdentity {
   if (!identity.method || !identity.routeTemplate) {
     throw new TypeError('Endpoint route identity requires a method and routeTemplate')
   }

@@ -1,0 +1,110 @@
+import { assertType, describe, expectTypeOf, it } from 'vitest'
+import {
+  defineEndpoint,
+  defineEndpointMethodHandlers,
+  defineEndpointMethods,
+} from '../../src/runtime'
+import type { EndpointMethodMember, StandardSchemaLike } from '../../src/runtime'
+
+type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
+
+const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
+  throw new Error('type-only schema')
+}
+
+describe('defineEndpointMethods structural constraint', () => {
+  it('accepts a concrete DefinedEndpoint as an EndpointMethodMember', () => {
+    const endpoint = defineEndpoint({ response: schema<{ id: number }>() })
+    assertType<EndpointMethodMember>(endpoint)
+  })
+})
+
+describe('defineEndpointMethodHandlers handler context inference', () => {
+  it('infers each handler context from its own member definition', () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({
+        params: schema<{ id: string }, { id: number }>(),
+        response: schema<{ id: number; name: string }>(),
+      }),
+      put: defineEndpoint({
+        params: schema<{ id: string }, { id: number }>(),
+        body: schema<{ name: string }>(),
+        response: schema<{ id: number; name: string }>(),
+      }),
+    })
+
+    defineEndpointMethodHandlers(endpoints, {
+      get: ({ params, body }) => {
+        expectTypeOf(params).toEqualTypeOf<{ id: number }>()
+        expectTypeOf(body).toEqualTypeOf<undefined>()
+        return { id: params.id, name: 'Tom' }
+      },
+      put: ({ params, body }) => {
+        expectTypeOf(params).toEqualTypeOf<{ id: number }>()
+        expectTypeOf(body).toEqualTypeOf<{ name: string }>()
+        return { id: params.id, name: body.name }
+      },
+    })
+  })
+
+  it('rejects an undeclared response body for a member with declared responses', () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({
+        responses: {
+          200: schema<{ id: number; name: string }>(),
+          404: schema<{ message: string }>(),
+        },
+      }),
+    })
+
+    defineEndpointMethodHandlers(endpoints, {
+      // @ts-expect-error the returned shape matches neither the 200 nor the
+      // 404 response contract, and this member never calls `respond`.
+      get: () => ({ wrong: true }),
+    })
+  })
+
+  it('accepts a declared non-200 response via respond', () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({
+        responses: {
+          200: schema<{ id: number; name: string }>(),
+          404: schema<{ message: string }>(),
+        },
+      }),
+    })
+
+    defineEndpointMethodHandlers(endpoints, {
+      get: ({ respond }) => respond(404, { message: 'Not found' }),
+    })
+  })
+
+  it('requires a handler for every declared method', () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ response: schema<{ id: number }>() }),
+      put: defineEndpoint({ body: schema<{ name: string }>() }),
+    })
+
+    // @ts-expect-error `put` has no handler.
+    defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ id: 1 }),
+    })
+  })
+
+  it('types __endpoint_method_handler_returns__ as the handler return map', () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ params: schema<{ id: string }, { id: number }>() }),
+      put: defineEndpoint({ body: schema<{ name: string }>() }),
+    })
+
+    const handler = defineEndpointMethodHandlers(endpoints, {
+      get: ({ params }) => ({ id: params.id, name: 'Tom' }),
+      put: ({ body }) => ({ created: body.name }),
+    })
+
+    expectTypeOf(handler.__endpoint_method_handler_returns__).toEqualTypeOf<{
+      get: { id: number; name: string }
+      put: { created: string }
+    }>()
+  })
+})

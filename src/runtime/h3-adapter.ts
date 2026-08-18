@@ -38,6 +38,16 @@ export function getRuntimeQuery(event: RuntimeEvent): unknown {
   return getQuery(event)
 }
 
+/**
+ * Reads the incoming request's HTTP method (e.g. `'GET'`). Used by the
+ * method-dispatch runtime (endpoint-methods.ts) to pick which declared
+ * method's sub-handler runs; kept here so h3 stays imported from this one
+ * file only.
+ */
+export function getRuntimeMethod(event: RuntimeEvent): string {
+  return event.method
+}
+
 export function getRuntimeRequestHeaders(
   event: RuntimeEvent,
 ): Readonly<Record<string, string | undefined>> {

@@ -106,6 +106,7 @@ export { defineEndpoint, defineEndpointHandler } from './endpoint'
 export type {
   DefinedEndpoint,
   EndpointEventHandler,
+  EndpointHandlerSuccessBody,
   EndpointIdempotencyContext,
   EndpointIdempotencyOptions,
   EndpointIdempotencyRuntimeMarker,
@@ -113,6 +114,16 @@ export type {
   EndpointRuntimeOptions,
   IdempotencyProblem,
 } from './endpoint'
+export { defineEndpointMethods, defineEndpointMethodHandlers } from './endpoint-methods'
+export type {
+  DeclarableEndpointMethod,
+  EndpointMethodHandlersMap,
+  EndpointMethodMember,
+  EndpointMethodsDefinition,
+  EndpointMethodsEventHandler,
+  EndpointMethodsMap,
+  EndpointMethodsSuccessBody,
+} from './endpoint-methods'
 export { defineIdempotencyPolicy } from './idempotency-policy'
 export type { EndpointIdempotencyPolicy } from './idempotency-policy'
 export { createOpenApiDocument } from './openapi'
