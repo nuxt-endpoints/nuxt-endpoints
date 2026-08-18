@@ -2,7 +2,7 @@
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-08-15
+Last consolidated: 2026-08-18
 
 This is the source of truth for product-level implementation priorities and
 for recommendations that are not specific to one client adapter. Detailed
@@ -36,7 +36,9 @@ without hiding the broader roadmap.
 | Idempotency central runtime policy                                    | Implemented                      | `server/endpoints/idempotency.ts` supplies storage/scope/authorization defaults; endpoints keep contract metadata and overrides                                                                                                                                                                                                                                                                                                                   |
 | Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Multipart request contracts                                           | Candidate for later              | Design runtime parsing, client serialization, and OpenAPI together                                                                                                                                                                                                                                                                                                                                                                                |
+| Multipart request contracts                                           | Candidate for later              | Design runtime parsing, client serialization, and OpenAPI together. Also a prerequisite for a lossless primitive-layer adapter                                                                                                                                                                                                                                                                                                                    |
+| Primitive-layer boundary and adapter                                  | Designed, not implemented        | Keep `EndpointRouteEntry` canonical and project foreign contracts onto it; widen the contract vocabulary and extract the validation/handler seam first                                                                                                                                                                                                                                                                                            |
+| Per-method dispatch and media-type request bodies                     | Proposed                         | Contract-vocabulary gaps against upstream validated-routing work; prerequisites for the adapter above                                                                                                                                                                                                                                                                                                                                             |
 | Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                               |
 | Optional path-parameter contracts                                     | Rejected                         | OpenAPI has no honest representation for optional path parameters; declare two routes instead. Build-time rejection shipped                                                                                                                                                                                                                                                                                                                       |
 | First-class typed streaming/SSE                                       | Deferred                         | Require a complete chunk, cancellation, and error contract                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -300,6 +302,99 @@ Typed streaming and SSE should remain raw HTTP until a design preserves:
 
 Current public guidance remains [Low-level HTTP](../site/content/docs/low-level-http.md).
 
+## Primitive-layer boundary and upstream convergence
+
+Recorded 2026-08-18, from reading `h3-route-tools@0.1.1` (source at
+`sandros94/h3-typed-routes`) against this codebase, and from
+[`h3js/h3#1437`](https://github.com/h3js/h3/issues/1437), which proposes
+growing H3 core into a validated-routing surface: `params` and `response`
+validation, uniform async validation, per-method dispatch, and a convention
+for handlers exposing their resolved contract as an introspectable property.
+The RFC explicitly keeps the typed-fetch client, OpenAPI generation, and the
+Nitro module downstream, which is where this module lives.
+
+### The layer split
+
+Everything this module owns divides in two:
+
+- **Primitive layer** — contract definition, request/response validation,
+  JSON wire projection, typed client plumbing, OpenAPI generation, and
+  build-time contract discovery. This is the layer upstream is growing into.
+- **Application layer** — idempotency, the TanStack Query adapter, the Effect
+  adapter, Nuxt async-data integration, and operation-named call targets.
+  Nothing upstream is proposing to own this.
+
+Compared on the primitive layer alone, this module is not uniformly ahead. It
+is stronger on discovery robustness (evaluation failures fail the build rather
+than silently degrading types), schema-library breadth (Zod, Valibot, and
+Effect Schema without wrappers, where a `~standard.jsonSchema`-only approach
+degrades to an empty schema), status-typed client results, and verified
+agreement with the platform's own wire projection. It is weaker on contract
+expressiveness: no per-method dispatch, no media-type request bodies, no
+streaming declarations.
+
+### Adapter over generalization
+
+Decision: keep `EndpointRouteEntry` and `EndpointDefinition` as the canonical
+vocabulary, and project foreign contracts into them at the boundary. Do not
+generalize the internal types to accept arbitrary contract shapes.
+
+This works because both sides bottom out in Standard Schema, so the adapter
+rearranges structure rather than translating semantics — a foreign
+`{ params, get: { validate: { query, body, response } } }` maps onto this
+module's flat per-method definition without touching the schema values. The
+type helpers that every application-layer adapter already derives from
+`EndpointRouteEntry` therefore keep working unchanged.
+
+Constructs the canonical vocabulary cannot express must fail loudly at the
+adapter rather than being partially mapped. Silently keeping only the JSON
+branch of a media-type body would reproduce exactly the degradation this
+module rejects elsewhere.
+
+### The missing seam
+
+An external primitive layer can only host this module's server-side
+application layer if it exposes an interception point between request
+validation and handler invocation, carrying the validated values and
+controlling whether the handler runs at all.
+
+Idempotency requires precisely that position: fingerprints must be computed
+from validated, coerced values, and a replay must return a recorded response
+without executing the handler. Ordinary Nitro middleware cannot substitute,
+because it runs before validation and cannot suppress the handler.
+
+Neither `h3-route-tools` nor the RFC currently exposes such a seam; validation
+and handler invocation are fused, with an error hook as the only extension
+point. This module already has the correct shape internally — a validated
+context value plus a deferred `execute` thunk — but it is inlined in
+`DefinedEndpoint.handler()` rather than named. Extracting it is therefore both
+an internal improvement and the evidence behind a concrete upstream request.
+
+### Sequence
+
+1. **Widen the contract vocabulary** — per-method dispatch and media-type
+   request bodies (see Multipart and typed streams). Until the vocabulary can
+   express them, any adapter over a richer upstream is permanently lossy.
+2. **Extract the interception seam** — turn the implicit validated-context and
+   deferred-execute pair into a named extension point, with idempotency as its
+   first consumer.
+3. **Define the contract adapter** — the type-level projection plus its runtime
+   counterpart, one implementation per upstream, all targeting
+   `EndpointRouteEntry`.
+4. **Take the seam requirement upstream** — with steps 2 and 3 done, the
+   request to `h3js/h3#1437` is backed by a working consumer rather than a
+   hypothesis.
+
+Steps 1 and 2 are independently valuable and do not depend on upstream
+timing. Step 3 should wait until an upstream contract shape is stable.
+
+### Not adopted from the reference implementation
+
+- Swallowing module-evaluation failures during build-time discovery. Types
+  degrade silently and no test covers the path.
+- Depending on a single proposed Standard Schema extension for JSON Schema
+  conversion. It narrows supported validators to those that implement it.
+
 ## Delegated and deliberately omitted features
 
 - Cache storage, stale policy, retry, request deduplication, optimistic rollback,
@@ -323,8 +418,11 @@ Recorded so the "why not" survives; none of these block current work.
 
 - Extracting the idempotency execution path (~150 lines) out of
   `DefinedEndpoint.handler()` requires reworking the late-injection closures
-  (`routeIdentity`, `idempotencyPolicy`). Do it together with the next
-  substantial idempotency change, not on its own.
+  (`routeIdentity`, `idempotencyPolicy`). This is no longer deferred on its own
+  merits: it is step 2 of the primitive-layer boundary work above, where the
+  extracted seam is what makes the application layer portable across primitive
+  implementations. Sequence it with that, not with the next idempotency
+  feature.
 - Splitting `runtime/client.ts` into type and implementation files adds imports
   without adding testability: the boundary is already clear inside the file and
   the type surface has a dedicated `.test-d.ts` suite.
