@@ -2,7 +2,13 @@
 
 Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
 
-Last verified: 2026-08-14
+Last verified: 2026-08-18, against `h3@2.0.1-rc.26` and `nitro@3.0.260610-beta`.
+
+The adapter maps below were previously unverified projections. They are now
+measured: every row was checked against those installed packages, and the
+runtime rows for H3 were additionally observed by dispatching requests through
+a real `H3` app. Both upstream packages are prerelease, so re-verify when they
+reach stable.
 
 ## Current support boundary
 
@@ -61,21 +67,57 @@ Nuxt end-to-end tests.
 
 ## H3 v1 to v2 adapter map
 
-The exact H3 v2 calls must be confirmed against the version selected for the
-migration. The expected ownership boundary is:
+Measured against `h3@2.0.1-rc.26`. Only one call in the adapter has no v2
+equivalent; every other v1 name still resolves and behaves identically, so the
+migration is far smaller than a name-by-name rewrite would suggest.
 
-| Operation           | H3 v1 adapter                      | H3 v2 adapter direction                                         |
-| ------------------- | ---------------------------------- | --------------------------------------------------------------- |
-| Define a handler    | `defineEventHandler`               | `defineHandler`                                                 |
-| Native event        | `H3Event`                          | `H3Event`                                                       |
-| Web request         | `toWebRequest(event)`              | `event.req`                                                     |
-| Request headers     | `getHeaders(event)`                | `event.req.headers` or a v2 utility                             |
-| Query               | `getQuery(event)`                  | `event.url.searchParams` or a v2 utility                        |
-| Parsed body         | `readBody(event)`                  | A v2 parser that preserves the existing endpoint body semantics |
-| Response status     | `setResponseStatus(event, status)` | `event.res` or a v2 utility                                     |
-| Response headers    | `setHeaders(event, headers)`       | `event.res.headers` or a v2 utility                             |
-| HTTP error          | `createError`                      | `HTTPError` with equivalent public response semantics           |
-| Node runtime access | `event.node`                       | `event.runtime.node` when Node-specific access is unavoidable   |
+| Operation           | H3 v1 adapter                      | v2 status                                                                       | v2-native form                                                                             |
+| ------------------- | ---------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Define a handler    | `defineEventHandler`               | Works unchanged, not deprecated (alias of `defineHandler`)                      | `defineHandler`                                                                            |
+| Native event        | `H3Event`                          | Works unchanged                                                                 | `H3Event`                                                                                  |
+| Web request         | `toWebRequest(event)`              | **Removed. The one required change**                                            | `event.req` (extends `Request`)                                                            |
+| Request headers     | `getHeaders(event)`                | Works unchanged, deprecated. Returns a plain record                             | `Object.fromEntries(event.req.headers.entries())`                                          |
+| Query               | `getQuery(event)`                  | Works unchanged, not deprecated. **Keep it** — see below                        | `getQuery(event)`                                                                          |
+| Parsed body         | `readBody(event)`                  | Works unchanged, not deprecated. JSON by default, `undefined` for an empty body | `readBody(event)`                                                                          |
+| Response status     | `setResponseStatus(event, status)` | Works unchanged, deprecated. Identical signature                                | `event.res.status = code` (assignment, not a call)                                         |
+| Response headers    | `setHeaders(event, headers)`       | Works unchanged, deprecated                                                     | `event.res.headers.set(name, value)`, one at a time; a record cannot be assigned wholesale |
+| HTTP error          | `createError`                      | Works, deprecated, **but the wire body changes** — see below                    | `new HTTPError({ status, statusText, data })`                                              |
+| Node runtime access | `event.node`                       | Deprecated getter; `event.runtime` is the replacement                           | `event.runtime.node`                                                                       |
+
+`event.context` survives unchanged and is the one event property the contract
+layer touches outside the adapter, so Nitro middleware context keeps working.
+
+### Query parsing must not move to `event.url.searchParams`
+
+`getQuery` still returns repeated parameters as arrays in v2 (`?tag=a&tag=b` →
+`{ tag: ['a', 'b'] }`), matching v1 exactly. `URLSearchParams.get()` returns
+only the first value and `Object.fromEntries` collapses duplicates, so
+"modernizing" this call silently drops repeated query values — which endpoint
+contracts document as a supported input shape. `test/h3-adapter.test.ts` pins
+this behavior through a real request so the regression fails loudly.
+
+### The error wire body changes shape
+
+This is the only behavioral break found, and it does not fail existing tests.
+Thrown H3 errors serialize differently between majors:
+
+```txt
+v1: { message, statusCode, statusMessage, data }
+v2: { message, status,     statusText,    data }
+```
+
+`HTTPError` still exposes `statusCode` / `statusMessage` as deprecated getters,
+so assertions that read those properties keep passing while the response body
+sent to clients has already changed. Test coverage cannot be relied on here.
+
+The blast radius is limited by the existing design: `createRuntimeError` is
+used only for internal `500` faults. Documented client-facing failures —
+request validation and every idempotency problem — do not throw. They return a
+value and set the status explicitly, so their Problem Details bodies are
+unaffected. Decide deliberately whether to adopt the v2 shape for those `500`
+bodies or to preserve the old keys by overriding `toJSON` in the adapter;
+preserving them depends on Nitro's error rendering calling `toJSON`, which is
+not yet verified.
 
 H3 v1 and v2 both expose a property named `event.req`, but it does not have the
 same contract: in H3 v1 it is a deprecated alias for the Node request, while in
@@ -98,24 +140,43 @@ one at build or module-setup time from the resolved H3 major. Do not import both
 implementations into the server bundle and do not infer the H3 major for each
 request from the event shape.
 
-## Remaining Nitro v3 work
+## Nitro 2 to 3 map
 
-The runtime plugin no longer imports Nitro's private
-`#nitro-internal-virtual/server-handlers` module. It consumes a module-owned
-generated manifest containing only detected endpoints and their route identity.
+Measured against `nitro@3.0.260610-beta`. Nitro 3 ships under a new package
+name: `nitropack` is renamed to `nitro`, and `nitropack` itself has no 3.x
+releases. Every integration point survives; the changes are import paths plus
+one renamed export.
 
-`scannedHandlers` remains an upstream Nitro build-time detail, but its use is
-isolated in `collectNitroRouteHandlers`. If Nitro 3 removes or changes it, only
-that collection boundary and its tests should need to change.
+| Integration point                            | Nitro 3 status                                                                                       | Change required      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------- |
+| `Serialize` / `Simplify` in `wire.ts`        | Present in `nitro/types`. Nitro's own build still composes `InternalApi` as `Simplify<Serialize<…>>` | Import path only     |
+| `InternalApi`                                | Still declared in `nitro/types` and module-augmented during build                                    | Import path only     |
+| `defineNitroPlugin`                          | The `nitropack/runtime/plugin` subpath is gone; the root export is `definePlugin`                    | Import path and name |
+| `scannedHandlers`, `options.handlers`        | Present, same fields (`handler`, `route`, `method`, `middleware`)                                    | None                 |
+| `options.scanDirs`, `options.ignore`         | Present, same meaning                                                                                | None                 |
+| `types:extend`, `nitro:init`, `nitro:config` | Present with identical signatures                                                                    | None                 |
 
-Other migration work:
+The runtime plugin already consumes a module-owned generated manifest rather
+than Nitro's private `#nitro-internal-virtual/server-handlers`, so no private
+surface is involved in the migration.
 
-- confirm the Nitro 3 runtime-plugin public import path;
-- implement and test the H3 v2 adapter, especially error serialization,
-  response headers/status, query parsing, and body parsing;
-- update dependency and peer-compatibility ranges only after actual Nitro 3
-  and H3 v2 verification;
-- ensure only one compatible H3 runtime is resolved into the server build.
+## Remaining work before a compatibility claim
+
+Nothing here is blocked on this package. The blocking dependency is upstream
+availability: Nuxt 5 exists only on the nightly channel, Nitro 3 is beta, and
+H3 v2 is still in release candidates. Nuxt 5 also moves Nitro integration into
+a separate `@nuxt/nitro-server` package, which is not yet stable.
+
+- Decide the error-body policy described above and implement `createRuntimeError`
+  accordingly; verify it against Nitro 3's error rendering, which the h3-only
+  measurements could not cover.
+- Run the full compatibility matrix — unit, type, build, and Nuxt end-to-end —
+  on the new majors; nothing so far has exercised a running server on them.
+- Update dependency and peer ranges, and `meta.compatibility.nuxt`, only after
+  that matrix passes.
+- Ensure only one compatible H3 runtime resolves into the server build. Nuxt
+  has already seen this failure mode in [`nuxt/nuxt#35132`](https://github.com/nuxt/nuxt/issues/35132),
+  where a hoisted H3 v2 conflicted with a Nitro handler on H3 v1.
 
 ## Nuxt 5 typed-fetch boundary
 
