@@ -230,6 +230,33 @@ describe('TanStack Query adapter', () => {
       expect(key1).toEqual(['nuxt-endpoints', 'v1', 'retryStatus', { idempotencyKey: 'request-1' }])
     })
 
+    // `mediaType` selects a member of a media-type-map `body` contract, and a
+    // FormData/URLSearchParams body always collapses to the same `{}` segment
+    // under JSON-based key serialization (it has no enumerable own
+    // properties), so without `mediaType` in the picked segment, two
+    // different-media-type requests to the same route/params/query would
+    // share a cache key. `listUsers`'s typed contract has a plain schema
+    // body, so this reaches the dynamic factory directly to exercise the key
+    // builder with a `mediaType` option untyped call sites don't have.
+    it('includes mediaType in cache identity so different members do not collide', () => {
+      const listUsersDynamic = queryOptions.listUsers as unknown as (
+        options: Record<string, unknown>,
+      ) => EndpointQueryOptionsObject<unknown>
+
+      const jsonKey = listUsersDynamic({
+        query: { a: 1, b: 2 },
+        body: { note: 'hi' },
+        mediaType: 'application/json',
+      }).queryKey
+      const multipartKey = listUsersDynamic({
+        query: { a: 1, b: 2 },
+        body: { note: 'hi' },
+        mediaType: 'multipart/form-data',
+      }).queryKey
+
+      expect(jsonKey).not.toEqual(multipartKey)
+    })
+
     it('excludes headers from the key', () => {
       const key1 = queryOptions.listUsers({
         query: { a: 1, b: 2 },

@@ -106,6 +106,32 @@ type Routes =
         | StatusResponse<400, { message: string }>
         | StatusResponse<202, { jobId: string }>
     }
+  | {
+      path: '/api/upload'
+      method: 'post'
+      operation: 'uploadFile'
+      definition: {
+        operation: 'uploadFile'
+        body: {
+          'application/json': Schema<{ name: string }>
+          'multipart/form-data': Schema<{ name: string }>
+        }
+        response: Schema<{ name: string; bodyMediaType: string }>
+      }
+    }
+  | {
+      path: '/api/export'
+      method: 'post'
+      operation: 'exportFile'
+      definition: {
+        operation: 'exportFile'
+        body: {
+          'multipart/form-data': Schema<{ name: string }>
+          'text/plain': Schema<{ name: string }>
+        }
+        response: Schema<{ ok: true }>
+      }
+    }
 
 type Client = EndpointClient<Routes>
 
@@ -471,6 +497,55 @@ describe('EndpointClient', () => {
 
     // @ts-expect-error name is required.
     client('/api/users', { method: 'post', body: {} })
+  })
+
+  it('keeps mediaType unavailable for a single-schema body contract', () => {
+    client('/api/users', { method: 'post', body: { name: 'Tom' } })
+
+    // @ts-expect-error mediaType is not a valid option unless body is a media-type map.
+    client('/api/users', { method: 'post', body: { name: 'Tom' }, mediaType: 'application/json' })
+  })
+
+  it('makes mediaType optional and defaults body to the json member when the map has one', async () => {
+    const byDefault = await client('/api/upload', { method: 'post', body: { name: 'Tom' } })
+    const byExplicitJson = await client('/api/upload', {
+      method: 'post',
+      mediaType: 'application/json',
+      body: { name: 'Tom' },
+    })
+    const byMultipart = await client('/api/upload', {
+      method: 'post',
+      mediaType: 'multipart/form-data',
+      body: new FormData(),
+    })
+
+    expectTypeOf(byDefault).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+    expectTypeOf(byExplicitJson).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+    expectTypeOf(byMultipart).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+
+    // @ts-expect-error body must be FormData once multipart/form-data is selected.
+    client('/api/upload', {
+      method: 'post',
+      mediaType: 'multipart/form-data',
+      body: { name: 'Tom' },
+    })
+    // @ts-expect-error mediaType must be one of the media types declared on the map.
+    client('/api/upload', { method: 'post', mediaType: 'text/plain', body: 'Tom' })
+  })
+
+  it('requires mediaType outright when the map has no json member', () => {
+    // @ts-expect-error mediaType is required when there is no application/json member.
+    client('/api/export', { method: 'post', body: new FormData() })
+
+    client('/api/export', {
+      method: 'post',
+      mediaType: 'multipart/form-data',
+      body: new FormData(),
+    })
+    client('/api/export', { method: 'post', mediaType: 'text/plain', body: 'hello' })
+
+    // @ts-expect-error a text/* member's body is the raw string, not URLSearchParams.
+    client('/api/export', { method: 'post', mediaType: 'text/plain', body: new URLSearchParams() })
   })
 
   it('does not need runtime schema values in type tests', () => {

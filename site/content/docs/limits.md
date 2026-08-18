@@ -23,9 +23,9 @@ If route module evaluation fails, or a route calls `defineEndpoint` without expo
 
 A route whose template contains a catch-all (`[...slug]`) or optional parameter cannot export an endpoint definition: the generated client cannot build those URLs correctly and OpenAPI has no honest representation for them, so the build fails with an explanation instead of producing silently broken output. Keep such routes as plain `defineEventHandler` handlers. Catch-all support is a designed-but-deferred candidate in the roadmap; optional path parameters are rejected permanently because OpenAPI cannot express them.
 
-### JSON is the first-class body format for now
+### Response bodies are JSON-first
 
-Multiple media types, request encodings, and content negotiation are not first-class endpoint fields yet. Use [Low-level HTTP](/docs/low-level-http) for files, streams, multipart uploads, redirects, proxies, and native Web Responses.
+Request bodies accept [media-type maps](/docs/endpoints#media-type-request-bodies) — JSON, URL-encoded forms, multipart uploads, and raw text. Response bodies remain JSON-first: response media types, response content negotiation, and typed streaming are not endpoint fields yet. Use [Low-level HTTP](/docs/low-level-http) for file downloads, streams, redirects, proxies, and native Web Responses.
 
 Contracted JSON responses use the supported Nitro line's wire-type mapping. Native `Response`, streams, files, and custom response parsers are outside the generated JSON body type.
 

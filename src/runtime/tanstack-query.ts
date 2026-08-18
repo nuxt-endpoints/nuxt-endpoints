@@ -563,6 +563,9 @@ function requestSegment(record: Record<string, unknown>): unknown {
   if (record.body !== undefined) {
     picked.body = record.body
   }
+  if (record.mediaType !== undefined) {
+    picked.mediaType = record.mediaType
+  }
   if (record.idempotencyKey !== undefined) {
     picked.idempotencyKey = record.idempotencyKey
   }

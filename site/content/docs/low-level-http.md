@@ -68,7 +68,10 @@ URL.revokeObjectURL(url)
 
 ## Multipart uploads
 
-Multipart parsing currently needs the raw Nuxt event. Use a native Nuxt server route for this shape.
+Multipart requests are now a first-class contract shape — declare a
+`multipart/form-data` member in a [media-type body map](/docs/endpoints#media-type-request-bodies)
+to get validation, typing, and OpenAPI output. Drop down to the raw Nuxt event
+only when you need streaming part-by-part processing instead of a parsed form.
 
 ```ts
 // server/api/uploads.post.ts

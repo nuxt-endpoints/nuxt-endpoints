@@ -113,6 +113,27 @@ async function checkClient() {
   // @ts-expect-error operation calls are generated only when operation is declared.
   await client('search', { query: { q: 'nuxt' } })
 
+  // Media-type-map body: omitting `mediaType` defaults to the map's
+  // `application/json` member, typing `body` the same as a single-schema
+  // contract would.
+  const uploadedByDefault = await client('/api/upload', {
+    method: 'post',
+    body: { name: 'Sid' },
+  })
+  uploadedByDefault.name.toUpperCase()
+  uploadedByDefault.bodyMediaType.toUpperCase()
+
+  // Selecting `multipart/form-data` types `body` as the wire value (FormData)
+  // rather than the member schema's input.
+  const uploadedByMultipart = await client('createUpload', {
+    mediaType: 'multipart/form-data',
+    body: new FormData(),
+  })
+  uploadedByMultipart.bodyMediaType.toUpperCase()
+
+  // @ts-expect-error body must be FormData once multipart/form-data is selected.
+  await client('createUpload', { mediaType: 'multipart/form-data', body: { name: 'Sid' } })
+
   const userState = await useClient('/api/users/:id', {
     method: 'get',
     params: { id: '1' },

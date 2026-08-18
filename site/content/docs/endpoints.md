@@ -66,6 +66,81 @@ await $endpoint.getUser({ params: { id: '123' } })
 - `headers`: header schemas are useful for explicit authentication or versioning boundaries.
 - `body`: JSON request bodies are the first-class body format in the current API.
 
+## Media-type request bodies
+
+A `body` contract can also be a map from media types to schemas. The request's
+`Content-Type` (parameters such as `charset` stripped, lowercased) selects the
+member to validate against; a request matching no member gets a `415` listing
+the supported types.
+
+```ts
+export const endpoint = defineEndpoint({
+  operation: 'createUser',
+  body: {
+    'application/json': z.object({ name: z.string() }),
+    'multipart/form-data': z.object({
+      name: z.string(),
+      avatar: z.instanceof(File),
+    }),
+  },
+  responses: { 201: User },
+})
+
+export default defineEndpointHandler(endpoint, ({ body, bodyMediaType, respond }) => {
+  // body is the union of member outputs; bodyMediaType narrows which one matched
+  if (bodyMediaType === 'multipart/form-data') {
+    // body.avatar is a File here
+  }
+  return respond(201, createUser(body.name))
+})
+```
+
+Supported member families and how each is parsed before validation:
+
+- `application/json` — parsed as JSON, exactly like a single-schema body.
+- `application/x-www-form-urlencoded` — parsed into an object.
+- `multipart/form-data` — parsed into an object: repeated field names become
+  arrays, file parts stay `File` values (validate them with e.g.
+  `z.instanceof(File)`).
+- `text/plain` and other specific `text/*` types — the raw request text as a
+  string, with no coercion.
+
+Any other media type, an empty map, or uppercase keys fail at
+`defineEndpoint()` time — which means during build discovery, not on a live
+request. A media-type map makes the body mandatory: requests without a
+matching `Content-Type` are rejected with `415` before the handler runs.
+
+On the client, the generated `$endpoint` gains a `mediaType` request option for
+map contracts. When the map has an `application/json` member, `mediaType` is
+optional and calls read exactly like a single-schema body. Selecting any other
+member types `body` as its wire value — `FormData` for multipart,
+`URLSearchParams` for URL-encoded forms, `string` for `text/*` — because the
+client does not invent an object-to-wire serialization it cannot make honest:
+
+```ts
+const formData = new FormData()
+formData.append('name', 'Tom')
+formData.append('avatar', file)
+
+await $endpoint('createUser', {
+  mediaType: 'multipart/form-data',
+  body: formData, // typed as FormData; content-type is left to the runtime
+})
+```
+
+Maps without a JSON member make `mediaType` required at the type level. The
+option also participates in `useEndpoint` and Vue Query cache keys, so calls
+differing only by media type never share a cache entry.
+
+Two caveats:
+
+- The generated OpenAPI document lists every member under `requestBody.content`.
+  Schema constructs the converter libraries cannot express (such as
+  `z.instanceof(File)`) fail conversion according to those libraries' behavior.
+- The default idempotency fingerprint projects `body`, and `File` values are
+  not JSON-serializable, so an idempotent multipart endpoint must supply a
+  custom `fingerprint` that projects serializable fields only.
+
 ## Request event and middleware context
 
 The handler context exposes both the original H3 `event` and a normalized Web `request`:

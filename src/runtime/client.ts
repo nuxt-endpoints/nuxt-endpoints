@@ -861,8 +861,14 @@ export function createEndpointRequest(
   options: Record<string, unknown> = {},
   runtimeOptions: EndpointRequestRuntimeOptions = {},
 ): EndpointRequestFunctions {
-  const { params, idempotencyKey, ...fetchOptions } = options
+  const { params, idempotencyKey, mediaType, ...fetchOptions } = options
   applyIdempotencyClientOptions(route, fetchOptions, idempotencyKey)
+  // `mediaType` is a client-only selector for a media-type-map `body`
+  // contract (see `EndpointBodyMediaTypeClientOptions` in contract.ts) - it
+  // is never a wire value itself, so it is destructured out above and only
+  // reaches `applyMediaTypeClientOptions` for header bookkeeping, never the
+  // fetcher's options.
+  applyMediaTypeClientOptions(fetchOptions, mediaType)
   const path = replaceParams(route.path, params)
   const fetcher = runtimeOptions.fetcher
 
@@ -966,6 +972,74 @@ function applyIdempotencyClientOptions(
     throwDuplicateIdempotencyHeader(metadata.headerName)
   }
   fetchOptions.headers = { ...headerRecord, [metadata.headerName]: idempotencyKey }
+}
+
+function applyMediaTypeClientOptions(
+  fetchOptions: Record<string, unknown>,
+  mediaType: unknown,
+): void {
+  if (mediaType === undefined) {
+    return
+  }
+  if (typeof mediaType !== 'string') {
+    throw new TypeError('Endpoint mediaType option must be a string')
+  }
+
+  if (mediaType.startsWith('text/')) {
+    // text/* bodies are plain strings with no self-describing Content-Type,
+    // so the client sets one explicitly here - but only if the caller has
+    // not already set their own via `headers`, which wins.
+    setContentTypeHeaderIfAbsent(fetchOptions, mediaType)
+    return
+  }
+
+  // `multipart/form-data` and `application/x-www-form-urlencoded` bodies are
+  // intentionally left alone: a `FormData` body needs a Content-Type header
+  // carrying a runtime-generated boundary
+  // (`multipart/form-data; boundary=...`) that only the fetch implementation
+  // can produce, and setting a plain `multipart/form-data` header here would
+  // strip that boundary and break the request; a `URLSearchParams` body is
+  // already tagged `application/x-www-form-urlencoded` by the same
+  // Fetch-compatible runtime. So this case does nothing on purpose.
+}
+
+// Mirrors the header-shape handling in `applyIdempotencyClientOptions`
+// above (Headers instance / tuple list / plain record), but sets the header
+// only when the caller has not already supplied a content-type - the
+// caller's own `headers` option always wins.
+function setContentTypeHeaderIfAbsent(
+  fetchOptions: Record<string, unknown>,
+  contentType: string,
+): void {
+  const headers = fetchOptions.headers
+
+  if (headers instanceof Headers) {
+    if (headers.has('content-type')) {
+      return
+    }
+    const nextHeaders = new Headers(headers)
+    nextHeaders.set('content-type', contentType)
+    fetchOptions.headers = nextHeaders
+    return
+  }
+  if (Array.isArray(headers)) {
+    const nextHeaders = new Headers(headers as [string, string][])
+    if (nextHeaders.has('content-type')) {
+      return
+    }
+    nextHeaders.set('content-type', contentType)
+    fetchOptions.headers = nextHeaders
+    return
+  }
+  if (headers !== undefined && (typeof headers !== 'object' || headers === null)) {
+    throw new TypeError('Endpoint headers must be a Headers object, tuple list, or record')
+  }
+
+  const headerRecord = (headers ?? {}) as Record<string, unknown>
+  if (Object.keys(headerRecord).some((name) => name.toLowerCase() === 'content-type')) {
+    return
+  }
+  fetchOptions.headers = { ...headerRecord, 'content-type': contentType }
 }
 
 function throwDuplicateIdempotencyHeader(headerName: string): never {

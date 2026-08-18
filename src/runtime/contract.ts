@@ -87,7 +87,23 @@ export type EndpointContext<DEFINITION extends EndpointDefinition> = {
   respond: EndpointResponder<DEFINITION>
 }
 
-export type EndpointClientOptions<DEFINITION extends EndpointDefinition> = OptionalIfEmpty<
+// Branches on `IsEndpointBodyMediaTypeMap` up front (rather than composing a
+// shared `body` field type into one object, the way `params`/`query`/
+// `headers` are handled) so the single-schema-or-no-body branch stays the
+// exact single `RemoveNever<{ params; query; headers; body }>` call it
+// always was - not-a-map endpoints keep byte-identical option types to
+// before media-type maps existed. Splitting that merged object across two
+// separate `RemoveNever` calls (one for params/query/headers, one for body)
+// was tried and rejected: the two calls no longer type-check as *equal* to
+// the merged form under `expect-type`'s `toEqualTypeOf`, even though both
+// are mutually assignable, which would have been a silent breaking change
+// for every existing non-map endpoint's generated option type.
+export type EndpointClientOptions<DEFINITION extends EndpointDefinition> =
+  IsEndpointBodyMediaTypeMap<DEFINITION['body']> extends true
+    ? EndpointMediaTypeBodyClientOptions<DEFINITION>
+    : EndpointSingleBodyClientOptions<DEFINITION>
+
+type EndpointSingleBodyClientOptions<DEFINITION extends EndpointDefinition> = OptionalIfEmpty<
   RemoveNever<{
     params: InferInputOrNever<DEFINITION['params']>
     query: InferInputOrNever<DEFINITION['query']>
@@ -96,6 +112,21 @@ export type EndpointClientOptions<DEFINITION extends EndpointDefinition> = Optio
   }> &
     EndpointIdempotencyClientOptions<DEFINITION>
 >
+
+type EndpointMediaTypeBodyClientOptions<DEFINITION extends EndpointDefinition> =
+  DEFINITION extends {
+    body: infer BODY extends EndpointBodyMediaTypeMap
+  }
+    ? OptionalIfEmpty<
+        RemoveNever<{
+          params: InferInputOrNever<DEFINITION['params']>
+          query: InferInputOrNever<DEFINITION['query']>
+          headers: InferInputOrNever<DEFINITION['headers']>
+        }> &
+          EndpointBodyMediaTypeClientOptions<BODY> &
+          EndpointIdempotencyClientOptions<DEFINITION>
+      >
+    : never
 
 export type EndpointClientOptionsAreOptional<DEFINITION extends EndpointDefinition> = [
   EndpointClientOptions<DEFINITION>,
@@ -215,15 +246,54 @@ type InferBodyMediaType<BODY> = BODY extends ValidatorSchema
     ? MEDIA_TYPE
     : undefined
 
-// Client input inference for a media-type map is handled by the client-side
-// task; this only keeps a map `body` from producing a type error here by
-// falling back to the `application/json` member's input (or `never` if there
-// isn't one).
-type InferInputOrNever<SCHEMA> = SCHEMA extends ValidatorSchema
-  ? InferInput<SCHEMA>
-  : SCHEMA extends { 'application/json': infer JSON_SCHEMA extends ValidatorSchema }
-    ? InferInput<JSON_SCHEMA>
-    : never
+// Used for `params`/`query`/`headers` (never a media-type map) and for a
+// single-schema `body` contract. A media-type map `body` is handled
+// separately by `EndpointMediaTypeBodyClientOptions` above.
+type InferInputOrNever<SCHEMA> = SCHEMA extends ValidatorSchema ? InferInput<SCHEMA> : never
+
+// The wire-format value the client accepts once a media-type map member
+// other than `application/json` is explicitly selected via `mediaType`.
+// Deliberately NOT derived from the member's validator schema: turning an
+// arbitrary schema input into `application/x-www-form-urlencoded` or
+// `multipart/form-data` wire bytes (nested objects, arrays, where a `File`
+// belongs) is a serialization convention this library does not invent, so
+// the client is honest about it and asks for the wire value directly - the
+// same value the runtime would hand back out of `readBody`/`FormData`/plain
+// text parsing. `application/json` is the one exception, handled directly in
+// `EndpointBodyMediaTypeClientOptions` below since its member schema *can*
+// honestly describe an input shape.
+type EndpointBodyMediaTypeWireValue<MEDIA_TYPE extends string> =
+  MEDIA_TYPE extends 'application/x-www-form-urlencoded'
+    ? URLSearchParams
+    : MEDIA_TYPE extends 'multipart/form-data'
+      ? FormData
+      : MEDIA_TYPE extends `text/${string}`
+        ? string
+        : never
+
+// Client request option shape for a media-type-map `body` contract: one
+// member per declared media type, unioned so a literal `mediaType` value
+// narrows `body`'s type at the call site.
+//
+// - When the map has an `application/json` member, `mediaType` is optional
+//   for it: omitting `mediaType` behaves exactly like the pre-existing
+//   single-schema `body` contract (`body` typed as that member's
+//   `InferInput`), and passing `mediaType: 'application/json'` explicitly
+//   types `body` the same way.
+// - Every other member requires `mediaType` to be given explicitly, and its
+//   `body` is typed as the member's wire value (`EndpointBodyMediaTypeWireValue`),
+//   not its schema's input - see the "no magic serialization" reasoning above.
+// - If the map has no `application/json` member at all, there is no default
+//   to omit `mediaType` for, so it is required outright for every member.
+type EndpointBodyMediaTypeClientOptions<MAP extends EndpointBodyMediaTypeMap> = {
+  [MEDIA_TYPE in keyof MAP & string]: MAP extends {
+    'application/json': infer JSON_SCHEMA extends ValidatorSchema
+  }
+    ? MEDIA_TYPE extends 'application/json'
+      ? { mediaType?: MEDIA_TYPE; body: InferInput<JSON_SCHEMA> }
+      : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeWireValue<MEDIA_TYPE> }
+    : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeWireValue<MEDIA_TYPE> }
+}[keyof MAP & string]
 
 export type NormalizeResponses<DEFINITION extends EndpointDefinition> = DEFINITION extends {
   responses: infer RESPONSES extends EndpointResponsesContract

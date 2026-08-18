@@ -264,6 +264,101 @@ describe('createEndpointClient', () => {
     })
   })
 
+  describe('mediaType body options', () => {
+    it('sets a content-type header for a text/* mediaType with a string body', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+
+      await client('createNote', { mediaType: 'text/plain', body: 'hello world' })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
+        body: 'hello world',
+        headers: { 'content-type': 'text/plain' },
+        method: 'post',
+      })
+    })
+
+    it('lets an explicit content-type header win over a text/* mediaType', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+
+      await client('createNote', {
+        mediaType: 'text/plain',
+        body: 'hello world',
+        headers: { 'Content-Type': 'text/plain; charset=iso-8859-1' },
+      })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
+        body: 'hello world',
+        headers: { 'Content-Type': 'text/plain; charset=iso-8859-1' },
+        method: 'post',
+      })
+    })
+
+    it('does not set a content-type header for a multipart/form-data mediaType', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/upload', method: 'post', operation: 'uploadFile' },
+      ])
+      const formData = new FormData()
+      formData.append('name', 'Tom')
+
+      await client('uploadFile', { mediaType: 'multipart/form-data', body: formData })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/upload', {
+        body: formData,
+        method: 'post',
+      })
+      const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
+      expect(calledOptions.headers).toBeUndefined()
+    })
+
+    it('does not set a content-type header for an application/x-www-form-urlencoded mediaType', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+      const params = new URLSearchParams({ note: 'hi' })
+
+      await client('createNote', {
+        mediaType: 'application/x-www-form-urlencoded',
+        body: params,
+      })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
+        body: params,
+        method: 'post',
+      })
+    })
+
+    it('does not leak the mediaType option to the fetcher', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+
+      await client('createNote', { mediaType: 'application/json', body: { note: 'hi' } })
+
+      const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
+      expect(calledOptions).not.toHaveProperty('mediaType')
+      expect(calledOptions).toEqual({ body: { note: 'hi' }, method: 'post' })
+    })
+
+    it('throws when mediaType is not a string', () => {
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+
+      expect(() =>
+        client('createNote', { mediaType: 123 as unknown as string, body: 'x' }),
+      ).toThrow(/mediaType option must be a string/)
+    })
+  })
+
   it('wraps endpoint data calls with useAsyncData', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
 

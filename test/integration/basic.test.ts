@@ -97,6 +97,12 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(requestBody.content).toHaveProperty('multipart/form-data')
     })
 
+    it('sends a multipart/form-data body through $endpoint using the mediaType option', async () => {
+      await expect($fetch<string>('/upload')).resolves.toContain(
+        'upload: Multipart via multipart/form-data',
+      )
+    })
+
     it('serializes response-schema outputs to their JSON wire representation', async () => {
       await expect($fetch('/api/serialized')).resolves.toEqual({
         createdAt: '2026-08-14T00:00:00.000Z',
