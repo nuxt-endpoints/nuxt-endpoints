@@ -84,6 +84,26 @@ describe('idempotency canonicalization and digests', () => {
     expect(() => canonicalizeIdempotencyValue(circular)).toThrow(/serializable/i)
   })
 
+  it('rejects the default fingerprint projection when a multipart body carries a File', () => {
+    // Pins current behavior: a media-type-map endpoint with a
+    // `multipart/form-data` member can put a `File` into `context.body`, and
+    // the default fingerprint projection (`{ params, query, body }`) must
+    // keep rejecting it rather than silently changing what gets hashed.
+    const body = { upload: new File(['contents'], 'upload.txt', { type: 'text/plain' }) }
+
+    let caught: unknown
+    try {
+      canonicalizeIdempotencyValue({ params: undefined, query: undefined, body })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(TypeError)
+    expect((caught as TypeError).message).toMatch(/serializable/i)
+    expect((caught as TypeError).cause).toBeInstanceOf(TypeError)
+    expect(((caught as TypeError).cause as TypeError).message).toBe('File is not JSON serializable')
+  })
+
   it('preserves JSON object keys that have prototype semantics in JavaScript', () => {
     const withProtoKey = JSON.parse('{"__proto__":{"amount":100}}') as unknown
 

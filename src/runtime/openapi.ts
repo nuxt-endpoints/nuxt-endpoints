@@ -1,3 +1,4 @@
+import { isBodyMediaTypeMap } from './body-media-type'
 import type { EndpointDefinition, EndpointResponsesContract, ResponseContract } from './contract'
 import { isPathParamSegment, pathParamNames, replacePathParams } from './path-template'
 import {
@@ -286,6 +287,21 @@ function createRequestBody(
 ): OpenApiOperation['requestBody'] {
   if (!definition.body) {
     return undefined
+  }
+
+  if (isBodyMediaTypeMap(definition.body)) {
+    // A media-type map contract always requires a body: the request must
+    // match one of its declared media types (see the 415 behavior at
+    // request time), so there is no "optional" member to reflect here.
+    return {
+      required: true,
+      content: Object.fromEntries(
+        Object.entries(definition.body).map(([mediaType, schema]) => [
+          mediaType,
+          { schema: toJsonSchema(schema, schemaContext, { mode: 'input' }) },
+        ]),
+      ),
+    }
   }
 
   return {

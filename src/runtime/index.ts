@@ -71,6 +71,7 @@ export type {
   UseEndpointResultPathCaller,
 } from './client'
 export type {
+  EndpointBodyMediaTypeMap,
   EndpointClientOptions,
   EndpointClientOptionsAreOptional,
   EndpointContext,
@@ -82,6 +83,7 @@ export type {
   EndpointResponseStatus,
   EndpointResponsesContract,
   EndpointSuccessBody,
+  IsEndpointBodyMediaTypeMap,
   NormalizeResponses,
   ResponseBody,
   ResponseBodyForStatus,

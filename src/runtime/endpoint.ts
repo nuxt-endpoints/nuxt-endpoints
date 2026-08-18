@@ -1,4 +1,5 @@
 import type {
+  EndpointBodyMediaTypeMap,
   EndpointContext,
   EndpointDefinition,
   EndpointHandler,
@@ -9,6 +10,12 @@ import type {
   ResponseContract,
   UnknownIfNever,
 } from './contract'
+import {
+  formDataToPlainObject,
+  isBodyMediaTypeMap,
+  normalizeBodyContentType,
+  validateBodyMediaTypeMapDefinition,
+} from './body-media-type'
 import { idempotencyRuntimeOptionKeys, validateIdempotencyTtl } from './idempotency'
 import {
   createRuntimeError,
@@ -17,6 +24,8 @@ import {
   getRuntimeRequestHeaders,
   getRuntimeWebRequest,
   readRuntimeBody,
+  readRuntimeFormData,
+  readRuntimeTextBody,
   setRuntimeResponseHeaders,
   setRuntimeResponseStatus,
 } from './h3-adapter'
@@ -32,7 +41,7 @@ import type {
   EndpointRuntimeResponse,
 } from './interceptor'
 import { parseValidator } from './validator'
-import type { ValidationIssue } from './validator'
+import type { ValidationIssue, ValidatorSchema } from './validator'
 
 export type EndpointRuntimeOptions = {
   validation?: {
@@ -109,9 +118,24 @@ type ParsedRequestPart =
 
 type RequestValidationFailure = { success: false; problem: RequestValidationProblem }
 
+// Returned when a media-type-map `body` contract cannot find a member whose
+// media type matches the request's Content-Type.
+type BodyMediaTypeProblem = {
+  statusCode: 415
+  statusMessage: 'Unsupported Media Type'
+  data: {
+    message: string
+    received: string | null
+    supportedMediaTypes: string[]
+  }
+}
+
+type BodyMediaTypeFailure = { success: false; problem: BodyMediaTypeProblem }
+
 type BuildContextResult<DEFINITION extends EndpointDefinition> =
   | { success: true; context: EndpointContext<DEFINITION> }
   | RequestValidationFailure
+  | BodyMediaTypeFailure
 
 export type NormalizedEndpointIdempotencyOptions = {
   storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
@@ -238,9 +262,11 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           idempotencyOptions?.headerName,
         )
         if (!contextResult.success) {
-          return applyRequestValidationProblem(
-            event,
-            contextResult.problem,
+          const problem = contextResult.problem
+          return (
+            problem.statusCode === 415
+              ? applyBodyMediaTypeProblem(event, problem)
+              : applyRequestValidationProblem(event, problem)
           ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
         }
 
@@ -367,7 +393,23 @@ export function defineEndpoint<const DEFINITION extends EndpointDefinition>(
     ([DEFINITION] extends [{ idempotency: unknown }] ? { idempotency?: never } : unknown),
   options?: EndpointRuntimeOptions,
 ): DefinedEndpoint<DEFINITION> {
+  // A media-type-map `body` is validated here so a malformed map fails at
+  // definition time — including the jiti evaluation Nuxt performs at build
+  // time — rather than surfacing as a confusing runtime error on first
+  // request. A single schema `body` needs no extra validation here: its
+  // shape is checked the same way it always was, by `parseValidator` at
+  // request time. This is delegated to a non-generic helper (rather than
+  // narrowing `definition.body` inline) so control-flow narrowing on a
+  // generic parameter's property can't leak into `DEFINITION` inference for
+  // the `return` below.
+  validateEndpointBodyDefinition(definition.body)
   return new DefinedEndpoint(definition, options)
+}
+
+function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void {
+  if (body !== undefined && isBodyMediaTypeMap(body)) {
+    validateBodyMediaTypeMapDefinition(body)
+  }
 }
 
 export function defineEndpointHandler<
@@ -410,9 +452,24 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   )
   if (!headers.success) return validationFailure('headers', headers.issues)
 
-  const body = definition.body
-    ? await parsePart(definition.body, await readRuntimeBody(event))
-    : ({ success: true, value: undefined } as const)
+  let body: ParsedRequestPart
+  let bodyMediaType: string | undefined
+  if (!definition.body) {
+    // No `body` contract: identical to the pre-media-type-map behavior.
+    body = { success: true, value: undefined }
+    bodyMediaType = undefined
+  } else if (!isBodyMediaTypeMap(definition.body)) {
+    // Single-schema `body` contract: the original code path, untouched.
+    body = await parsePart(definition.body, await readRuntimeBody(event))
+    bodyMediaType = undefined
+  } else {
+    const resolution = await resolveBodyMediaTypeMember(event, definition.body)
+    if (!resolution.success) {
+      return { success: false, problem: resolution.problem }
+    }
+    body = await parsePart(definition.body[resolution.mediaType], resolution.raw)
+    bodyMediaType = resolution.mediaType
+  }
   if (!body.success) return validationFailure('body', body.issues)
 
   return {
@@ -424,9 +481,74 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
       query: query.value,
       headers: headers.value,
       body: body.value,
+      bodyMediaType,
       respond: createResponse,
     } as EndpointContext<DEFINITION>,
   }
+}
+
+type BodyMediaTypeResolution =
+  | { success: true; mediaType: string; raw: unknown }
+  | { success: false; problem: BodyMediaTypeProblem }
+
+// Selects the media-type map member matching the request's Content-Type and
+// reads the body with the parser that member's media type requires. Never
+// runs for a single-schema `body` contract.
+async function resolveBodyMediaTypeMember(
+  event: RuntimeEvent,
+  map: EndpointBodyMediaTypeMap,
+): Promise<BodyMediaTypeResolution> {
+  const contentType = normalizeBodyContentType(getRuntimeRequestHeaders(event)['content-type'])
+  const supportedMediaTypes = Object.keys(map)
+
+  if (contentType === undefined || !(contentType in map)) {
+    return {
+      success: false,
+      problem: createBodyMediaTypeProblem(contentType, supportedMediaTypes),
+    }
+  }
+
+  return {
+    success: true,
+    mediaType: contentType,
+    raw: await readBodyForMediaType(event, contentType),
+  }
+}
+
+async function readBodyForMediaType(event: RuntimeEvent, mediaType: string): Promise<unknown> {
+  if (mediaType === 'multipart/form-data') {
+    return formDataToPlainObject(await readRuntimeFormData(event))
+  }
+  if (mediaType.startsWith('text/')) {
+    return readRuntimeTextBody(event)
+  }
+  // 'application/json' and 'application/x-www-form-urlencoded': h3's
+  // readBody natively supports both.
+  return readRuntimeBody(event)
+}
+
+function createBodyMediaTypeProblem(
+  received: string | undefined,
+  supportedMediaTypes: string[],
+): BodyMediaTypeProblem {
+  return {
+    statusCode: 415,
+    statusMessage: 'Unsupported Media Type',
+    data: {
+      message: 'The request Content-Type does not match this endpoint body contract.',
+      received: received ?? null,
+      supportedMediaTypes,
+    },
+  }
+}
+
+function applyBodyMediaTypeProblem(
+  event: RuntimeEvent,
+  problem: BodyMediaTypeProblem,
+): BodyMediaTypeProblem {
+  setRuntimeResponseStatus(event, problem.statusCode, problem.statusMessage)
+  setRuntimeResponseHeaders(event, { 'content-type': 'application/json' })
+  return problem
 }
 
 function validationFailure(
@@ -570,10 +692,7 @@ function getResponseBodySchema(contract: ResponseContract) {
 }
 
 async function parsePart(
-  schema: EndpointDefinition[keyof Pick<
-    EndpointDefinition,
-    'params' | 'query' | 'headers' | 'body'
-  >],
+  schema: ValidatorSchema | undefined,
   input: unknown,
 ): Promise<ParsedRequestPart> {
   if (!schema) {

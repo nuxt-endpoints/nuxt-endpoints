@@ -13,12 +13,33 @@ export type HttpMethod =
   | 'connect'
   | 'trace'
 
+// Media-type keyed request-body contract. Keys must be lowercase and are
+// restricted to the media-type families the runtime can actually parse
+// (see `isSupportedBodyMediaType` in body-media-type.ts).
+export type EndpointBodyMediaTypeMap = {
+  readonly [mediaType: string]: ValidatorSchema
+}
+
 export type EndpointRequestContract = {
   params?: ValidatorSchema
   query?: ValidatorSchema
   headers?: ValidatorSchema
-  body?: ValidatorSchema
+  body?: ValidatorSchema | EndpointBodyMediaTypeMap
 }
+
+// Discriminates a `body` contract between a single validator schema and a
+// media-type map. The schema branch is checked first: `ValidatorSchema`'s
+// members each carry a structural marker (`~standard`, the Effect
+// `Type`/`Encoded`/`Context`/`ast` shape, or Zod's `parse`/`safeParse`
+// family), and TypeScript's "weak type" detection means a map whose keys are
+// media-type strings (which never collide with those markers) fails the
+// schema check outright — so checking the map shape second is unambiguous.
+// Exported so the client-side task can reuse the same discrimination.
+export type IsEndpointBodyMediaTypeMap<BODY> = [BODY] extends [ValidatorSchema]
+  ? false
+  : [BODY] extends [EndpointBodyMediaTypeMap]
+    ? true
+    : false
 
 export type ResponseContract =
   | ValidatorSchema
@@ -56,7 +77,13 @@ export type EndpointContext<DEFINITION extends EndpointDefinition> = {
   params: InferOutputOrUndefined<DEFINITION['params']>
   query: InferOutputOrUndefined<DEFINITION['query']>
   headers: InferOutputOrUndefined<DEFINITION['headers']>
-  body: InferOutputOrUndefined<DEFINITION['body']>
+  body: InferBodyOutputOrUndefined<DEFINITION['body']>
+  /**
+   * The media type whose schema matched the request when `body` is a
+   * media-type map (e.g. `'application/json'`). `undefined` for a single
+   * schema `body` contract or when there is no `body` contract at all.
+   */
+  bodyMediaType: InferBodyMediaType<DEFINITION['body']>
   respond: EndpointResponder<DEFINITION>
 }
 
@@ -169,7 +196,34 @@ type InferOutputOrUndefined<SCHEMA> = SCHEMA extends ValidatorSchema
   ? InferOutput<SCHEMA>
   : undefined
 
-type InferInputOrNever<SCHEMA> = SCHEMA extends ValidatorSchema ? InferInput<SCHEMA> : never
+// Same as `InferOutputOrUndefined`, but for `body` specifically: a
+// media-type map infers to the union of all its members' outputs.
+type InferBodyOutputOrUndefined<BODY> = BODY extends ValidatorSchema
+  ? InferOutput<BODY>
+  : BODY extends Record<string, infer MEMBER extends ValidatorSchema>
+    ? InferOutput<MEMBER>
+    : undefined
+
+// `keyof BODY` (or an indexed access like `BODY[keyof BODY]`) on a generic
+// `BODY` parameter produces a deferred type that breaks `DefinedEndpoint`'s
+// structural comparability across its own generic instantiations (see the
+// `.idempotency()` overloads below) — so, like `InferBodyOutputOrUndefined`
+// above, this infers the media-type keys instead of indexing into `BODY`.
+type InferBodyMediaType<BODY> = BODY extends ValidatorSchema
+  ? undefined
+  : BODY extends Record<infer MEDIA_TYPE extends string, ValidatorSchema>
+    ? MEDIA_TYPE
+    : undefined
+
+// Client input inference for a media-type map is handled by the client-side
+// task; this only keeps a map `body` from producing a type error here by
+// falling back to the `application/json` member's input (or `never` if there
+// isn't one).
+type InferInputOrNever<SCHEMA> = SCHEMA extends ValidatorSchema
+  ? InferInput<SCHEMA>
+  : SCHEMA extends { 'application/json': infer JSON_SCHEMA extends ValidatorSchema }
+    ? InferInput<JSON_SCHEMA>
+    : never
 
 export type NormalizeResponses<DEFINITION extends EndpointDefinition> = DEFINITION extends {
   responses: infer RESPONSES extends EndpointResponsesContract

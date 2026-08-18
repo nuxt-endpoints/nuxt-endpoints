@@ -114,6 +114,48 @@ describe('createOpenApiDocument', () => {
     })
   })
 
+  it('generates a multi-media-type request body from a media-type-map body contract', () => {
+    const document = createOpenApiDocument([
+      {
+        path: '/api/uploads',
+        method: 'post',
+        definition: {
+          operation: 'createUpload',
+          body: {
+            'application/json': z.object({ name: z.string() }),
+            'multipart/form-data': z.object({ name: z.string(), tag: z.array(z.string()) }),
+          },
+          responses: {
+            201: z.object({ id: z.number() }),
+          },
+        },
+      },
+    ])
+
+    expect(document.paths['/api/uploads'].post.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['name'],
+            properties: { name: { type: 'string' } },
+          },
+        },
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            required: ['name', 'tag'],
+            properties: {
+              name: { type: 'string' },
+              tag: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+    })
+  })
+
   it('uses Valibot input schemas for requests and output schemas for responses', () => {
     const numberFromString = v.pipe(v.string(), v.transform(Number), v.number())
 

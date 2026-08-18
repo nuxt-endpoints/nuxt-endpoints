@@ -57,6 +57,46 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(response.status).toBe(201)
     })
 
+    it('accepts a media-type-map body via its application/json member', async () => {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Sid' }),
+        headers: {
+          'content-type': 'application/json',
+        },
+      })
+
+      expect(response.status).toBe(201)
+      await expect(response.json()).resolves.toEqual({
+        name: 'Sid',
+        bodyMediaType: 'application/json',
+      })
+    })
+
+    it('rejects a media-type-map body whose Content-Type matches no declared member', async () => {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: '<p>nope</p>',
+        headers: {
+          'content-type': 'text/html',
+        },
+      })
+
+      expect(response.status).toBe(415)
+      const body = await response.json()
+      expect(body.statusMessage).toBe('Unsupported Media Type')
+      expect(body.data.received).toBe('text/html')
+    })
+
+    it('includes every declared media type in the OpenAPI request body for a media-type-map contract', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const requestBody = schema.paths['/api/upload'].post.requestBody
+
+      expect(requestBody.required).toBe(true)
+      expect(requestBody.content).toHaveProperty('application/json')
+      expect(requestBody.content).toHaveProperty('multipart/form-data')
+    })
+
     it('serializes response-schema outputs to their JSON wire representation', async () => {
       await expect($fetch('/api/serialized')).resolves.toEqual({
         createdAt: '2026-08-14T00:00:00.000Z',

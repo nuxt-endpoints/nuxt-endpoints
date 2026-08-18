@@ -4,6 +4,8 @@ import {
   getHeaders,
   getQuery,
   readBody,
+  readFormData,
+  readRawBody,
   setHeaders,
   setResponseStatus,
   toWebRequest,
@@ -44,6 +46,24 @@ export function getRuntimeRequestHeaders(
 
 export function readRuntimeBody(event: RuntimeEvent): Promise<unknown> {
   return readBody(event)
+}
+
+/**
+ * Reads a `multipart/form-data` request body as a Web `FormData` instance.
+ * Kept separate from `readRuntimeBody` because h3's `readBody` does not
+ * decode multipart bodies the way it does JSON/urlencoded ones.
+ */
+export function readRuntimeFormData(event: RuntimeEvent): Promise<FormData> {
+  return readFormData(event)
+}
+
+/**
+ * Reads a request body as raw UTF-8 text. Unlike `readRuntimeBody` (which
+ * applies h3's `destr` coercion — e.g. turning `"123"` into a number), this
+ * always yields the exact request body text, which `text/*` contracts need.
+ */
+export async function readRuntimeTextBody(event: RuntimeEvent): Promise<string> {
+  return (await readRawBody(event, 'utf8')) ?? ''
 }
 
 export function setRuntimeResponseStatus(
