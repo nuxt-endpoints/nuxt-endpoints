@@ -444,7 +444,6 @@ const stackItems = [
         transform-origin: center 72%;
         will-change: opacity, transform;
       }
-
     }
   }
 
