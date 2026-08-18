@@ -9,12 +9,7 @@ import type {
   ResponseContract,
   UnknownIfNever,
 } from './contract'
-import {
-  createIdempotencyFingerprint,
-  createIdempotencyStorageKey,
-  hasHttpControlCharacter,
-  validateIdempotencyTtl,
-} from './idempotency'
+import { idempotencyRuntimeOptionKeys, validateIdempotencyTtl } from './idempotency'
 import {
   createRuntimeError,
   defineRuntimeHandler,
@@ -26,14 +21,16 @@ import {
   setRuntimeResponseStatus,
 } from './h3-adapter'
 import type { RuntimeEvent } from './h3-adapter'
+import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
-import type {
-  IdempotencyReleaseInput,
-  IdempotencyStorage,
-  IdempotencyStoredResponse,
-} from './idempotency'
+import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
 import { createResponse, isStatusResponse } from './response'
 import type { StatusResponse } from './response'
+import type {
+  EndpointInterceptor,
+  EndpointInterceptorNext,
+  EndpointRuntimeResponse,
+} from './interceptor'
 import { parseValidator } from './validator'
 import type { ValidationIssue } from './validator'
 
@@ -78,20 +75,15 @@ export type EndpointRouteIdentity = {
   routeTemplate: string
 }
 
-export type IdempotencyProblem = {
-  type: 'about:blank'
-  title: string
-  status: 400 | 409 | 422
-  detail: string
-  code:
-    | 'IDEMPOTENCY_KEY_REQUIRED'
-    | 'IDEMPOTENCY_KEY_INVALID'
-    | 'IDEMPOTENCY_REQUEST_IN_FLIGHT'
-    | 'IDEMPOTENCY_KEY_REUSED'
-    | 'IDEMPOTENCY_LEASE_LOST'
-}
+// Re-exported so `src/runtime/index.ts` keeps importing it from here; the
+// type now lives in idempotency-interceptor.ts next to the code that builds
+// and consumes `IdempotencyProblem` values.
+export type { IdempotencyProblem } from './idempotency-interceptor'
 
-type RuntimeIdempotencyContext = {
+// Erased view of `EndpointContext<DEFINITION>` handed to idempotency
+// callbacks (storage/scope/authorization/fingerprint). Exported so
+// idempotency-interceptor.ts can share it without redefining the shape.
+export type RuntimeIdempotencyContext = {
   event: RuntimeEvent
   params: unknown
   query: unknown
@@ -121,7 +113,7 @@ type BuildContextResult<DEFINITION extends EndpointDefinition> =
   | { success: true; context: EndpointContext<DEFINITION> }
   | RequestValidationFailure
 
-type NormalizedEndpointIdempotencyOptions = {
+export type NormalizedEndpointIdempotencyOptions = {
   storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
   scope?: (context: RuntimeIdempotencyContext) => MaybePromise<string>
   authorization?:
@@ -134,11 +126,6 @@ type NormalizedEndpointIdempotencyOptions = {
   replayTtlMs?: number
   replayStatuses: readonly number[]
 }
-
-// Single source of truth for which runtime options an endpoint can either
-// supply itself (in `.idempotency()`) or delegate to the central policy.
-export const idempotencyRuntimeOptionKeys = ['storage', 'scope', 'authorization'] as const
-export type IdempotencyRuntimeOptionKey = (typeof idempotencyRuntimeOptionKeys)[number]
 
 /**
  * Records, per `.idempotency()` call, which runtime options the endpoint
@@ -229,12 +216,26 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   ): EndpointEventHandler<DEFINITION, unknown> {
     let routeIdentity: EndpointRouteIdentity | undefined
     let idempotencyPolicy: EndpointIdempotencyPolicy | undefined
+    const idempotencyOptions = this.idempotencyOptions
+
+    // `routeIdentity` and `idempotencyPolicy` are injected after `.handler()`
+    // returns (via `__set_endpoint_route__`/`__set_idempotency_policy__`), so
+    // the interceptor reads them through getters rather than capturing them
+    // by value here.
+    const interceptor: EndpointInterceptor<DEFINITION> | undefined = idempotencyOptions
+      ? createIdempotencyInterceptor<DEFINITION>({
+          options: idempotencyOptions,
+          getRouteIdentity: () => routeIdentity,
+          getPolicy: () => idempotencyPolicy,
+        })
+      : undefined
+
     const eventHandler = defineRuntimeHandler(
       async (event: RuntimeEvent): Promise<EndpointHandlerSuccessBody<DEFINITION, unknown>> => {
         const contextResult = await buildContext(
           this.definition,
           event,
-          this.idempotencyOptions?.headerName,
+          idempotencyOptions?.headerName,
         )
         if (!contextResult.success) {
           return applyRequestValidationProblem(
@@ -244,192 +245,14 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
         }
 
         const context = contextResult.context
-        const execute = async () => this.executeHandler(handler, context)
-        const idempotency = this.idempotencyOptions
-
-        if (!idempotency) {
-          return applyEndpointResponse(event, await execute()) as EndpointHandlerSuccessBody<
-            DEFINITION,
-            unknown
-          >
-        }
-
-        const key = readIdempotencyKey(event, idempotency.headerName)
-        if (key.outcome === 'invalid') {
-          return applyIdempotencyProblem(
-            event,
-            createIdempotencyProblem(
-              400,
-              'Bad Request',
-              `The ${idempotency.headerName} header must contain one value between 1 and 255 characters without control characters or commas.`,
-              'IDEMPOTENCY_KEY_INVALID',
-            ),
-          ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
-        }
-        if (key.outcome === 'missing' && idempotency.required) {
-          return applyIdempotencyProblem(
-            event,
-            createIdempotencyProblem(
-              400,
-              'Bad Request',
-              `The ${idempotency.headerName} header is required for this endpoint.`,
-              'IDEMPOTENCY_KEY_REQUIRED',
-            ),
-          ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
-        }
-
-        const runtime = resolveIdempotencyRuntimeOptions(idempotency, idempotencyPolicy)
-        const runtimeContext = context as unknown as RuntimeIdempotencyContext
-        if (runtime.authorization !== 'middleware') {
-          await runtime.authorization(runtimeContext)
-        }
-
-        if (key.outcome === 'missing') {
-          return applyEndpointResponse(event, await execute()) as EndpointHandlerSuccessBody<
-            DEFINITION,
-            unknown
-          >
-        }
-
-        if (!routeIdentity) {
-          throw createRuntimeError({
-            statusCode: 500,
-            statusMessage: 'Idempotency Route Metadata Error',
-            data: { message: 'The endpoint route identity was not injected at Nitro startup.' },
-          })
-        }
-
-        const storage = await runtime.storage(runtimeContext)
-        assertIdempotencyStorage(storage)
-        const scope = await runtime.scope(runtimeContext)
-        if (typeof scope !== 'string' || scope.length === 0) {
-          throw createRuntimeError({
-            statusCode: 500,
-            statusMessage: 'Idempotency Scope Error',
-            data: { message: 'The idempotency scope resolver must return a non-empty string.' },
-          })
-        }
-
-        const projection = idempotency.fingerprint
-          ? await idempotency.fingerprint(runtimeContext)
-          : { params: context.params, query: context.query, body: context.body }
-        const fingerprint = await createIdempotencyFingerprint(projection)
-        const storageKey = await createIdempotencyStorageKey({
-          method: routeIdentity.method,
-          routeTemplate: routeIdentity.routeTemplate,
-          scope,
-          key: key.value,
-        })
-        const lease = globalThis.crypto.randomUUID()
-        const claim = await storage.claim({
-          storageKey,
-          fingerprint,
-          lease,
-          leaseTtlMs: runtime.leaseTtlMs,
-        })
-
-        if (claim.outcome === 'completed') {
-          return replayStoredResponse(event, claim.response) as EndpointHandlerSuccessBody<
-            DEFINITION,
-            unknown
-          >
-        }
-        if (claim.outcome === 'conflict') {
-          return applyIdempotencyProblem(
-            event,
-            createIdempotencyProblem(
-              422,
-              'Unprocessable Content',
-              'This idempotency key was already used with a different request.',
-              'IDEMPOTENCY_KEY_REUSED',
-            ),
-          ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
-        }
-        if (claim.outcome === 'in-flight') {
-          return applyIdempotencyProblem(
-            event,
-            createIdempotencyProblem(
-              409,
-              'Conflict',
-              'A request with this idempotency key is still being processed.',
-              'IDEMPOTENCY_REQUEST_IN_FLIGHT',
-            ),
-          ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
-        }
-        if (claim.outcome !== 'acquired') {
-          throw createRuntimeError({
-            statusCode: 500,
-            statusMessage: 'Idempotency Storage Error',
-            data: { message: 'The storage adapter returned an unknown claim outcome.' },
-          })
-        }
-
-        const leaseInput = { storageKey, fingerprint, lease }
-        let response: EndpointRuntimeResponse
-        try {
-          response = await execute()
-        } catch (error) {
-          await releaseLeaseAfterFailure(storage, leaseInput)
-          throw error
-        }
-
-        if (!isReplayableStatus(response.status, idempotency.replayStatuses)) {
-          await storage.release(leaseInput)
-          return applyEndpointResponse(event, response) as EndpointHandlerSuccessBody<
-            DEFINITION,
-            unknown
-          >
-        }
-
-        let snapshot: IdempotencyBodySnapshot
-        try {
-          snapshot = createIdempotencyBodySnapshot(response.body)
-        } catch (error) {
-          await releaseLeaseAfterFailure(storage, leaseInput)
-          throw error
-        }
-
-        let completion
-        try {
-          completion = await storage.complete({
-            ...leaseInput,
-            response: {
-              status: response.status,
-              hasBody: snapshot.hasBody,
-              serializedBody: snapshot.serializedBody,
-              headers: filterReplaySafeHeaders(response.headers),
-            },
-            replayTtlMs: runtime.replayTtlMs,
-          })
-        } catch (error) {
-          await releaseLeaseAfterFailure(storage, leaseInput)
-          throw error
-        }
-
-        if (completion.outcome === 'lease-lost') {
-          return applyIdempotencyProblem(
-            event,
-            createIdempotencyProblem(
-              409,
-              'Conflict',
-              'The request exceeded its idempotency lease and its response was not recorded.',
-              'IDEMPOTENCY_LEASE_LOST',
-            ),
-          ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
-        }
-        if (completion.outcome !== 'applied') {
-          await releaseLeaseAfterFailure(storage, leaseInput)
-          throw createRuntimeError({
-            statusCode: 500,
-            statusMessage: 'Idempotency Storage Error',
-            data: { message: 'The storage adapter returned an unknown completion outcome.' },
-          })
-        }
-
-        return applyEndpointResponse(event, {
-          ...response,
-          body: snapshot.body,
-        }) as EndpointHandlerSuccessBody<DEFINITION, unknown>
+        const execute: EndpointInterceptorNext = () => this.executeHandler(handler, context)
+        const response = interceptor
+          ? await interceptor({ event, context }, execute)
+          : await execute()
+        return applyEndpointResponse(event, response) as EndpointHandlerSuccessBody<
+          DEFINITION,
+          unknown
+        >
       },
     )
 
@@ -642,43 +465,12 @@ function toRequestValidationIssue(issue: ValidationIssue): RequestValidationIssu
   }
 }
 
-type EndpointRuntimeResponse = {
-  status: number
-  body: unknown
-  headers?: Readonly<Record<string, string>>
-  explicitStatus: boolean
-}
-
-type IdempotencyKeyResult =
-  | { outcome: 'missing' }
-  | { outcome: 'invalid' }
-  | { outcome: 'value'; value: string }
-
-const replaySafeResponseHeaders = new Set([
-  'cache-control',
-  'content-language',
-  'content-type',
-  'etag',
-  'last-modified',
-  'location',
-  'retry-after',
-])
-
 function createIdempotencyRuntimeMarker(
   predicate: (key: IdempotencyRuntimeOptionKey) => boolean,
 ): EndpointIdempotencyRuntimeMarker {
   return Object.fromEntries(
     idempotencyRuntimeOptionKeys.map((key) => [key, predicate(key)]),
   ) as EndpointIdempotencyRuntimeMarker
-}
-
-// A type predicate (rather than a plain boolean check) so the key-array-driven
-// gap check also narrows each field to non-nullable for the caller, the way
-// `!storage || !scope || !authorization` used to narrow them individually.
-function hasAllIdempotencyRuntimeOptions<T extends Record<IdempotencyRuntimeOptionKey, unknown>>(
-  value: T,
-): value is { [KEY in keyof T]: NonNullable<T[KEY]> } {
-  return idempotencyRuntimeOptionKeys.every((key) => value[key] !== undefined)
 }
 
 function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
@@ -723,89 +515,8 @@ function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
   }
 }
 
-type ResolvedIdempotencyRuntimeOptions = {
-  storage: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope: (context: RuntimeIdempotencyContext) => MaybePromise<string>
-  authorization:
-    | IdempotencyAuthorizationDelegation
-    | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
-  leaseTtlMs: number
-  replayTtlMs: number
-}
-
-const defaultIdempotencyLeaseTtlMs = 60_000
-const defaultIdempotencyReplayTtlMs = 86_400_000
-
-// Startup validation (server-plugin.ts) guarantees every idempotent endpoint
-// resolves storage/scope/authorization from itself or the central policy, so
-// this is a defensive fallback rather than a path exercised in practice.
-function resolveIdempotencyRuntimeOptions(
-  endpointOptions: NormalizedEndpointIdempotencyOptions,
-  policy: EndpointIdempotencyPolicy | undefined,
-): ResolvedIdempotencyRuntimeOptions {
-  // The policy's context type (`EndpointIdempotencyContext<EndpointDefinition>`)
-  // is erased the same way as in `normalizeIdempotencyOptions`.
-  const runtimePolicy = policy as unknown as Partial<ResolvedIdempotencyRuntimeOptions> | undefined
-  const resolved = {
-    storage: endpointOptions.storage ?? runtimePolicy?.storage,
-    scope: endpointOptions.scope ?? runtimePolicy?.scope,
-    authorization: endpointOptions.authorization ?? runtimePolicy?.authorization,
-  }
-
-  if (!hasAllIdempotencyRuntimeOptions(resolved)) {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Runtime Options Error',
-      data: {
-        message:
-          'The endpoint and its central policy together did not provide storage, scope, and authorization.',
-      },
-    })
-  }
-
-  return {
-    storage: resolved.storage,
-    scope: resolved.scope,
-    authorization: resolved.authorization,
-    leaseTtlMs:
-      endpointOptions.leaseTtlMs ?? runtimePolicy?.leaseTtlMs ?? defaultIdempotencyLeaseTtlMs,
-    replayTtlMs:
-      endpointOptions.replayTtlMs ?? runtimePolicy?.replayTtlMs ?? defaultIdempotencyReplayTtlMs,
-  }
-}
-
 function isValidHttpHeaderName(value: string): boolean {
   return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value)
-}
-
-function readIdempotencyKey(event: RuntimeEvent, headerName: string): IdempotencyKeyResult {
-  const lowerName = headerName.toLowerCase()
-  const values: string[] = []
-
-  for (const [name, value] of Object.entries(getRuntimeRequestHeaders(event))) {
-    if (name.toLowerCase() !== lowerName || value === undefined) {
-      continue
-    }
-    values.push(value)
-  }
-
-  if (values.length === 0) {
-    return { outcome: 'missing' }
-  }
-  if (values.length !== 1) {
-    return { outcome: 'invalid' }
-  }
-
-  const value = values[0]!
-  if (
-    value.length === 0 ||
-    value.length > 255 ||
-    value.includes(',') ||
-    hasHttpControlCharacter(value)
-  ) {
-    return { outcome: 'invalid' }
-  }
-  return { outcome: 'value', value }
 }
 
 function omitRequestHeader(
@@ -819,25 +530,6 @@ function omitRequestHeader(
   return Object.fromEntries(
     Object.entries(headers).filter(([name]) => name.toLowerCase() !== lowerName),
   )
-}
-
-function assertIdempotencyStorage(value: unknown): asserts value is IdempotencyStorage {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('claim' in value) ||
-    typeof value.claim !== 'function' ||
-    !('complete' in value) ||
-    typeof value.complete !== 'function' ||
-    !('release' in value) ||
-    typeof value.release !== 'function'
-  ) {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Storage Error',
-      data: { message: 'The idempotency storage resolver returned an invalid adapter.' },
-    })
-  }
 }
 
 function normalizeRouteIdentity(identity: EndpointRouteIdentity): EndpointRouteIdentity {
@@ -855,140 +547,6 @@ function applyEndpointResponse(event: RuntimeEvent, response: EndpointRuntimeRes
     setRuntimeResponseHeaders(event, { ...response.headers })
   }
   return response.body
-}
-
-function replayStoredResponse(event: RuntimeEvent, response: IdempotencyStoredResponse): unknown {
-  if (!Number.isInteger(response.status) || response.status < 100 || response.status > 599) {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Storage Error',
-      data: { message: 'The stored response has an invalid HTTP status.' },
-    })
-  }
-
-  if (typeof response.hasBody !== 'boolean') {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Storage Error',
-      data: { message: 'The stored response must declare whether it has a body.' },
-    })
-  }
-  if (typeof response.serializedBody !== 'string') {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Storage Error',
-      data: { message: 'The stored response body must be JSON text.' },
-    })
-  }
-  if (!response.hasBody) {
-    if (response.serializedBody !== '') {
-      throw createRuntimeError({
-        statusCode: 500,
-        statusMessage: 'Idempotency Storage Error',
-        data: { message: 'A stored empty response must have an empty serialized body.' },
-      })
-    }
-    setRuntimeResponseStatus(event, response.status)
-    const headers = filterReplaySafeHeaders(response.headers)
-    if (headers && Object.keys(headers).length > 0) {
-      setRuntimeResponseHeaders(event, headers)
-    }
-    return undefined
-  }
-
-  let body: unknown
-  try {
-    body = JSON.parse(response.serializedBody)
-  } catch (error) {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Storage Error',
-      data: { message: 'The stored response body is not valid JSON.', cause: error },
-    })
-  }
-
-  setRuntimeResponseStatus(event, response.status)
-  const headers = filterReplaySafeHeaders(response.headers)
-  if (headers && Object.keys(headers).length > 0) {
-    setRuntimeResponseHeaders(event, headers)
-  }
-  return body
-}
-
-function filterReplaySafeHeaders(
-  headers: Readonly<Record<string, string>> | undefined,
-): Record<string, string> | undefined {
-  if (!headers) {
-    return undefined
-  }
-  const safeHeaders: Record<string, string> = {}
-  for (const [name, value] of Object.entries(headers)) {
-    const normalizedName = name.toLowerCase()
-    if (replaySafeResponseHeaders.has(normalizedName)) {
-      safeHeaders[normalizedName] = value
-    }
-  }
-  return Object.keys(safeHeaders).length > 0 ? safeHeaders : undefined
-}
-
-function isReplayableStatus(status: number, additionalStatuses: readonly number[]): boolean {
-  return (status >= 200 && status < 300) || additionalStatuses.includes(status)
-}
-
-type IdempotencyBodySnapshot =
-  | { hasBody: false; serializedBody: ''; body: undefined }
-  | { hasBody: true; serializedBody: string; body: unknown }
-
-function createIdempotencyBodySnapshot(body: unknown): IdempotencyBodySnapshot {
-  try {
-    if (body === undefined) {
-      return { hasBody: false, serializedBody: '', body: undefined }
-    }
-    if (typeof Response !== 'undefined' && body instanceof Response) {
-      throw new TypeError('Native Response values are not supported by idempotency replay')
-    }
-    const serialized = JSON.stringify(body)
-    if (serialized === undefined) {
-      throw new TypeError('The response body is not JSON serializable')
-    }
-    return { hasBody: true, serializedBody: serialized, body: JSON.parse(serialized) }
-  } catch (error) {
-    throw createRuntimeError({
-      statusCode: 500,
-      statusMessage: 'Idempotency Response Serialization Error',
-      data: { message: 'The endpoint response body is not JSON serializable.', cause: error },
-    })
-  }
-}
-
-async function releaseLeaseAfterFailure(
-  storage: IdempotencyStorage,
-  input: IdempotencyReleaseInput,
-): Promise<void> {
-  try {
-    await storage.release(input)
-  } catch {
-    // Preserve the original handler/storage error. The lease TTL is the final
-    // recovery boundary when best-effort release cannot reach the adapter.
-  }
-}
-
-function createIdempotencyProblem(
-  status: IdempotencyProblem['status'],
-  title: string,
-  detail: string,
-  code: IdempotencyProblem['code'],
-): IdempotencyProblem {
-  return { type: 'about:blank', title, status, detail, code }
-}
-
-function applyIdempotencyProblem(
-  event: RuntimeEvent,
-  problem: IdempotencyProblem,
-): IdempotencyProblem {
-  setRuntimeResponseStatus(event, problem.status)
-  setRuntimeResponseHeaders(event, { 'content-type': 'application/problem+json' })
-  return problem
 }
 
 function getResponseContract(

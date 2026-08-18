@@ -2,7 +2,8 @@ import { defineNitroPlugin } from 'nitropack/runtime/plugin'
 import endpointsOptions from '#nuxt-endpoints/options'
 import policyModule from '#nuxt-endpoints/idempotency-policy'
 import type { EndpointDefinition } from './contract'
-import { idempotencyMetadataWithoutRuntimeMessage, idempotencyRuntimeOptionKeys } from './endpoint'
+import { idempotencyMetadataWithoutRuntimeMessage } from './endpoint'
+import { idempotencyRuntimeOptionKeys } from './idempotency'
 import type {
   DefinedEndpoint,
   EndpointIdempotencyRuntimeMarker,

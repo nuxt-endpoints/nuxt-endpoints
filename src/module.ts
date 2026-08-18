@@ -35,8 +35,8 @@ import {
   defineEndpoint,
   defineEndpointHandler,
   idempotencyMetadataWithoutRuntimeMessage,
-  idempotencyRuntimeOptionKeys,
 } from './runtime/endpoint'
+import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
 import { mutationHttpMethodList, queryHttpMethodList } from './runtime/tanstack-query'

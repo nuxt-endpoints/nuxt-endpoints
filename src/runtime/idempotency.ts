@@ -349,3 +349,11 @@ function copyStoredResponse(response: IdempotencyStoredResponse): IdempotencySto
     ...(response.headers ? { headers: { ...response.headers } } : {}),
   }
 }
+
+// Single source of truth for which runtime options an endpoint can either
+// supply itself (in `.idempotency()`) or delegate to the central policy.
+// It lives here rather than next to its consumers because build-time
+// discovery, startup validation, and request-time resolution all need it,
+// and this module imports nothing, so no consumer can form an import cycle.
+export const idempotencyRuntimeOptionKeys = ['storage', 'scope', 'authorization'] as const
+export type IdempotencyRuntimeOptionKey = (typeof idempotencyRuntimeOptionKeys)[number]
