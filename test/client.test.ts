@@ -432,7 +432,11 @@ describe('createEndpointClient', () => {
     const call = client('getUser', { params: { id: 123 } }) as ReturnType<typeof client> & {
       effect: () => Effect.Effect<unknown>
     }
-    const result = await Effect.runPromise(call.effect())
+    const program = call.effect()
+
+    expect(fetchRawMock).not.toHaveBeenCalled()
+
+    const result = await Effect.runPromise(program)
 
     expect(result).toEqual({
       status: 200,

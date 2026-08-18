@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Schema } from 'effect'
 import * as v from 'valibot'
 import { z } from 'zod'
 import { createOpenApiDocument } from '../src/runtime'
@@ -149,6 +150,35 @@ describe('createOpenApiDocument', () => {
         id: { type: 'number' },
       },
       required: ['id'],
+    })
+  })
+
+  it('generates OpenAPI schemas from Effect Schema contracts', () => {
+    const document = createOpenApiDocument([
+      {
+        path: '/api/effect-items',
+        method: 'post',
+        definition: {
+          operation: 'createEffectItem',
+          body: Schema.Struct({ name: Schema.String }),
+          response: Schema.Struct({ id: Schema.Number, name: Schema.String }),
+        },
+      },
+    ])
+
+    expect(
+      document.paths['/api/effect-items'].post.requestBody?.content['application/json'].schema,
+    ).toMatchObject({
+      type: 'object',
+      required: ['name'],
+      properties: { name: { type: 'string' } },
+    })
+    expect(
+      document.paths['/api/effect-items'].post.responses[200].content['application/json'].schema,
+    ).toMatchObject({
+      type: 'object',
+      required: ['id', 'name'],
+      properties: { id: { type: 'number' }, name: { type: 'string' } },
     })
   })
 
