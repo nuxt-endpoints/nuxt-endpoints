@@ -389,6 +389,29 @@ an internal improvement and the evidence behind a concrete upstream request.
 Steps 1 and 2 are independently valuable and do not depend on upstream
 timing. Step 3 should wait until an upstream contract shape is stable.
 
+### Handler return typing: what was measured
+
+The reference implementation's `ConstResponse` keeps inline literal and tuple
+responses narrow without `as const`. Probing this codebase for the same
+behavior found two separate problems, only one of which is fixed:
+
+- **Tuple responses were unusable** (fixed). `DeepMutable`, which strips
+  `readonly` before the handler-return check, collapsed every array — tuples
+  included — to `Item[]`, so a `z.tuple()` response could not be satisfied even
+  by an explicitly typed tuple value. It now maps tuples element-wise.
+- **Inline literals still widen** (open). `() => ({ ok: true })` against a
+  `z.literal(true)` response infers `boolean` and fails; `as const` works.
+
+Making the handler's declared return type the contract itself would fix this
+through contextual typing, and that mechanism was verified to work in
+isolation. It could not be wired into `defineEndpointHandler`: the parameter's
+type is a `HasEndpointResponses` conditional, and a deferred conditional type
+is not used as a contextual type. Removing the conditional was not enough
+either, because `DEFINITION` is inferred from the first argument. A
+`const` type parameter with a constraint was also tried and provides no
+contextual type for a function body's return expression. Revisit only with a
+signature that resolves `DEFINITION` before the handler parameter is checked.
+
 ### Not adopted from the reference implementation
 
 - Swallowing module-evaluation failures during build-time discovery. Types

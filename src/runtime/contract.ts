@@ -195,8 +195,15 @@ export type DeepMutable<VALUE> = VALUE extends
     ? Map<DeepMutable<KEY>, DeepMutable<ITEM>>
     : VALUE extends ReadonlySet<infer ITEM>
       ? Set<DeepMutable<ITEM>>
-      : VALUE extends readonly (infer ITEM)[]
-        ? DeepMutable<ITEM>[]
+      : VALUE extends readonly unknown[]
+        ? // A tuple's `length` is a literal, so `number extends length` only
+          // holds for unbounded arrays. Tuples are mapped element-wise to keep
+          // their arity and per-position types; collapsing them to
+          // `DeepMutable<ITEM>[]` would make a tuple response schema
+          // unsatisfiable.
+          number extends VALUE['length']
+          ? DeepMutable<VALUE[number]>[]
+          : { -readonly [KEY in keyof VALUE]: DeepMutable<VALUE[KEY]> }
         : VALUE extends object
           ? { -readonly [KEY in keyof VALUE]: DeepMutable<VALUE[KEY]> }
           : VALUE

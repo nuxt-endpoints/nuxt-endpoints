@@ -1,4 +1,5 @@
 import { assertType, describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
 import { defineEndpoint, defineEndpointHandler, respond } from '../../src/runtime'
 import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../../src/runtime'
 import type { H3Event } from 'h3'
@@ -273,5 +274,42 @@ describe('defineEndpoint handler types', () => {
       id: number
       name: string
     }>()
+  })
+})
+
+describe('tuple and literal response contracts', () => {
+  it('accepts a tuple-typed response value', () => {
+    const endpoint = defineEndpoint({
+      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+    })
+    const pair: [string, number] = ['a', 1]
+
+    defineEndpointHandler(endpoint, () => ({ pair }))
+    // `as const` works too: the readonly tuple keeps its arity through the
+    // handler return check.
+    defineEndpointHandler(endpoint, () => ({ pair: ['a', 1] }) as const)
+  })
+
+  it('keeps rejecting a tuple whose positions do not match', () => {
+    const endpoint = defineEndpoint({
+      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+    })
+
+    // @ts-expect-error the second position must be a number.
+    defineEndpointHandler(endpoint, () => ({ pair: ['a', 'b'] }) as const)
+  })
+
+  it('accepts an inline literal response written with as const', () => {
+    const endpoint = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+
+    // Inline literals widen without `as const`, so the assertion is required
+    // here; see the roadmap note on contextual handler returns.
+    defineEndpointHandler(endpoint, () => ({ ok: true }) as const)
+  })
+
+  it('still accepts ordinary arrays', () => {
+    const endpoint = defineEndpoint({ response: z.object({ items: z.array(z.string()) }) })
+
+    defineEndpointHandler(endpoint, () => ({ items: ['a', 'b'] }))
   })
 })
