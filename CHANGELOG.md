@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 - 2026-08-19
+
+### Added
+
+- Request bodies can be declared per media type: a `body` map from
+  `application/json`, `application/x-www-form-urlencoded`,
+  `multipart/form-data`, or a `text/*` type to its own schema. The request
+  Content-Type selects the member, a mismatch answers `415`, and the handler
+  context gains `bodyMediaType` narrowing which member matched. Generated
+  client calls take a `mediaType` option typed to the wire value of the
+  selected member, and OpenAPI lists every member under `requestBody.content`.
+- A method-suffix-free route file can declare several methods at once with
+  `defineEndpointMethods()` and `defineEndpointMethodHandlers()`. Members are
+  ordinary `defineEndpoint()` contracts, so operations, idempotency, and
+  media-type bodies all work per method. The dispatcher derives `HEAD` from
+  `GET`, answers `OPTIONS` with `204`, and returns `405` with an `Allow`
+  header listing every reachable method.
+
+### Fixed
+
+- Tuple response schemas are satisfiable again. The handler-return check
+  collapsed every array to `Item[]`, so a `z.tuple()` response could not be
+  met even by an explicitly typed tuple.
+- Inline literal and tuple responses no longer need an `as const` assertion,
+  while values that do not match the contract are still rejected — including
+  tuple arity. Endpoints with no declared responses keep widening their
+  handler return, so a sample value does not narrow the generated client type.
+- Vue Query cache keys include the `mediaType` option, so two calls to one
+  route that differ only by media type no longer share a cache entry.
+- Build-time discovery no longer reads files that are not user route sources.
+  Handlers registered programmatically, this module's own OpenAPI route among
+  them, are recognized by path shape instead.
+
+### Changed
+
+- Endpoint routes declared on catch-all or optional-parameter paths now fail
+  the build with an explanation rather than generating client URLs and
+  OpenAPI paths that cannot be correct.
+- The idempotency execution path moved behind a named interception point
+  between request validation and handler execution. Behavior is unchanged;
+  the seam is what will let the application layer sit on a future primitive
+  layer.
+
 ## 0.2.0 - 2026-08-16
 
 ### Added
