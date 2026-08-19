@@ -286,12 +286,13 @@ cache inspector.
 
 ## Multipart and typed streams
 
-Multipart upload support affects request types, runtime parsing, client
-serialization, OpenAPI media types, and encoding metadata together. Avoid a
-convenience-only `FormData` wrapper that cannot be represented accurately in
-the endpoint contract.
+Multipart uploads ship as one member of a media-type request-body map, which
+is what kept request types, runtime parsing, client serialization, OpenAPI
+media types, and encoding metadata consistent with each other rather than
+bolted on as a `FormData` convenience wrapper.
 
-Typed streaming and SSE should remain raw HTTP until a design preserves:
+Stream _declarations_ ship (see Typed SSE chunks below). Typed streaming - the
+chunks themselves - should remain raw HTTP until a design preserves:
 
 - chunk schemas and end-to-end chunk inference;
 - optional per-chunk runtime validation;
@@ -303,7 +304,9 @@ Typed streaming and SSE should remain raw HTTP until a design preserves:
 - native `Response` escape hatches;
 - Effect Stream integration where its model differs from browser streams.
 
-Current public guidance remains [Low-level HTTP](../site/content/docs/low-level-http.md).
+Public guidance is [Streaming responses](../site/content/docs/endpoints.md) for
+declaring one, and [Low-level HTTP](../site/content/docs/low-level-http.md) for
+routes that stay outside the contract.
 
 ## Primitive-layer boundary and upstream convergence
 
@@ -332,9 +335,11 @@ is stronger on discovery robustness (evaluation failures fail the build rather
 than silently degrading types), schema-library breadth (Zod, Valibot, and
 Effect Schema without wrappers, where a `~standard.jsonSchema`-only approach
 degrades to an empty schema), status-typed client results, and verified
-agreement with the platform's own wire projection. It is weaker on contract
-expressiveness: no per-method dispatch, no media-type request bodies, no
-streaming declarations.
+agreement with the platform's own wire projection. The contract-expressiveness
+gap that motivated this comparison is closed: per-method dispatch, media-type
+request bodies, and stream response declarations all ship. What remains
+one-sided is response-side media types on a _validated_ status and response
+content negotiation.
 
 ### Adapter over generalization
 
@@ -375,12 +380,13 @@ an internal improvement and the evidence behind a concrete upstream request.
 
 ### Sequence
 
-1. **Widen the contract vocabulary** — done: media-type request bodies and
-   per-method dispatch both ship. The remaining known gap is response-side
-   media types and streaming declarations (see Multipart and typed streams).
-2. **Extract the interception seam** — turn the implicit validated-context and
-   deferred-execute pair into a named extension point, with idempotency as its
-   first consumer.
+1. **Widen the contract vocabulary** — done: media-type request bodies,
+   per-method dispatch, and stream response declarations all ship. The
+   remaining known gap is response-side media types on a validated status and
+   response content negotiation.
+2. **Extract the interception seam** — done: `wrapHandler` names the
+   validated-context and deferred-execute pair, and idempotency is its first
+   consumer rather than a privileged one.
 3. **Define the contract adapter** — the type-level projection plus its runtime
    counterpart, one implementation per upstream, all targeting
    `EndpointRouteEntry`.
@@ -434,9 +440,9 @@ This implementation rejects both.
 
 ### Typed SSE chunks: not planned
 
-Streaming responses cannot currently be declared at all, which is a real gap:
-such a route has to leave the contract entirely, losing request validation,
-OpenAPI, and operation names along with it. Declaring them is worth doing.
+Declaring a streaming response was worth doing and now ships: a status marked
+`stream: true` keeps its route inside the contract, reaches OpenAPI with its
+media type, and tells the generated client not to parse that route's body.
 
 Typing the _chunks_ is not. Every SSE issue across nuxt, nitro, and h3 is about
 making SSE work or making it easier to return — promoting `EventStream` to
@@ -504,8 +510,9 @@ Recorded so the "why not" survives; none of these block current work.
    stabilize.
 5. Add advanced adapter ergonomics and DevTools only after the public API is
    stable.
-6. Implement first-class multipart or typed streams only after concrete demand
-   and a complete transport contract exist.
+6. Implement typed stream chunks only after concrete demand and a complete
+   transport contract exist. Declaring a stream, and multipart requests, both
+   ship already.
 
 ```text
 Nuxt 4 / Nitro 2 contract stability
@@ -514,7 +521,7 @@ Nuxt 4 / Nitro 2 contract stability
 -> operation-aware observability
 -> advanced adapter ergonomics
 -> DevTools and scaffolding
--> multipart and typed streams
+-> typed stream chunks
 ```
 
 ## Independent review brief
