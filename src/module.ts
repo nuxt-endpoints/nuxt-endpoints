@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   addImports,
@@ -526,36 +526,29 @@ async function writeGenerated(filePath: string, content: string): Promise<void> 
   await fsp.writeFile(filePath, content)
 }
 
-const routeSourceExtensions = ['', '.ts', '.mts', '.js', '.mjs']
+// A scanned user route is always an absolute path to a JS/TS file. The other
+// two shapes Nitro hands over are not route sources and must not be read:
+// module-registered handlers resolve to an absolute path with no extension
+// (this module's own OpenAPI route among them, whose specifier sits right
+// next to a real runtime file), and Nuxt's internal handlers use virtual
+// specifiers such as `#internal/nuxt/island-renderer.mjs`, which carry an
+// extension but no file.
+const routeSourceFilePattern = /\.[cm]?[jt]sx?$/
 
-// Reads a route handler's source, probing the extensions Nitro omits from
-// programmatically registered specifiers. Returns undefined when no file
-// exists, which distinguishes "not a source file" from a read failure.
-async function readRouteSource(handlerPath: string): Promise<string | undefined> {
-  for (const extension of routeSourceExtensions) {
-    try {
-      return await fsp.readFile(`${handlerPath}${extension}`, { encoding: 'utf-8' })
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-      throw error
-    }
-  }
-  return undefined
+function isScannedRouteSource(handlerPath: string): boolean {
+  return isAbsolute(handlerPath) && routeSourceFilePattern.test(handlerPath)
 }
 
 async function detectEndpoint(
   handler: NitroRouteHandlerDescriptor,
   loaders: ContractModuleLoaders,
 ): Promise<EndpointDetection | null> {
-  const fileContent = await readRouteSource(handler.handler)
-  if (fileContent === undefined) {
-    // Handlers registered programmatically (this module's own OpenAPI route,
-    // or another module's `addServerHandler`) carry an extension-less
-    // specifier with no file behind it. They are not user route sources, so
-    // there is nothing to analyze. Scanned route files always resolve here,
-    // so a real endpoint route can never take this path.
+  if (!isScannedRouteSource(handler.handler)) {
     return null
   }
+  // A scanned route file that cannot be read is a real problem, so this stays
+  // loud rather than treating the route as non-endpoint.
+  const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
   const source = await resolveEndpointCarrierSource(fileContent, handler.handler, loaders)
 
   if (source.kind === 'skip') {
