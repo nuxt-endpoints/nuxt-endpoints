@@ -1,14 +1,17 @@
 import type {
+  CapturedEndpointHandler,
+  DeepReadonly,
   EndpointBodyMediaTypeMap,
   EndpointContext,
   EndpointDefinition,
-  EndpointHandler,
   EndpointIdempotencyMetadata,
   EndpointSuccessBody,
+  HandlerReturn,
   HasEndpointResponses,
   IsSuccessStatus,
   ResponseContract,
   UnknownIfNever,
+  WidenCapturedReturn,
 } from './contract'
 import {
   formDataToPlainObject,
@@ -227,14 +230,22 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     return new DefinedEndpoint(definition, this.options, normalized, marker)
   }
 
-  handler<const HANDLER extends (context: EndpointContext<DEFINITION>) => unknown>(
-    handler: HasEndpointResponses<DEFINITION> extends true ? never : HANDLER,
-  ): EndpointEventHandler<DEFINITION, ReturnType<HANDLER>>
-  handler<const ACTUAL_RETURN>(
-    handler: HasEndpointResponses<DEFINITION> extends true
-      ? EndpointHandler<DEFINITION, ACTUAL_RETURN>
-      : never,
-  ): EndpointEventHandler<DEFINITION, ACTUAL_RETURN>
+  // Single signature for the same reason as `defineEndpointHandler` below:
+  // a second overload defeats the `const` capture that keeps inline literals
+  // and tuples narrow, and the no-declared-responses case is handled by
+  // widening in the return type instead.
+  handler<
+    const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+      HandlerReturn<DEFINITION>
+    >,
+  >(
+    handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>,
+  ): EndpointEventHandler<
+    DEFINITION,
+    HasEndpointResponses<DEFINITION> extends true
+      ? ACTUAL_RETURN
+      : WidenCapturedReturn<ACTUAL_RETURN>
+  >
   handler(
     handler: (context: EndpointContext<DEFINITION>) => unknown,
   ): EndpointEventHandler<DEFINITION, unknown> {
@@ -414,22 +425,28 @@ function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void 
   }
 }
 
+// One signature, deliberately not overloaded: any preceding overload defeats
+// the `const` capture of ACTUAL_RETURN, and the capture is what keeps inline
+// literals and tuples narrow without `as const`. The readonly projection in
+// the constraint accepts the captured value against the contract, tuple arity
+// included.
+//
+// Endpoints without declared responses need the opposite treatment - their
+// client type comes from the handler return, where a sample `name: 'Tom'`
+// must widen to `string`. That reversal happens in the return type, which is
+// safe: a conditional there does not reach the parameter being captured.
 export function defineEndpointHandler<
   const DEFINITION extends EndpointDefinition,
-  const HANDLER extends (context: EndpointContext<DEFINITION>) => unknown,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
 >(
   endpoint: DefinedEndpoint<DEFINITION>,
-  handler: HasEndpointResponses<DEFINITION> extends true ? never : HANDLER,
-): EndpointEventHandler<DEFINITION, ReturnType<HANDLER>>
-export function defineEndpointHandler<
-  const DEFINITION extends EndpointDefinition,
-  const ACTUAL_RETURN,
->(
-  endpoint: DefinedEndpoint<DEFINITION>,
-  handler: HasEndpointResponses<DEFINITION> extends true
-    ? EndpointHandler<DEFINITION, ACTUAL_RETURN>
-    : never,
-): EndpointEventHandler<DEFINITION, ACTUAL_RETURN>
+  handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
+>
 export function defineEndpointHandler<const DEFINITION extends EndpointDefinition>(
   endpoint: DefinedEndpoint<DEFINITION>,
   handler: (context: EndpointContext<DEFINITION>) => unknown,

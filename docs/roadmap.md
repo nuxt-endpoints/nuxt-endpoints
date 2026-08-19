@@ -389,28 +389,46 @@ an internal improvement and the evidence behind a concrete upstream request.
 Steps 1 and 2 are independently valuable and do not depend on upstream
 timing. Step 3 should wait until an upstream contract shape is stable.
 
-### Handler return typing: what was measured
+### Handler return typing: measured, then fixed
 
-The reference implementation's `ConstResponse` keeps inline literal and tuple
-responses narrow without `as const`. Probing this codebase for the same
-behavior found two separate problems, only one of which is fixed:
+Two problems were found by probing this codebase against the reference
+implementation's `ConstResponse`, and both are now fixed:
 
-- **Tuple responses were unusable** (fixed). `DeepMutable`, which strips
-  `readonly` before the handler-return check, collapsed every array — tuples
-  included — to `Item[]`, so a `z.tuple()` response could not be satisfied even
-  by an explicitly typed tuple value. It now maps tuples element-wise.
-- **Inline literals still widen** (open). `() => ({ ok: true })` against a
-  `z.literal(true)` response infers `boolean` and fails; `as const` works.
+- **Tuple responses were unusable.** `DeepMutable`, which strips `readonly`
+  before the handler-return check, collapsed every array — tuples included —
+  to `Item[]`. It now maps tuples element-wise.
+- **Inline literals and tuples needed `as const`.** They no longer do.
 
-Making the handler's declared return type the contract itself would fix this
-through contextual typing, and that mechanism was verified to work in
-isolation. It could not be wired into `defineEndpointHandler`: the parameter's
-type is a `HasEndpointResponses` conditional, and a deferred conditional type
-is not used as a contextual type. Removing the conditional was not enough
-either, because `DEFINITION` is inferred from the first argument. A
-`const` type parameter with a constraint was also tried and provides no
-contextual type for a function body's return expression. Revisit only with a
-signature that resolves `DEFINITION` before the handler parameter is checked.
+The working mechanism is a `const` type parameter capturing the handler's
+actual return, constrained by a `DeepReadonly` projection of the contract:
+capture keeps `{ ok: true }` and `['a', 1]` narrow, and the readonly
+projection is what lets the captured (deeply readonly) value satisfy the
+contract, tuple arity included.
+
+Four things had to be true at once, each verified by reverting it:
+
+- **No preceding overload.** Any earlier overload defeats the capture, whatever
+  its own shape. Both entry points are therefore single signatures.
+- **No conditional on the handler parameter.** A deferred conditional there
+  defeats the capture too, so `HasEndpointResponses` cannot gate the argument.
+- **Discrimination in the return type instead.** Endpoints with no declared
+  responses need the opposite treatment — their client type comes from the
+  handler return, where a sample `name: 'Tom'` must widen to `string`. That
+  reversal happens in the return type, which the capture does not reach.
+- **`respond()` results excluded from widening.** Their wrapper and status
+  literal are deliberate; only their body widens.
+
+Approaches that do not work, so they are not retried: a constraint alone
+(no contextual type for a function body's return), intersecting the inference
+site with a concrete expected type, and discriminating overloads through a
+`DEFINITION` constraint (a failed constraint falls back to the constraint
+itself, silently producing `never` fields).
+
+Measured against the reference implementation on the same cases: it also
+accepts inline literals without `as const`, but accepts a wrong tuple —
+`['a', 'b']` and `['a', 1, 'extra']` both satisfy a `[string, number]`
+contract there, because its readonly projection collapses tuples to arrays.
+This implementation rejects both.
 
 ### Not adopted from the reference implementation
 

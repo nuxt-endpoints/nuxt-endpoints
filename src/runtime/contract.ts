@@ -156,6 +156,67 @@ export type EndpointHandler<DEFINITION extends EndpointDefinition, ACTUAL_RETURN
   context: EndpointContext<DEFINITION>,
 ) => ACTUAL_RETURN & Check<Awaited<ACTUAL_RETURN>, HandlerReturn<DEFINITION>>
 
+// Readonly projection of a handler's expected return. Used as the constraint
+// on the `const`-captured actual return: `const` capture keeps inline literals
+// and tuples narrow, but the captured value is deeply readonly, so a mutable
+// expected type would reject it (TS4104). Projecting the expectation instead
+// keeps the check exact - including tuple arity - while accepting both plain
+// and `as const` returns.
+export type DeepReadonly<VALUE> = VALUE extends
+  | Date
+  | RegExp
+  | Error
+  | ((...args: never[]) => unknown)
+  ? VALUE
+  : VALUE extends ReadonlyMap<infer KEY, infer ITEM>
+    ? ReadonlyMap<DeepReadonly<KEY>, DeepReadonly<ITEM>>
+    : VALUE extends ReadonlySet<infer ITEM>
+      ? ReadonlySet<DeepReadonly<ITEM>>
+      : VALUE extends readonly unknown[]
+        ? number extends VALUE['length']
+          ? readonly DeepReadonly<VALUE[number]>[]
+          : { readonly [KEY in keyof VALUE]: DeepReadonly<VALUE[KEY]> }
+        : VALUE extends object
+          ? { readonly [KEY in keyof VALUE]: DeepReadonly<VALUE[KEY]> }
+          : VALUE
+
+// Handler shape for an endpoint with declared responses. The return type is
+// the bare captured type: the `const` type parameter at the call site does the
+// narrowing and its constraint does the checking, so no `Check` intersection
+// is involved. Intersecting here was tried and defeats the capture.
+export type CapturedEndpointHandler<DEFINITION extends EndpointDefinition, ACTUAL_RETURN> = (
+  context: EndpointContext<DEFINITION>,
+) => ACTUAL_RETURN | Promise<ACTUAL_RETURN>
+
+// Undoes a `const` capture for endpoints with no declared responses, where the
+// captured literals describe one sample implementation rather than the API.
+// Applied in the handler's return type - never in a parameter position, which
+// would defeat the capture it exists to reverse.
+export type WidenCapturedReturn<VALUE> = VALUE extends
+  | Date
+  | RegExp
+  | Error
+  | ((...args: never[]) => unknown)
+  ? VALUE
+  : // A `respond()` result keeps its wrapper and its status literal - the
+    // status is a deliberate choice, not a sample value - while its body is
+    // widened like any other inferred return.
+    VALUE extends StatusResponse<infer STATUS, infer BODY, infer HEADERS>
+    ? StatusResponse<STATUS, WidenCapturedReturn<BODY>, HEADERS>
+    : VALUE extends string
+      ? string
+      : VALUE extends number
+        ? number
+        : VALUE extends boolean
+          ? boolean
+          : VALUE extends bigint
+            ? bigint
+            : VALUE extends readonly unknown[]
+              ? WidenCapturedReturn<VALUE[number]>[]
+              : VALUE extends object
+                ? { -readonly [KEY in keyof VALUE]: WidenCapturedReturn<VALUE[KEY]> }
+                : VALUE
+
 export type EndpointResponder<DEFINITION extends EndpointDefinition> =
   HasEndpointResponses<DEFINITION> extends true
     ? DeclaredEndpointResponder<DEFINITION>

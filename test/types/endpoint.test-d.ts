@@ -299,12 +299,36 @@ describe('tuple and literal response contracts', () => {
     defineEndpointHandler(endpoint, () => ({ pair: ['a', 'b'] }) as const)
   })
 
-  it('accepts an inline literal response written with as const', () => {
-    const endpoint = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+  it('accepts inline literals and tuples without as const', () => {
+    const literal = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+    defineEndpointHandler(literal, () => ({ ok: true }))
 
-    // Inline literals widen without `as const`, so the assertion is required
-    // here; see the roadmap note on contextual handler returns.
-    defineEndpointHandler(endpoint, () => ({ ok: true }) as const)
+    const tuple = defineEndpoint({
+      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+    })
+    defineEndpointHandler(tuple, () => ({ pair: ['a', 1] }))
+  })
+
+  it('still rejects inline values that do not match the contract', () => {
+    const literal = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+    // @ts-expect-error false does not satisfy the declared literal.
+    defineEndpointHandler(literal, () => ({ ok: false }))
+
+    const tuple = defineEndpoint({
+      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+    })
+    // @ts-expect-error the second position must be a number.
+    defineEndpointHandler(tuple, () => ({ pair: ['a', 'b'] }))
+    // @ts-expect-error the tuple has two positions.
+    defineEndpointHandler(tuple, () => ({ pair: ['a', 1, 'extra'] }))
+  })
+
+  it('keeps widening the return of a handler with no declared responses', () => {
+    const endpoint = defineEndpoint({ query: z.object({ q: z.string() }) })
+    const handler = defineEndpointHandler(endpoint, () => ({ name: 'Tom' }))
+
+    // The sample value must not narrow the generated client type to 'Tom'.
+    expectTypeOf<Awaited<ReturnType<typeof handler>>>().toEqualTypeOf<{ name: string }>()
   })
 
   it('still accepts ordinary arrays', () => {
