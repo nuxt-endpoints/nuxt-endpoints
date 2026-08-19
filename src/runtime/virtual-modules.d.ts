@@ -11,3 +11,8 @@ declare module '#nuxt-endpoints/idempotency-policy' {
   const policy: import('./idempotency-policy').EndpointIdempotencyPolicy | undefined
   export default policy
 }
+
+declare module '#nuxt-endpoints/hooks' {
+  const hooks: import('./hooks').EndpointHooks | undefined
+  export default hooks
+}

@@ -47,6 +47,15 @@ export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
   client?: EndpointsClientModuleOptions
   idempotency?: EndpointsIdempotencyModuleOptions
+  hooks?: EndpointsHooksModuleOptions
+}
+
+export type EndpointsHooksModuleOptions = {
+  /**
+   * Path to the application-wide endpoint hooks module, resolved from the
+   * project root. Defaults to `server/endpoints/hooks`.
+   */
+  path?: string
 }
 
 export type EndpointsIdempotencyModuleOptions = {
@@ -214,9 +223,17 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     // (project server dir, layer server dirs, custom scanDirs) instead of
     // re-deriving that list here.
     let idempotencyPolicyPath = options.idempotency?.policy
-      ? await resolveExplicitIdempotencyPolicyPath(nuxt, options.idempotency.policy)
+      ? await resolveExplicitConventionPath(
+          nuxt,
+          options.idempotency.policy,
+          'endpoints.idempotency.policy',
+        )
       : undefined
     let idempotencyPolicyPathResolved = options.idempotency?.policy !== undefined
+    let hooksPath = options.hooks?.path
+      ? await resolveExplicitConventionPath(nuxt, options.hooks.path, 'endpoints.hooks')
+      : undefined
+    let hooksPathResolved = options.hooks?.path !== undefined
 
     if (resolvedOptions.client.query && !isTanstackVueQueryResolvable(nuxt.options.rootDir)) {
       if (resolvedOptions.client.querySetup === 'auto') {
@@ -303,6 +320,20 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       },
     })
 
+    addServerTemplate({
+      filename: `#nuxt-${moduleName}/hooks`,
+      getContents: () => {
+        if (!hooksPathResolved) {
+          throw new Error(
+            '[nuxt-endpoints] Endpoint hooks template was requested before Nitro route discovery completed.',
+          )
+        }
+        return hooksPath
+          ? `import * as handlerModule from '${toImportPath(hooksPath)}'\nexport default handlerModule.default\n`
+          : 'export default undefined\n'
+      },
+    })
+
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
     hook('nitro:config', (nitroConfig) => {
       nitroConfig.ignore = [...(nitroConfig.ignore ?? []), endpointContractIgnorePattern]
@@ -310,11 +341,20 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     hook('nitro:init', async (nitro) => {
       const generateArtifacts = async () => {
         if (!options.idempotency?.policy) {
-          idempotencyPolicyPath = await resolveConventionIdempotencyPolicyPath(
+          idempotencyPolicyPath = await resolveConventionPath(
             nuxt.options.rootDir,
             nitro.options.scanDirs,
+            'endpoints/idempotency',
           )
           idempotencyPolicyPathResolved = true
+        }
+        if (!options.hooks?.path) {
+          hooksPath = await resolveConventionPath(
+            nuxt.options.rootDir,
+            nitro.options.scanDirs,
+            'endpoints/hooks',
+          )
+          hooksPathResolved = true
         }
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
@@ -357,6 +397,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       // is not a discovery-evaluated module (route or contract file), so
       // this auto-import is only ever exercised through Nitro's own bundling.
       { from: resolve('./runtime'), name: 'defineIdempotencyPolicy' },
+      { from: resolve('./runtime'), name: 'defineEndpointHooks' },
     ])
 
     addImports([
@@ -821,17 +862,18 @@ export function resolveQueryClientOption(
 
 // Exported for focused unit testing of the "explicit policy path must exist"
 // rejection without a full Nuxt module setup pass.
-export async function resolveExplicitIdempotencyPolicyPath(
+export async function resolveExplicitConventionPath(
   nuxt: Nuxt,
-  policy: string,
+  configuredPath: string,
+  optionName: string,
 ): Promise<string> {
-  const resolved = await findPath(join(nuxt.options.rootDir, policy), {
+  const resolved = await findPath(join(nuxt.options.rootDir, configuredPath), {
     cwd: nuxt.options.rootDir,
     extensions: idempotencyPolicyExtensions,
   })
   if (!resolved) {
     throw new Error(
-      `[nuxt-endpoints] endpoints.idempotency.policy is set to "${policy}", but no matching file was found.`,
+      `[nuxt-endpoints] ${optionName} is set to "${configuredPath}", but no matching file was found.`,
     )
   }
   return resolved
@@ -844,12 +886,13 @@ export async function resolveExplicitIdempotencyPolicyPath(
 // without re-deriving that list here.
 // Exported for focused unit testing of the "first scanDir match wins" and
 // "no policy file found" behavior without a full Nuxt module setup pass.
-export async function resolveConventionIdempotencyPolicyPath(
+export async function resolveConventionPath(
   rootDir: string,
   scanDirs: readonly string[],
+  relativePath: string,
 ): Promise<string | undefined> {
   for (const scanDir of scanDirs) {
-    const resolved = await findPath(join(scanDir, 'endpoints/idempotency'), {
+    const resolved = await findPath(join(scanDir, relativePath), {
       cwd: rootDir,
       extensions: idempotencyPolicyExtensions,
     })

@@ -38,6 +38,7 @@ without hiding the broader roadmap.
 | Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Multipart request contracts                                           | Candidate for later              | Design runtime parsing, client serialization, and OpenAPI together. Also a prerequisite for a lossless primitive-layer adapter                                                                                                                                                                                                                                                                                                                    |
 | Primitive-layer boundary and adapter                                  | Designed, not implemented        | Keep `EndpointRouteEntry` canonical and project foreign contracts onto it; widen the contract vocabulary and extract the validation/handler seam first                                                                                                                                                                                                                                                                                            |
+| Endpoint hooks (`onValidationError`, `wrapHandler`)                   | Implemented                      | Same key names at both scopes: runtime options on `defineEndpoint()`, and `server/endpoints/hooks.ts` application-wide. `onValidationError` resolves endpoint -> application -> default; `wrapHandler` nests application -> endpoint -> idempotency, making idempotency the built-in consumer of a now-public extension point rather than a privileged one                                                                                        |
 | Media-type request bodies                                             | Implemented                      | JSON, URL-encoded, multipart, and text/\* members with 415 on mismatch, wire-typed client `mediaType` option, and per-member OpenAPI content. Response-side media types remain open                                                                                                                                                                                                                                                               |
 | Per-method dispatch                                                   | Implemented                      | `defineEndpointMethods()` groups on method-suffix-free files, with derived HEAD/OPTIONS and 405 + Allow. Members stay ordinary `defineEndpoint()` contracts, so operations, idempotency, and media-type bodies work per method                                                                                                                                                                                                                    |
 | Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                               |
@@ -429,6 +430,24 @@ accepts inline literals without `as const`, but accepts a wrong tuple —
 `['a', 'b']` and `['a', 1, 'extra']` both satisfy a `[string, number]`
 contract there, because its readonly projection collapses tuples to arrays.
 This implementation rejects both.
+
+### Typed SSE chunks: not planned
+
+Streaming responses cannot currently be declared at all, which is a real gap:
+such a route has to leave the contract entirely, losing request validation,
+OpenAPI, and operation names along with it. Declaring them is worth doing.
+
+Typing the _chunks_ is not. Every SSE issue across nuxt, nitro, and h3 is about
+making SSE work or making it easier to return — promoting `EventStream` to
+public API, returning it directly from a handler, close/error handling,
+platform-specific breakage. None asks for chunk payload schemas. The reference
+implementation does not type chunks either; it declares the streamed status and
+its media types for documentation, and stops there.
+
+The shape of the demand also argues against it: token streams, progress
+events, notifications, and live updates have little in common, so a chunk
+contract would be either too loose to be worth having or too specific to fit
+the next case. Revisit only if concrete demand appears.
 
 ### Not adopted from the reference implementation
 

@@ -39,17 +39,37 @@ import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempote
 import { createResponse, isStatusResponse } from './response'
 import type { StatusResponse } from './response'
 import type {
-  EndpointInterceptor,
-  EndpointInterceptorNext,
+  EndpointHandlerNext,
+  EndpointHandlerWrapper,
   EndpointRuntimeResponse,
 } from './interceptor'
+import type { EndpointHooks } from './hooks'
+import { isValidationErrorResponse } from './validation-error'
+import type {
+  EndpointValidationErrorHandler,
+  EndpointValidationErrorResponse,
+  EndpointValidationFailure,
+  EndpointValidationSource,
+} from './validation-error'
 import { parseValidator } from './validator'
 import type { ValidationIssue, ValidatorSchema } from './validator'
 
-export type EndpointRuntimeOptions = {
+export type EndpointRuntimeOptions<DEFINITION extends EndpointDefinition = EndpointDefinition> = {
   validation?: {
     response?: boolean
   }
+  /**
+   * Shapes the response for a request that does not match this endpoint's
+   * contract. Returning nothing falls through to the application-wide hook in
+   * `server/endpoints/hooks.ts`, and then to the default shape.
+   */
+  onValidationError?: EndpointValidationErrorHandler
+  /**
+   * Wraps handler execution for this endpoint, after validation. Runs inside
+   * the application-wide wrapper and outside the endpoint's own idempotency
+   * handling, so a replayed response still passes back through it.
+   */
+  wrapHandler?: EndpointHandlerWrapper<DEFINITION>
 }
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
@@ -103,12 +123,6 @@ export type RuntimeIdempotencyContext = {
   body: unknown
 }
 
-type RequestValidationProblem = {
-  statusCode: 400
-  statusMessage: 'Validation Error'
-  data: Record<string, readonly RequestValidationIssue[]>
-}
-
 type RequestValidationIssue = {
   path?: readonly (string | number)[]
   message: string
@@ -119,21 +133,9 @@ type ParsedRequestPart =
   | { success: true; value: unknown }
   | { success: false; issues: readonly ValidationIssue[] }
 
-type RequestValidationFailure = { success: false; problem: RequestValidationProblem }
+type RequestValidationFailure = { success: false; failure: EndpointValidationFailure }
 
-// Returned when a media-type-map `body` contract cannot find a member whose
-// media type matches the request's Content-Type.
-type BodyMediaTypeProblem = {
-  statusCode: 415
-  statusMessage: 'Unsupported Media Type'
-  data: {
-    message: string
-    received: string | null
-    supportedMediaTypes: string[]
-  }
-}
-
-type BodyMediaTypeFailure = { success: false; problem: BodyMediaTypeProblem }
+type BodyMediaTypeFailure = { success: false; failure: EndpointValidationFailure }
 
 type BuildContextResult<DEFINITION extends EndpointDefinition> =
   | { success: true; context: EndpointContext<DEFINITION> }
@@ -251,13 +253,15 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   ): EndpointEventHandler<DEFINITION, unknown> {
     let routeIdentity: EndpointRouteIdentity | undefined
     let idempotencyPolicy: EndpointIdempotencyPolicy | undefined
+    let appValidationErrorHandler: EndpointValidationErrorHandler | undefined
+    let appHandlerWrapper: EndpointHandlerWrapper<EndpointDefinition> | undefined
     const idempotencyOptions = this.idempotencyOptions
 
     // `routeIdentity` and `idempotencyPolicy` are injected after `.handler()`
     // returns (via `__set_endpoint_route__`/`__set_idempotency_policy__`), so
     // the interceptor reads them through getters rather than capturing them
     // by value here.
-    const interceptor: EndpointInterceptor<DEFINITION> | undefined = idempotencyOptions
+    const idempotencyWrapper: EndpointHandlerWrapper<DEFINITION> | undefined = idempotencyOptions
       ? createIdempotencyInterceptor<DEFINITION>({
           options: idempotencyOptions,
           getRouteIdentity: () => routeIdentity,
@@ -273,19 +277,31 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           idempotencyOptions?.headerName,
         )
         if (!contextResult.success) {
-          const problem = contextResult.problem
-          return (
-            problem.statusCode === 415
-              ? applyBodyMediaTypeProblem(event, problem)
-              : applyRequestValidationProblem(event, problem)
+          return applyValidationErrorResponse(
+            event,
+            resolveValidationErrorResponse(
+              contextResult.failure,
+              this.options.onValidationError,
+              appValidationErrorHandler,
+            ),
           ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
         }
 
         const context = contextResult.context
-        const execute: EndpointInterceptorNext = () => this.executeHandler(handler, context)
-        const response = interceptor
-          ? await interceptor({ event, context }, execute)
-          : await execute()
+        // Outermost first: an application-wide wrapper sees every request,
+        // an endpoint's own wrapper sees its own, and idempotency sits closest
+        // to the handler so a replay still unwinds back through both.
+        const wrappers = [
+          appHandlerWrapper as EndpointHandlerWrapper<DEFINITION> | undefined,
+          this.options.wrapHandler,
+          idempotencyWrapper,
+        ].filter((wrapper): wrapper is EndpointHandlerWrapper<DEFINITION> => wrapper !== undefined)
+
+        const execute: EndpointHandlerNext = () => this.executeHandler(handler, context)
+        const response = await wrappers.reduceRight<EndpointHandlerNext>(
+          (next, wrapper) => () => wrapper(context, next),
+          execute,
+        )()
         return applyEndpointResponse(event, response) as EndpointHandlerSuccessBody<
           DEFINITION,
           unknown
@@ -311,6 +327,10 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       },
       __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => {
         idempotencyPolicy = policy
+      },
+      __set_endpoint_hooks__: (hooks: EndpointHooks | undefined) => {
+        appValidationErrorHandler = hooks?.onValidationError
+        appHandlerWrapper = hooks?.wrapHandler
       },
     })
   }
@@ -375,6 +395,7 @@ export type EndpointEventHandler<
   __endpoint_handler_return__: HANDLER_RETURN
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
   __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => void
+  __set_endpoint_hooks__: (hooks: EndpointHooks | undefined) => void
 }
 
 // Exported so endpoint-methods.ts can compute the same success-body type for
@@ -460,16 +481,16 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   excludedHeaderName?: string,
 ): Promise<BuildContextResult<DEFINITION>> {
   const params = await parsePart(definition.params, event.context.params || {})
-  if (!params.success) return validationFailure('params', params.issues)
+  if (!params.success) return validationFailure(event, 'params', params.issues)
 
   const query = await parsePart(definition.query, getRuntimeQuery(event))
-  if (!query.success) return validationFailure('query', query.issues)
+  if (!query.success) return validationFailure(event, 'query', query.issues)
 
   const headers = await parsePart(
     definition.headers,
     omitRequestHeader(getRuntimeRequestHeaders(event), excludedHeaderName),
   )
-  if (!headers.success) return validationFailure('headers', headers.issues)
+  if (!headers.success) return validationFailure(event, 'headers', headers.issues)
 
   let body: ParsedRequestPart
   let bodyMediaType: string | undefined
@@ -484,12 +505,12 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   } else {
     const resolution = await resolveBodyMediaTypeMember(event, definition.body)
     if (!resolution.success) {
-      return { success: false, problem: resolution.problem }
+      return { success: false, failure: resolution.failure }
     }
     body = await parsePart(definition.body[resolution.mediaType], resolution.raw)
     bodyMediaType = resolution.mediaType
   }
-  if (!body.success) return validationFailure('body', body.issues)
+  if (!body.success) return validationFailure(event, 'body', body.issues)
 
   return {
     success: true,
@@ -508,7 +529,7 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
 
 type BodyMediaTypeResolution =
   | { success: true; mediaType: string; raw: unknown }
-  | { success: false; problem: BodyMediaTypeProblem }
+  | { success: false; failure: EndpointValidationFailure }
 
 // Selects the media-type map member matching the request's Content-Type and
 // reads the body with the parser that member's media type requires. Never
@@ -523,7 +544,13 @@ async function resolveBodyMediaTypeMember(
   if (contentType === undefined || !(contentType in map)) {
     return {
       success: false,
-      problem: createBodyMediaTypeProblem(contentType, supportedMediaTypes),
+      failure: {
+        kind: 'media-type',
+        source: 'body',
+        received: contentType ?? null,
+        supportedMediaTypes,
+        event,
+      },
     }
   }
 
@@ -546,42 +573,72 @@ async function readBodyForMediaType(event: RuntimeEvent, mediaType: string): Pro
   return readRuntimeBody(event)
 }
 
-function createBodyMediaTypeProblem(
-  received: string | undefined,
-  supportedMediaTypes: string[],
-): BodyMediaTypeProblem {
-  return {
-    statusCode: 415,
-    statusMessage: 'Unsupported Media Type',
-    data: {
-      message: 'The request Content-Type does not match this endpoint body contract.',
-      received: received ?? null,
-      supportedMediaTypes,
-    },
-  }
-}
-
-function applyBodyMediaTypeProblem(
-  event: RuntimeEvent,
-  problem: BodyMediaTypeProblem,
-): BodyMediaTypeProblem {
-  setRuntimeResponseStatus(event, problem.statusCode, problem.statusMessage)
-  setRuntimeResponseHeaders(event, { 'content-type': 'application/json' })
-  return problem
-}
-
 function validationFailure(
-  part: string,
+  event: RuntimeEvent,
+  source: EndpointValidationSource,
   issues: readonly ValidationIssue[],
 ): RequestValidationFailure {
+  return { success: false, failure: { kind: 'schema', source, issues, event } }
+}
+
+// The default shape, used when no handler claims the failure. It is built here
+// rather than in `buildContext` so a handler can replace it before anything is
+// written to the event.
+function defaultValidationErrorResponse(
+  failure: EndpointValidationFailure,
+): EndpointValidationErrorResponse {
+  if (failure.kind === 'media-type') {
+    return {
+      status: 415,
+      statusText: 'Unsupported Media Type',
+      body: {
+        statusCode: 415,
+        statusMessage: 'Unsupported Media Type',
+        data: {
+          message: 'The request Content-Type does not match this endpoint body contract.',
+          received: failure.received,
+          supportedMediaTypes: [...failure.supportedMediaTypes],
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    }
+  }
+
   return {
-    success: false,
-    problem: {
+    status: 400,
+    statusText: 'Validation Error',
+    body: {
       statusCode: 400,
       statusMessage: 'Validation Error',
-      data: { [part]: issues.map(toRequestValidationIssue) },
+      data: { [failure.source]: failure.issues.map(toRequestValidationIssue) },
     },
+    headers: { 'content-type': 'application/json' },
   }
+}
+
+// Endpoint handler wins, then the application-wide one, then the default.
+function resolveValidationErrorResponse(
+  failure: EndpointValidationFailure,
+  endpointHandler: EndpointValidationErrorHandler | undefined,
+  appHandler: EndpointValidationErrorHandler | undefined,
+): EndpointValidationErrorResponse {
+  for (const handler of [endpointHandler, appHandler]) {
+    if (!handler) continue
+    const result = handler(failure)
+    if (isValidationErrorResponse(result)) {
+      return result
+    }
+  }
+  return defaultValidationErrorResponse(failure)
+}
+
+function applyValidationErrorResponse(
+  event: RuntimeEvent,
+  response: EndpointValidationErrorResponse,
+): unknown {
+  setRuntimeResponseStatus(event, response.status, response.statusText)
+  setRuntimeResponseHeaders(event, { 'content-type': 'application/json', ...response.headers })
+  return response.body
 }
 
 function toRequestValidationIssue(issue: ValidationIssue): RequestValidationIssue {
@@ -726,13 +783,4 @@ async function parsePart(
   }
 
   return { success: false, issues: result.issues }
-}
-
-function applyRequestValidationProblem(
-  event: RuntimeEvent,
-  problem: RequestValidationProblem,
-): RequestValidationProblem {
-  setRuntimeResponseStatus(event, problem.statusCode, problem.statusMessage)
-  setRuntimeResponseHeaders(event, { 'content-type': 'application/json' })
-  return problem
 }

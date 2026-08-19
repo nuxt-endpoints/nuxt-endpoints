@@ -73,19 +73,34 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
     })
 
-    it('rejects a media-type-map body whose Content-Type matches no declared member', async () => {
-      const response = await fetch('/api/upload', {
+    it('wraps every handler with the application-wide hook', async () => {
+      const response = await fetch('/api/users/123')
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('x-wrapped')).toBe('GET')
+    })
+
+    it('shapes contract failures with the application-wide validation hook', async () => {
+      const mediaTypeMismatch = await fetch('/api/upload', {
         method: 'POST',
         body: '<p>nope</p>',
-        headers: {
-          'content-type': 'text/html',
-        },
+        headers: { 'content-type': 'text/html' },
       })
 
-      expect(response.status).toBe(415)
-      const body = await response.json()
-      expect(body.statusMessage).toBe('Unsupported Media Type')
-      expect(body.data.received).toBe('text/html')
+      expect(mediaTypeMismatch.status).toBe(422)
+      await expect(mediaTypeMismatch.json()).resolves.toEqual({
+        error: 'contract',
+        kind: 'media-type',
+        source: 'body',
+      })
+
+      const schemaFailure = await fetch('/api/search')
+      expect(schemaFailure.status).toBe(422)
+      await expect(schemaFailure.json()).resolves.toEqual({
+        error: 'contract',
+        kind: 'schema',
+        source: 'query',
+      })
     })
 
     it('includes every declared media type in the OpenAPI request body for a media-type-map contract', async () => {

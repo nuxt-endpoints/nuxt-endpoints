@@ -103,6 +103,19 @@ export type {
 } from './idempotency'
 export { createMemoryIdempotencyStorage } from './idempotency'
 export { defineEndpoint, defineEndpointHandler } from './endpoint'
+export { defineEndpointHooks } from './hooks'
+export type { EndpointHooks } from './hooks'
+export type {
+  EndpointHandlerNext,
+  EndpointHandlerWrapper,
+  EndpointRuntimeResponse,
+} from './interceptor'
+export type {
+  EndpointValidationErrorHandler,
+  EndpointValidationErrorResponse,
+  EndpointValidationFailure,
+  EndpointValidationSource,
+} from './validation-error'
 export type {
   DefinedEndpoint,
   EndpointEventHandler,

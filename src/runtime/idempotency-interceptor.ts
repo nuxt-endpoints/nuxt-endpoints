@@ -1,5 +1,5 @@
-// The idempotency execution flow, wired in as the first consumer of the
-// `EndpointInterceptor` extension point (see `interceptor.ts`). Everything
+// The idempotency execution flow, wired in as the built-in consumer of the
+// handler-wrapper extension point (see `interceptor.ts`). Everything
 // here runs between request validation and handler execution for endpoints
 // that called `.idempotency()`; it owns key parsing, authorization,
 // storage claim/replay, and completion, and always resolves to an
@@ -13,7 +13,7 @@ import type {
   NormalizedEndpointIdempotencyOptions,
   RuntimeIdempotencyContext,
 } from './endpoint'
-import type { EndpointInterceptor, EndpointRuntimeResponse } from './interceptor'
+import type { EndpointHandlerWrapper, EndpointRuntimeResponse } from './interceptor'
 import {
   createIdempotencyFingerprint,
   createIdempotencyStorageKey,
@@ -74,11 +74,11 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
   options: NormalizedEndpointIdempotencyOptions
   getRouteIdentity: () => EndpointRouteIdentity | undefined
   getPolicy: () => EndpointIdempotencyPolicy | undefined
-}): EndpointInterceptor<DEFINITION> {
+}): EndpointHandlerWrapper<DEFINITION> {
   const { options: idempotency, getRouteIdentity, getPolicy } = input
 
-  return async ({ event, context }, next) => {
-    const key = readIdempotencyKey(event, idempotency.headerName)
+  return async (context, next) => {
+    const key = readIdempotencyKey(context.event, idempotency.headerName)
     if (key.outcome === 'invalid') {
       return toIdempotencyProblemResponse(
         createIdempotencyProblem(

@@ -202,6 +202,83 @@ Two caveats:
   not JSON-serializable, so an idempotent multipart endpoint must supply a
   custom `fingerprint` that projects serializable fields only.
 
+## Hooks
+
+Two extension points sit on every endpoint, and both are declared the same way
+at either scope: as runtime options on `defineEndpoint()`, or application-wide
+in `server/endpoints/hooks.ts`.
+
+```ts
+// server/endpoints/hooks.ts
+export default defineEndpointHooks({
+  onValidationError: ({ kind, source, event }) => ({
+    status: 422,
+    body: { error: 'invalid_request', field: source, reason: kind },
+  }),
+  wrapHandler: async (context, next) => {
+    const started = Date.now()
+    try {
+      return await next()
+    } finally {
+      recordDuration(context.event, Date.now() - started)
+    }
+  },
+})
+```
+
+```ts
+// or on one endpoint, using the same key names
+export const endpoint = defineEndpoint(
+  { query: z.object({ page: z.coerce.number() }) },
+  {
+    onValidationError: (failure) =>
+      failure.kind === 'media-type'
+        ? { status: 400, body: { accepts: failure.supportedMediaTypes } }
+        : undefined,
+  },
+)
+```
+
+### onValidationError
+
+Shapes the response for a request that does not match its contract, replacing
+the default `400` for a schema failure and `415` when no media-type member
+matches. The failure describes what its kind can:
+
+- `kind: 'schema'` — `source` is `params`, `query`, `headers`, or `body`, and
+  `issues` holds the validator's issues.
+- `kind: 'media-type'` — `source` is always `body`, with the normalized
+  `received` Content-Type (`null` when the request sent none) and the
+  `supportedMediaTypes` the contract declares.
+
+Both carry `event`, so an envelope can include values Nitro middleware
+attached. Return `status`, `body`, and optionally `statusText` and `headers` —
+or return nothing to decline, which passes the failure to the next scope.
+Resolution runs endpoint → application → default.
+
+Handler exceptions are ordinary Nitro errors and stay outside this hook, as do
+idempotency failures, which keep their `application/problem+json` Problem
+Details shape.
+
+### wrapHandler
+
+Wraps handler execution, after validation. Call `next()` to run the handler,
+or return a response without calling it to answer on its behalf — that is how
+a recorded idempotent response is replayed. Because a wrapper is an ordinary
+function, `try`/`finally` is how work that must survive a thrown handler is
+expressed, and its own scope is how state is carried across the call.
+
+Wrappers nest outermost-first: the application wrapper, then the endpoint's
+own, then that endpoint's idempotency handling closest to the handler. A
+replayed response therefore still unwinds back out through both wrappers,
+which is what makes rate limiting or audit logging count replays too.
+
+The context is the same one the handler receives, so `context.event`,
+validated `params`, `query`, `headers`, and `body` are all available.
+
+To use a different path for the application-wide hooks, set
+`endpoints: { hooks: { path: 'server/policies/hooks.ts' } }`.
+
 ## Request event and middleware context
 
 The handler context exposes both the original H3 `event` and a normalized Web `request`:

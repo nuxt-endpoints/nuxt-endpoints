@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   findUnsupportedRouteTemplateSyntax,
   getEndpointFromCarrier,
-  resolveConventionIdempotencyPolicyPath,
-  resolveExplicitIdempotencyPolicyPath,
+  resolveConventionPath,
+  resolveExplicitConventionPath,
   resolveModuleOptions,
   resolveQueryClientOption,
 } from '../src/module'
@@ -203,12 +203,12 @@ describe('idempotency policy path resolution', () => {
     return directory
   }
 
-  describe('resolveConventionIdempotencyPolicyPath', () => {
+  describe('resolveConventionPath', () => {
     it('returns undefined when no scanDir has an idempotency policy file', async () => {
       const scanDir = createTemporaryDir()
 
       await expect(
-        resolveConventionIdempotencyPolicyPath(scanDir, [scanDir]),
+        resolveConventionPath(scanDir, [scanDir], 'endpoints/idempotency'),
       ).resolves.toBeUndefined()
     })
 
@@ -220,10 +220,11 @@ describe('idempotency policy path resolution', () => {
       await mkdir(join(secondScanDir, 'endpoints'), { recursive: true })
       await writeFile(join(secondScanDir, 'endpoints/idempotency.ts'), 'export default {}\n')
 
-      const resolved = await resolveConventionIdempotencyPolicyPath(firstScanDir, [
+      const resolved = await resolveConventionPath(
         firstScanDir,
-        secondScanDir,
-      ])
+        [firstScanDir, secondScanDir],
+        'endpoints/idempotency',
+      )
 
       expect(resolved).toBe(join(firstScanDir, 'endpoints/idempotency.ts'))
     })
@@ -234,22 +235,27 @@ describe('idempotency policy path resolution', () => {
       await mkdir(join(matchingScanDir, 'endpoints'), { recursive: true })
       await writeFile(join(matchingScanDir, 'endpoints/idempotency.ts'), 'export default {}\n')
 
-      const resolved = await resolveConventionIdempotencyPolicyPath(emptyScanDir, [
+      const resolved = await resolveConventionPath(
         emptyScanDir,
-        matchingScanDir,
-      ])
+        [emptyScanDir, matchingScanDir],
+        'endpoints/idempotency',
+      )
 
       expect(resolved).toBe(join(matchingScanDir, 'endpoints/idempotency.ts'))
     })
   })
 
-  describe('resolveExplicitIdempotencyPolicyPath', () => {
+  describe('resolveExplicitConventionPath', () => {
     it('throws when the configured policy path has no matching file', async () => {
       const rootDir = createTemporaryDir()
       const nuxt = { options: { rootDir } } as Nuxt
 
       await expect(
-        resolveExplicitIdempotencyPolicyPath(nuxt, 'server/endpoints/missing-policy'),
+        resolveExplicitConventionPath(
+          nuxt,
+          'server/endpoints/missing-policy',
+          'endpoints.idempotency.policy',
+        ),
       ).rejects.toThrow(/no matching file was found/i)
     })
 
@@ -259,9 +265,10 @@ describe('idempotency policy path resolution', () => {
       await writeFile(join(rootDir, 'server/endpoints/idempotency.ts'), 'export default {}\n')
       const nuxt = { options: { rootDir } } as Nuxt
 
-      const resolved = await resolveExplicitIdempotencyPolicyPath(
+      const resolved = await resolveExplicitConventionPath(
         nuxt,
         'server/endpoints/idempotency',
+        'endpoints.idempotency.policy',
       )
 
       expect(resolved).toBe(join(rootDir, 'server/endpoints/idempotency.ts'))

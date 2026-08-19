@@ -1,6 +1,7 @@
 import { defineNitroPlugin } from 'nitropack/runtime/plugin'
 import endpointsOptions from '#nuxt-endpoints/options'
 import policyModule from '#nuxt-endpoints/idempotency-policy'
+import endpointHooksModule from '#nuxt-endpoints/hooks'
 import type { EndpointDefinition } from './contract'
 import { idempotencyMetadataWithoutRuntimeMessage } from './endpoint'
 import { idempotencyRuntimeOptionKeys } from './idempotency'
@@ -10,6 +11,7 @@ import type {
   EndpointRouteIdentity,
 } from './endpoint'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
+import type { EndpointHooks } from './hooks'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 
@@ -31,6 +33,7 @@ type HandlerFunction = {
   __endpoint_contracts__?: Record<string, DefinedEndpoint<EndpointDefinition>>
   __set_endpoint_route__?: (identity: EndpointRouteIdentity) => void
   __set_idempotency_policy__?: (policy: EndpointIdempotencyPolicy | undefined) => void
+  __set_endpoint_hooks__?: (hooks: EndpointHooks | undefined) => void
 }
 
 type HandlerDefinition = {
@@ -43,10 +46,12 @@ export default defineNitroPlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const policy = assertValidIdempotencyPolicy(policyModule)
+  const endpointHooks = assertValidEndpointHooks(endpointHooksModule)
   const document = await initializeEndpointHandlers(
     endpointHandlerManifest as HandlerDefinition[],
     options,
     policy,
+    endpointHooks,
   )
   if (document) {
     setOpenApiDocument(document)
@@ -57,8 +62,9 @@ export async function initializeEndpointHandlers(
   handlers: HandlerDefinition[],
   options: EndpointsRuntimeOptions,
   policy?: EndpointIdempotencyPolicy,
+  hooks?: EndpointHooks,
 ) {
-  const endpoints = await extractEndpoints(handlers, policy)
+  const endpoints = await extractEndpoints(handlers, policy, hooks)
   if (!options.openApi.enabled) {
     return undefined
   }
@@ -71,6 +77,7 @@ export async function initializeEndpointHandlers(
 export async function extractEndpoints(
   definitions: HandlerDefinition[],
   policy?: EndpointIdempotencyPolicy,
+  hooks?: EndpointHooks,
 ) {
   const endpoints = []
 
@@ -80,6 +87,11 @@ export async function extractEndpoints(
     if (!contract) {
       continue
     }
+
+    // Every endpoint receives the application-wide hooks, whether or not it
+    // declares its own: precedence is resolved per request, not by suppressing
+    // this injection.
+    handler.__set_endpoint_hooks__?.(hooks)
 
     if (contract.definition.idempotency) {
       const marker = contract.__idempotency_runtime_marker__
@@ -176,4 +188,16 @@ function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyP
     typeof candidate.scope === 'function' &&
     (candidate.authorization === 'middleware' || typeof candidate.authorization === 'function')
   )
+}
+
+function assertValidEndpointHooks(value: unknown): EndpointHooks | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(
+      '[nuxt-endpoints] server/endpoints/hooks.ts must default-export defineEndpointHooks({ ... }).',
+    )
+  }
+  return value as EndpointHooks
 }

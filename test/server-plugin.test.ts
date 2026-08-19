@@ -13,6 +13,7 @@ vi.mock('#nuxt-endpoints/options', () => ({
   },
 }))
 vi.mock('#nuxt-endpoints/idempotency-policy', () => ({ default: undefined }))
+vi.mock('#nuxt-endpoints/hooks', () => ({ default: undefined }))
 
 const { extractEndpoints, initializeEndpointHandlers } =
   await import('../src/runtime/server-plugin')
@@ -162,6 +163,7 @@ describe('idempotency policy module validation at Nitro startup', () => {
     vi.resetModules()
     vi.doMock('#nuxt-endpoints/options', () => ({ default: disabledOpenApiOptions }))
     vi.doMock('#nuxt-endpoints/server-handlers', () => ({ handlers: [] }))
+    vi.doMock('#nuxt-endpoints/hooks', () => ({ default: undefined }))
     vi.doMock('#nuxt-endpoints/idempotency-policy', () => ({
       default: { storage: () => createMemoryIdempotencyStorage() },
     }))
