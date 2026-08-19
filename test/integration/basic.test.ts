@@ -478,13 +478,13 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
     .filter((route) => !route.group)
     .map(
       ({ path, method }, index) =>
-        `type RouteAgreement${index} = Assert<Equal<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
+        `type RouteAgreement${index} = Assert<Agrees<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
     )
   const groupAssertions = Array.from(groupMethodsByPath, ([path, methods], index) => {
     const union = methods
       .map((method) => `$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>`)
       .join(' | ')
-    return `type GroupRouteAgreement${index} = Assert<Equal<${union}, InternalApi[${JSON.stringify(path)}]['default']>>`
+    return `type GroupRouteAgreement${index} = Assert<Agrees<${union}, InternalApi[${JSON.stringify(path)}]['default']>>`
   })
   const assertions = [...singleAssertions, ...groupAssertions].join('\n')
 
@@ -500,6 +500,15 @@ type Equal<LEFT, RIGHT> =
       : false
     : false
 type Assert<VALUE extends true> = VALUE
+
+// A route that declares a stream response is exempt, and deliberately so.
+// InternalApi describes what a parsing $fetch would produce for that route,
+// while the whole point of the declaration is that this client does not parse
+// it. The exemption is keyed on the exact client type a stream declaration
+// produces, so a JSON route whose projection drifted cannot slip through it -
+// and \`typecheck.ts\` asserts the streaming side positively.
+type Agrees<LEFT, RIGHT> =
+  Equal<LEFT, ReadableStream<Uint8Array>> extends true ? true : Equal<LEFT, RIGHT>
 
 ${assertions}
 `

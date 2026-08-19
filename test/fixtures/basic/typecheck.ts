@@ -194,6 +194,17 @@ async function checkClient() {
   // @ts-expect-error the put member's body follows its own schema.
   await client('/api/multi', { method: 'put', body: { name: 1 } })
 
+  // A declared stream response is handed back unread: the client asks the
+  // fetcher not to parse this route, so every status arrives as the live
+  // stream - including the validated 404 the contract still declares.
+  const exported = await client('exportUsers', { query: {} })
+  exported.getReader()
+
+  const exportedResult = await client('/api/export', { method: 'get', query: {} }).result()
+  exportedResult.body.getReader()
+  // @ts-expect-error a streaming route's body is never the parsed 404 shape.
+  void exportedResult.body.message
+
   const searchState = await useClient('/api/search', {
     method: 'get',
     query: { q: 'nuxt' },
@@ -215,6 +226,9 @@ const userPathResponse: $EndpointPathResponse<'/api/users/:id', 'get'> = {
   name: 'Tom',
 }
 
+const exportPathResponse: $EndpointPathResponse<'/api/export', 'get'> =
+  new ReadableStream<Uint8Array>()
+
 const searchPath: EndpointPath = '/api/search'
 const searchMethod: EndpointMethod<'/api/search'> = 'get'
 
@@ -232,6 +246,7 @@ const invalidUserResponse: $EndpointResponse<'getUser'> = {
 void checkClient
 void userResponse
 void userPathResponse
+void exportPathResponse
 void searchPath
 void searchMethod
 void multiGetMethod

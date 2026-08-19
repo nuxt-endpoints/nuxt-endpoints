@@ -390,11 +390,11 @@ responses: {
 On the client, a route with a stream response is a streaming route end to end: the generated client tells the fetcher not to parse the body, so what you get back is the live stream rather than a decoded copy of it once it has all arrived.
 
 ```ts
-const stream = await $endpoint('exportUsers')
+const stream = await $endpoint('exportUsers', { query: { delimiter: ';' } })
 const reader = stream.getReader()
 
 // or, when you need the status and headers too
-const response = await $endpoint('exportUsers').raw()
+const response = await $endpoint('exportUsers', { query: {} }).raw()
 ```
 
 Two consequences follow from the client never parsing the response:
