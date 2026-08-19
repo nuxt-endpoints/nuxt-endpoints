@@ -97,10 +97,23 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(requestBody.content).toHaveProperty('multipart/form-data')
     })
 
-    it('sends a multipart/form-data body through $endpoint using the mediaType option', async () => {
+    it('sends a labelled media-type body through $endpoint during SSR', async () => {
       await expect($fetch<string>('/upload')).resolves.toContain(
-        'upload: Multipart via multipart/form-data',
+        'upload: Encoded via application/x-www-form-urlencoded',
       )
+    })
+
+    it('accepts a real multipart/form-data request', async () => {
+      // Sent as a real HTTP request, the way a browser would: the Content-Type
+      // boundary comes from building the request, which a server-side call to
+      // a local route never does.
+      const body = new FormData()
+      body.append('name', 'Multipart')
+
+      await expect($fetch('/api/upload', { method: 'POST', body })).resolves.toEqual({
+        name: 'Multipart',
+        bodyMediaType: 'multipart/form-data',
+      })
     })
 
     it('serializes response-schema outputs to their JSON wire representation', async () => {

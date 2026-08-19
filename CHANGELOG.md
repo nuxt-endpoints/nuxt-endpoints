@@ -11,6 +11,9 @@
   context gains `bodyMediaType` narrowing which member matched. Generated
   client calls take a `mediaType` option typed to the wire value of the
   selected member, and OpenAPI lists every member under `requestBody.content`.
+  The client labels every media type it can; `multipart/form-data` is the
+  exception, because its boundary is generated while the request is built, so
+  those calls belong on the client.
 - A method-suffix-free route file can declare several methods at once with
   `defineEndpointMethods()` and `defineEndpointMethodHandlers()`. Members are
   ordinary `defineEndpoint()` contracts, so operations, idempotency, and

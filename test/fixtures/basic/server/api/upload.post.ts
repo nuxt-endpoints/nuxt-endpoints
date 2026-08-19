@@ -5,6 +5,7 @@ export const endpoint = defineEndpoint({
   operation: 'createUpload',
   body: {
     'application/json': z.object({ name: z.string() }),
+    'application/x-www-form-urlencoded': z.object({ name: z.string() }),
     'multipart/form-data': z.object({ name: z.string() }),
   },
   responses: {

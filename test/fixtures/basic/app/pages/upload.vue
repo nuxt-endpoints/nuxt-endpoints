@@ -1,11 +1,15 @@
 <script setup lang="ts">
-const formData = new FormData()
-formData.append('name', 'Multipart')
+// URL-encoded rather than multipart: a multipart body needs a Content-Type
+// with a runtime-generated boundary, which a server-side call to a local route
+// never gets because Nuxt dispatches into the handler without building a
+// Request. The multipart path is covered by a real HTTP request in the
+// integration tests instead.
+const body = new URLSearchParams({ name: 'Encoded' })
 
 const result = await $endpoint('/api/upload', {
   method: 'post',
-  mediaType: 'multipart/form-data',
-  body: formData,
+  mediaType: 'application/x-www-form-urlencoded',
+  body,
 })
 </script>
 

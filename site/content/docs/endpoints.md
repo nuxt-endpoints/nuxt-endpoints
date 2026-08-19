@@ -187,6 +187,12 @@ Maps without a JSON member make `mediaType` required at the type level. The
 option also participates in `useEndpoint` and Vue Query cache keys, so calls
 differing only by media type never share a cache entry.
 
+Send `multipart/form-data` from the client. Its `Content-Type` carries a
+boundary generated while the request is built, and a server-side call to a
+local route never builds one — Nuxt dispatches straight into the handler — so
+such a call arrives without a `Content-Type` and is rejected with `415`. Every
+other media type is labelled by the client itself and works from either side.
+
 Two caveats:
 
 - The generated OpenAPI document lists every member under `requestBody.content`.

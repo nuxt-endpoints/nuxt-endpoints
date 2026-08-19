@@ -317,7 +317,10 @@ describe('createEndpointClient', () => {
       expect(calledOptions.headers).toBeUndefined()
     })
 
-    it('does not set a content-type header for an application/x-www-form-urlencoded mediaType', async () => {
+    it('labels an application/x-www-form-urlencoded body itself', async () => {
+      // No boundary is involved, so the client can set the header rather than
+      // depending on the request being built by a real fetch - which a Nuxt
+      // server-side call to a local route is not.
       fetchMock.mockResolvedValue({ ok: true })
       const client = createEndpointClient([
         { path: '/api/notes', method: 'post', operation: 'createNote' },
@@ -332,6 +335,24 @@ describe('createEndpointClient', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
         body: params,
         method: 'post',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      })
+    })
+
+    it('keeps a caller-supplied content-type for a urlencoded body', async () => {
+      fetchMock.mockResolvedValue({ ok: true })
+      const client = createEndpointClient([
+        { path: '/api/notes', method: 'post', operation: 'createNote' },
+      ])
+
+      await client('createNote', {
+        mediaType: 'application/x-www-form-urlencoded',
+        body: new URLSearchParams({ note: 'hi' }),
+        headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
+      })
+
+      expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({
+        'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
       })
     })
 
@@ -345,7 +366,11 @@ describe('createEndpointClient', () => {
 
       const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
       expect(calledOptions).not.toHaveProperty('mediaType')
-      expect(calledOptions).toEqual({ body: { note: 'hi' }, method: 'post' })
+      expect(calledOptions).toEqual({
+        body: { note: 'hi' },
+        method: 'post',
+        headers: { 'content-type': 'application/json' },
+      })
     })
 
     it('throws when mediaType is not a string', () => {

@@ -985,22 +985,22 @@ function applyMediaTypeClientOptions(
     throw new TypeError('Endpoint mediaType option must be a string')
   }
 
-  if (mediaType.startsWith('text/')) {
-    // text/* bodies are plain strings with no self-describing Content-Type,
-    // so the client sets one explicitly here - but only if the caller has
-    // not already set their own via `headers`, which wins.
-    setContentTypeHeaderIfAbsent(fetchOptions, mediaType)
+  if (mediaType === 'multipart/form-data') {
+    // The only media type the client cannot label: a `FormData` body needs a
+    // Content-Type carrying a runtime-generated boundary
+    // (`multipart/form-data; boundary=...`), and writing a bare
+    // `multipart/form-data` here would strip it. The header therefore has to
+    // come from whatever constructs the request. A real fetch does that; a
+    // Nuxt server-side call to a local route does not, because it dispatches
+    // into the handler without building a `Request`. Multipart calls belong
+    // on the client for that reason - see the media-type body docs.
     return
   }
 
-  // `multipart/form-data` and `application/x-www-form-urlencoded` bodies are
-  // intentionally left alone: a `FormData` body needs a Content-Type header
-  // carrying a runtime-generated boundary
-  // (`multipart/form-data; boundary=...`) that only the fetch implementation
-  // can produce, and setting a plain `multipart/form-data` header here would
-  // strip that boundary and break the request; a `URLSearchParams` body is
-  // already tagged `application/x-www-form-urlencoded` by the same
-  // Fetch-compatible runtime. So this case does nothing on purpose.
+  // Every other declared media type is a fixed string the client can set
+  // itself, so the request carries it regardless of how it is dispatched.
+  // A caller-supplied Content-Type always wins.
+  setContentTypeHeaderIfAbsent(fetchOptions, mediaType)
 }
 
 // Mirrors the header-shape handling in `applyIdempotencyClientOptions`
