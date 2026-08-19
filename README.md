@@ -103,14 +103,14 @@ Module options (OpenAPI route, optional client methods, the Vue Query adapter) a
 Guides:
 
 - [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started) — install, configure, and what gets generated
-- [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, response validation
+- [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, streaming responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses & Effect](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses-and-effect) — success-body, `.result()`, `.raw()`, and `.effect()` call shapes
 - [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — generated TanStack Vue Query option factories and SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics
 - [Idempotency](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/idempotency) — optional `Idempotency-Key` replay protection
-- [Low-level HTTP](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/low-level-http) — files, streams, redirects, and raw responses
+- [Low-level HTTP](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/low-level-http) — files, redirects, proxies, and raw responses
 - [Incremental Adoption](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/incremental-adoption) — convert routes one at a time
 
 Concepts, for when you want the reasoning behind the design:

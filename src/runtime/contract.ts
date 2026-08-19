@@ -41,6 +41,60 @@ export type IsEndpointBodyMediaTypeMap<BODY> = [BODY] extends [ValidatorSchema]
     ? true
     : false
 
+/**
+ * What a handler may return for a status declared as a stream. These are the
+ * values the underlying HTTP layer forwards to the socket untouched, rather
+ * than serializing: a web `ReadableStream`, a Node readable, a native
+ * `Response`, a `Blob`, raw bytes, or an already-encoded string.
+ */
+export type EndpointStreamBody =
+  | ReadableStream
+  | Response
+  | Blob
+  | ArrayBufferView
+  | ArrayBuffer
+  | string
+  | NodeReadableStream
+
+// Values the deep type mappers below must leave completely alone. Mapping a
+// `ReadableStream` or a `Response` property-by-property produces a structural
+// look-alike that no longer satisfies the real interface, and there is nothing
+// to make readonly, mutable, or wider about a stream anyway.
+type OpaqueValue = ReadableStream | Response | Blob | ArrayBuffer | ArrayBufferView
+
+// Structural stand-in for a Node `Readable`, matching what the HTTP layer
+// sniffs for. Declared structurally rather than imported from `node:stream`
+// so this module stays usable from a browser-only type environment - it is
+// imported by the client-side types as well as the server runtime.
+type NodeReadableStream = {
+  pipe: (destination: never) => unknown
+  on: (event: string, listener: never) => unknown
+}
+
+/**
+ * A response whose payload the runtime never reads. The handler produces the
+ * bytes; the library only records what the endpoint promises to send, so a
+ * streaming route keeps its place in the contract - its status, its media
+ * type, and its OpenAPI entry - instead of having to drop `responses`
+ * entirely and become an untyped raw route.
+ *
+ * Nothing here is validated: a stream cannot be buffered and checked without
+ * defeating the reason it is a stream.
+ */
+export type StreamResponseContract = {
+  stream: true
+  /** Media type sent for this status. Defaults to `application/octet-stream`. */
+  contentType?: string
+  description?: string
+  headers?: Record<string, ValidatorSchema>
+  /**
+   * Documentation only: describes the payload, or one chunk of it, in the
+   * generated OpenAPI document. Deliberately not named `body` - the `body` of
+   * a non-stream response contract is validated, and this never is.
+   */
+  schema?: ValidatorSchema
+}
+
 export type ResponseContract =
   | ValidatorSchema
   | {
@@ -49,8 +103,28 @@ export type ResponseContract =
       contentType?: string
       headers?: Record<string, ValidatorSchema>
     }
+  | StreamResponseContract
 
 export type EndpointResponsesContract = Record<number | string, ResponseContract>
+
+/**
+ * What the client hands back for a streaming route. The fetcher is told not
+ * to parse the response, so this is the live body rather than a decoded copy
+ * of it.
+ */
+export type EndpointStreamResponseBody = ReadableStream<Uint8Array>
+
+/**
+ * Whether any declared status streams. This is a property of the whole route,
+ * not of one status: a client that must not parse the response cannot parse
+ * *part* of it, so one stream declaration decides how every status of that
+ * route is delivered.
+ */
+export type HasStreamResponseContract<RESPONSES extends EndpointResponsesContract> = true extends {
+  [STATUS in keyof RESPONSES]: RESPONSES[STATUS] extends { stream: true } ? true : false
+}[keyof RESPONSES]
+  ? true
+  : false
 
 export type EndpointIdempotencyMetadata<
   HEADER_NAME extends string = string,
@@ -166,6 +240,7 @@ export type DeepReadonly<VALUE> = VALUE extends
   | Date
   | RegExp
   | Error
+  | OpaqueValue
   | ((...args: never[]) => unknown)
   ? VALUE
   : VALUE extends ReadonlyMap<infer KEY, infer ITEM>
@@ -196,6 +271,7 @@ export type WidenCapturedReturn<VALUE> = VALUE extends
   | Date
   | RegExp
   | Error
+  | OpaqueValue
   | ((...args: never[]) => unknown)
   ? VALUE
   : // A `respond()` result keeps its wrapper and its status literal - the
@@ -250,6 +326,7 @@ export type DeepMutable<VALUE> = VALUE extends
   | Date
   | RegExp
   | Error
+  | OpaqueValue
   | ((...args: never[]) => unknown)
   ? VALUE
   : VALUE extends ReadonlyMap<infer KEY, infer ITEM>
@@ -396,11 +473,13 @@ export type SuccessResponseBody<RESPONSES extends EndpointResponsesContract> = {
     : never
 }[keyof RESPONSES]
 
-export type ResponseBody<RESPONSE> = RESPONSE extends { body: infer BODY extends ValidatorSchema }
-  ? InferOutput<BODY>
-  : RESPONSE extends ValidatorSchema
-    ? InferOutput<RESPONSE>
-    : never
+export type ResponseBody<RESPONSE> = RESPONSE extends { stream: true }
+  ? EndpointStreamBody
+  : RESPONSE extends { body: infer BODY extends ValidatorSchema }
+    ? InferOutput<BODY>
+    : RESPONSE extends ValidatorSchema
+      ? InferOutput<RESPONSE>
+      : never
 
 export type StatusNumber<STATUS> = STATUS extends number
   ? STATUS

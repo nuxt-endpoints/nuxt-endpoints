@@ -1,4 +1,23 @@
+import type { StreamResponseContract } from './contract'
+
 export type StatusCode = number
+
+/** Media type sent for a stream response that does not declare one. */
+export const defaultStreamContentType = 'application/octet-stream'
+
+/**
+ * Whether a declared response hands its payload to the socket untouched. The
+ * `stream: true` marker is the discriminant: a validator schema never carries
+ * it, and neither does the validated `{ body }` form.
+ */
+export function isStreamResponseContract(contract: unknown): contract is StreamResponseContract {
+  return (
+    typeof contract === 'object' &&
+    contract !== null &&
+    'stream' in contract &&
+    (contract as { stream: unknown }).stream === true
+  )
+}
 
 export type ResponseOptions<HEADERS extends Record<string, string> = Record<string, string>> = {
   headers?: HEADERS

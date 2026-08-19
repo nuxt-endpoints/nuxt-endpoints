@@ -131,6 +131,39 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
     })
 
+    it('streams a declared stream response with its declared media type', async () => {
+      const response = await fetch('/api/export?delimiter=;')
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('text/csv')
+      // Read it as a stream rather than with .text(): the point of the
+      // declaration is that nothing buffered it on the way out.
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let received = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) {
+          break
+        }
+        received += decoder.decode(value, { stream: true })
+      }
+
+      expect(received).toBe('id;name\nu_1;Tom\n')
+    })
+
+    it('documents a stream response in the OpenAPI schema', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const response = schema.paths['/api/export'].get.responses['200']
+
+      expect(response.description).toBe('CSV export')
+      expect(response.content).toHaveProperty('text/csv')
+      expect(response.content['text/csv'].schema).toEqual({
+        type: 'string',
+        contentEncoding: 'binary',
+      })
+    })
+
     it('serializes response-schema outputs to their JSON wire representation', async () => {
       await expect($fetch('/api/serialized')).resolves.toEqual({
         createdAt: '2026-08-14T00:00:00.000Z',

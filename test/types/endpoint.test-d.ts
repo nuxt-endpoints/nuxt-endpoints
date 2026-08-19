@@ -336,4 +336,23 @@ describe('tuple and literal response contracts', () => {
 
     defineEndpointHandler(endpoint, () => ({ items: ['a', 'b'] }))
   })
+
+  it('accepts every body shape the HTTP layer forwards for a stream status', () => {
+    const endpoint = defineEndpoint({
+      responses: {
+        200: { stream: true, contentType: 'text/csv' },
+        404: z.object({ message: z.string() }),
+      },
+    })
+
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(200, new ReadableStream()))
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(200, new Response('id,name\n')))
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(200, 'id,name\n'))
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(200, new Uint8Array([1, 2])))
+
+    // The other declared statuses keep their validated bodies.
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(404, { message: 'gone' }))
+    // @ts-expect-error the 404 body is still checked against its schema.
+    defineEndpointHandler(endpoint, ({ respond: send }) => send(404, { detail: 'gone' }))
+  })
 })

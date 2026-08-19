@@ -610,4 +610,81 @@ describe('createOpenApiDocument', () => {
       },
     ])
   })
+
+  describe('stream response contracts', () => {
+    it('describes a stream with no contentType or schema as binary octet-stream content', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: {
+              200: { stream: true },
+            },
+          },
+        },
+      ])
+
+      expect(document.paths['/api/export'].get.responses[200]).toMatchObject({
+        content: {
+          'application/octet-stream': {
+            schema: { type: 'string', contentEncoding: 'binary' },
+          },
+        },
+      })
+    })
+
+    it('uses a declared contentType and description', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: {
+              200: { stream: true, contentType: 'text/csv', description: 'CSV export' },
+            },
+          },
+        },
+      ])
+
+      expect(document.paths['/api/export'].get.responses[200]).toMatchObject({
+        description: 'CSV export',
+        content: {
+          'text/csv': {
+            schema: { type: 'string', contentEncoding: 'binary' },
+          },
+        },
+      })
+    })
+
+    it('converts a declared schema into the JSON Schema documenting the stream instead of the binary placeholder', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: {
+              200: {
+                stream: true,
+                contentType: 'text/csv',
+                schema: z.object({ id: z.string(), name: z.string() }),
+              },
+            },
+          },
+        },
+      ])
+
+      expect(document.paths['/api/export'].get.responses[200].content['text/csv'].schema).toEqual({
+        type: 'object',
+        required: ['id', 'name'],
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+        },
+      })
+    })
+  })
 })

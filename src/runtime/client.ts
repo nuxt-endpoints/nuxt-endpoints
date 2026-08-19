@@ -3,8 +3,10 @@ import type {
   EndpointClientOptionsAreOptional,
   EndpointDefinition,
   EndpointResponsesContract,
+  EndpointStreamResponseBody,
   EndpointSuccessBody,
   HasEndpointResponses,
+  HasStreamResponseContract,
   HttpMethod,
   IsSuccessStatus,
   NormalizeResponses,
@@ -339,7 +341,7 @@ export type EndpointResultValue<RESPONSES extends EndpointResponsesContract> = [
         ? {
             status: STATUS_NUMBER
             ok: IsSuccessStatus<STATUS_NUMBER>
-            body: EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
+            body: EndpointClientBody<RESPONSES, STATUS>
             headers: Headers
           }
         : never
@@ -358,7 +360,7 @@ export type EndpointResultDataValue<RESPONSES extends EndpointResponsesContract>
         ? {
             status: STATUS_NUMBER
             ok: IsSuccessStatus<STATUS_NUMBER>
-            body: EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
+            body: EndpointClientBody<RESPONSES, STATUS>
           }
         : never
     }[keyof RESPONSES]
@@ -372,7 +374,7 @@ export type EndpointRawResponseValue<RESPONSES extends EndpointResponsesContract
         ? TypedRawResponse<
             STATUS_NUMBER,
             IsSuccessStatus<STATUS_NUMBER>,
-            EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
+            EndpointClientBody<RESPONSES, STATUS>
           >
         : never
     }[keyof RESPONSES]
@@ -386,9 +388,25 @@ export type TypedRawResponse<STATUS extends number, OK extends boolean, BODY> = 
   json: () => Promise<BODY>
 }
 
+/**
+ * The body type for one declared status. A route that declares any stream
+ * response is a streaming route end to end - `createEndpointRequest` tells
+ * the fetcher not to parse it - so every status arrives as the live stream,
+ * including the JSON error shapes the contract still documents for OpenAPI.
+ */
+type EndpointClientBody<
+  RESPONSES extends EndpointResponsesContract,
+  STATUS extends keyof RESPONSES,
+> =
+  HasStreamResponseContract<RESPONSES> extends true
+    ? EndpointStreamResponseBody
+    : EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
+
 export type RouteResponseBody<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
-    ? EndpointWireValue<EndpointSuccessBody<ROUTE['definition']>>
+    ? HasStreamResponseContract<NormalizeResponses<ROUTE['definition']>> extends true
+      ? EndpointStreamResponseBody
+      : EndpointWireValue<EndpointSuccessBody<ROUTE['definition']>>
     : InferredHandlerSuccessBody<RouteHandlerReturn<ROUTE>>
 
 type RouteHandlerReturn<ROUTE extends EndpointRouteEntry> = ROUTE extends {
@@ -599,6 +617,12 @@ export type EndpointClientRouteConfig = {
     headerName: string
     required: boolean
   }
+  /**
+   * Set when the route declares a stream response. Build-time metadata, the
+   * runtime half of the `HasStreamResponseContract` type branch: it is what
+   * tells the fetcher to hand back the body unread.
+   */
+  stream?: boolean
 }
 
 export type EndpointClientRouteConfigInput =
@@ -869,6 +893,7 @@ export function createEndpointRequest(
   // reaches `applyMediaTypeClientOptions` for header bookkeeping, never the
   // fetcher's options.
   applyMediaTypeClientOptions(fetchOptions, mediaType)
+  applyStreamClientOptions(route, fetchOptions)
   const path = replaceParams(route.path, params)
   const fetcher = runtimeOptions.fetcher
 
@@ -907,6 +932,22 @@ export function createEndpointRequest(
   }
 
   return { data, result, raw }
+}
+
+/**
+ * Stops the fetcher from parsing a streaming route's response, so the caller
+ * receives the body while it is still arriving rather than a decoded copy of
+ * it once it has all arrived. An explicit caller `responseType` still wins -
+ * asking for `'blob'` on a download is a legitimate choice.
+ */
+function applyStreamClientOptions(
+  route: EndpointClientRouteConfig,
+  fetchOptions: Record<string, unknown>,
+): void {
+  if (!route.stream || fetchOptions.responseType !== undefined) {
+    return
+  }
+  fetchOptions.responseType = 'stream'
 }
 
 function applyIdempotencyClientOptions(
@@ -1381,7 +1422,15 @@ function responseBody(data: unknown): BodyInit | null {
 }
 
 function isJsonResponseBody(data: unknown): boolean {
-  return typeof data === 'object' && data !== null && !(data instanceof Blob)
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    !(data instanceof Blob) &&
+    // An unread stream is bytes of some declared media type, never JSON. It
+    // reaches here whenever a route declares a stream response, because the
+    // fetcher was told not to parse that route's body.
+    !(data instanceof ReadableStream)
+  )
 }
 
 function isBodyAllowed(status: number): boolean {

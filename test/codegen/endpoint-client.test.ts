@@ -18,6 +18,14 @@ const healthHandler: EndpointRouteHandler = {
   method: 'get',
 }
 
+const exportUsersHandler: EndpointRouteHandler = {
+  handler: '/server/api/export.get.ts',
+  route: '/api/export',
+  method: 'get',
+  operation: 'exportUsers',
+  stream: true,
+}
+
 describe('generateEndpointClient', () => {
   it('embeds an empty route config for an empty handler list', () => {
     const content = generateEndpointClient(resolve, [], {
@@ -47,6 +55,22 @@ describe('generateEndpointClient', () => {
 
     expect(content).not.toContain('"operation"')
     expect(content).not.toContain('"idempotency"')
+  })
+
+  it('emits stream: true in the route config for a handler that declares a stream response', () => {
+    const content = generateEndpointClient(resolve, [exportUsersHandler], {
+      client: { result: true, raw: true, effect: false },
+    })
+
+    expect(content).toContain('"stream": true')
+  })
+
+  it('omits the stream field for handlers without a stream response', () => {
+    const content = generateEndpointClient(resolve, [healthHandler], {
+      client: { result: true, raw: true, effect: false },
+    })
+
+    expect(content).not.toContain('"stream"')
   })
 
   it('exports useEndpointResult and imports its factory only when result is enabled', () => {

@@ -1,6 +1,7 @@
 import { isBodyMediaTypeMap } from './body-media-type'
 import type { EndpointDefinition, EndpointResponsesContract, ResponseContract } from './contract'
 import { isPathParamSegment, pathParamNames, replacePathParams } from './path-template'
+import { defaultStreamContentType, isStreamResponseContract } from './response'
 import {
   createJsonSchemaContext,
   getJsonSchemaComponents,
@@ -412,6 +413,14 @@ function responseSchema(
   response: ResponseContract,
   schemaContext: JsonSchemaConversionContext,
 ): JsonSchema {
+  // A stream declares no validated body. Its optional `schema` is
+  // documentation the author opted into; without one, the payload is
+  // described the way OpenAPI describes any opaque byte sequence.
+  if (isStreamResponseContract(response)) {
+    return response.schema
+      ? toJsonSchema(response.schema, schemaContext, { mode: 'output' })
+      : { type: 'string', contentEncoding: 'binary' }
+  }
   if (typeof response === 'object' && response !== null && 'body' in response) {
     return toJsonSchema(response.body, schemaContext, { mode: 'output' })
   }
@@ -427,7 +436,7 @@ function responseContentType(response: ResponseContract): string {
   ) {
     return response.contentType
   }
-  return 'application/json'
+  return isStreamResponseContract(response) ? defaultStreamContentType : 'application/json'
 }
 
 function responseHeaders(

@@ -183,6 +183,32 @@ describe('DefinedEndpoint', () => {
       },
     })
   })
+
+  it('rejects a declared response that mixes stream: true with body', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { stream: true, body: userResponse } as never,
+        },
+      }),
+    ).toThrow(/declares both stream: true and body/)
+  })
+
+  it('rejects a declared stream contentType that is not a string', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { stream: true, contentType: 123 as never },
+        },
+      }),
+    ).toThrow(/stream contentType that is not a string/)
+  })
 })
 
 function createEvent(input: {

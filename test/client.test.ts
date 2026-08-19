@@ -384,6 +384,48 @@ describe('createEndpointClient', () => {
     })
   })
 
+  describe('stream routes', () => {
+    it('sets responseType: stream in the fetcher options for a route declared as a stream', async () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', stream: true },
+      ])
+
+      await client('exportUsers')
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/export', {
+        method: 'get',
+        responseType: 'stream',
+      })
+    })
+
+    it('does not set responseType for a route without the stream flag', async () => {
+      fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
+      const client = createEndpointClient([
+        { path: '/api/users/:id', method: 'get', operation: 'getUser' },
+      ])
+
+      await client('getUser', { params: { id: 123 } })
+
+      const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
+      expect(calledOptions).not.toHaveProperty('responseType')
+    })
+
+    it('preserves an explicit caller responseType over the stream default', async () => {
+      fetchMock.mockResolvedValue(new Blob())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', stream: true },
+      ])
+
+      await client('exportUsers', { responseType: 'blob' })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/export', {
+        method: 'get',
+        responseType: 'blob',
+      })
+    })
+  })
+
   it('wraps endpoint data calls with useAsyncData', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
 

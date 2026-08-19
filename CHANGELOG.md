@@ -4,6 +4,15 @@
 
 ### Added
 
+- Stream response declarations. A status declared as
+  `{ stream: true, contentType, schema? }` keeps a streaming route inside its
+  contract instead of forcing it to drop `responses` and become an untyped raw
+  route: the status and its media type reach the OpenAPI document, the declared
+  media type is applied unless the handler sets its own, and the payload is
+  never validated — a stream cannot be buffered and checked without defeating
+  the reason it is a stream. The generated client treats such a route as
+  streaming end to end, telling the fetcher not to parse the body so callers
+  receive the live stream rather than a decoded copy of it.
 - Two extension points on every endpoint, declared with the same key names at
   either scope — as runtime options on `defineEndpoint()`, or application-wide
   in `server/endpoints/runtime.ts`. `onValidationError` replaces the response

@@ -41,3 +41,5 @@ createOpenApiDocument(routes, {
 ## Generated from route contracts
 
 Request schemas, response schemas, summaries, route paths, and optional operation IDs are collected from discovered endpoint definitions. When `operation` is omitted, a stable operationId is derived from the route method and path. OpenAPI-only details can still be layered in through `document` and `extend`.
+
+A [streaming response](/docs/endpoints#streaming-responses) appears like any other status. Its media type is the declared `contentType`, defaulting to `application/octet-stream`, and its schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload — or one chunk of it — in more detail.

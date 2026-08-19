@@ -71,6 +71,46 @@ describe('build-time idempotency runtime gap detection', () => {
   })
 })
 
+describe('stream response detection', () => {
+  it('reports stream: true for a carrier declaring a stream response via responses', () => {
+    const detection = getEndpointFromCarrier({
+      definition: {
+        operation: 'exportUsers',
+        responses: {
+          200: { stream: true, contentType: 'text/csv' },
+          404: { message: 'not used at build time' } as never,
+        },
+      },
+    })
+
+    expect(detection).toEqual({ operation: 'exportUsers', stream: true })
+  })
+
+  it('reports stream: true for a carrier declaring a stream response via a bare response', () => {
+    const detection = getEndpointFromCarrier({
+      definition: {
+        operation: 'exportUsers',
+        response: { stream: true },
+      },
+    })
+
+    expect(detection).toEqual({ operation: 'exportUsers', stream: true })
+  })
+
+  it('reports no stream key when the carrier declares only validated responses', () => {
+    const detection = getEndpointFromCarrier({
+      definition: {
+        operation: 'getUser',
+        responses: {
+          200: { message: 'validated' } as never,
+        },
+      },
+    })
+
+    expect(detection).toEqual({ operation: 'getUser' })
+  })
+})
+
 describe('findUnsupportedRouteTemplateSyntax', () => {
   it('reports a named catch-all segment', () => {
     expect(findUnsupportedRouteTemplateSyntax('/api/files/**:path')).toBe('catch-all')

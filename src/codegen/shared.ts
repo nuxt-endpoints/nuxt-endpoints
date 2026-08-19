@@ -9,6 +9,7 @@ export type EndpointRouteConfigEntry = {
   method: string
   operation?: string
   idempotency?: { headerName: string; required: boolean }
+  stream?: true
 }
 
 export function toEndpointRouteConfigEntries(
@@ -26,6 +27,7 @@ export function toEndpointRouteConfigEntries(
           },
         }
       : {}),
+    ...(handler.stream ? { stream: true as const } : {}),
   }))
 }
 

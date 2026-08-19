@@ -7,7 +7,7 @@ Nuxt Endpoints is strongest for JSON REST APIs. Use `response` or `responses` wh
 
 For lower-level HTTP behavior, omit `response` and `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
 
-Response type checking only applies when a route opts into a response contract. If a route needs to return a file, stream, redirect, proxy response, or another native `Response`, leave the response contract out and handle the client side as raw HTTP.
+Response type checking only applies when a route opts into a response contract. If a route needs to return a file, redirect, proxy response, or another native `Response`, leave the response contract out and handle the client side as raw HTTP. Streams are the exception: they have a [first-class declaration](/docs/endpoints#streaming-responses) that keeps them in the contract without pretending their payload is validated.
 
 ```ts
 export const endpoint = defineEndpoint({
@@ -102,32 +102,44 @@ This route is outside the generated endpoint client until multipart request cont
 
 ## Streaming and SSE
 
-Streaming routes should return a native `Response`. Use `.raw()` when client code needs the stream.
+Streaming is no longer a reason to leave the contract. Declare the status with
+[`stream: true`](/docs/endpoints#streaming-responses) and the route keeps its
+place in OpenAPI and in the generated client, which stops parsing that route's
+body so callers receive the live stream.
 
 ```ts
 // server/api/events.get.ts
-export const endpoint = defineEndpoint({})
+export const endpoint = defineEndpoint({
+  operation: 'streamEvents',
+  responses: {
+    200: { stream: true, contentType: 'text/event-stream' },
+  },
+})
 
-export default defineEndpointHandler(endpoint, () => {
+export default defineEndpointHandler(endpoint, ({ respond }) => {
   const stream = new ReadableStream({
     start(controller) {
       controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
     },
   })
 
-  return new Response(stream, {
-    headers: {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache',
-    },
-  })
+  return respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
 })
 ```
 
 ```ts
-const response = await $endpoint('/api/events', { method: 'get' }).raw()
-const reader = response.body?.getReader()
+const reader = (await $endpoint('streamEvents')).getReader()
 ```
+
+An undeclared streaming route still works — return a native `Response` and use
+`.raw()`. What it gives up is the OpenAPI entry and the client's knowledge that
+the body should not be parsed.
+
+The chunks themselves stay untyped. Declaring their shape would need a complete
+chunk, cancellation, and error contract, and the demand in the ecosystem is for
+streaming to work at all rather than for typed chunks — so `stream: true`
+declares that a stream is sent, and `schema` documents it, without either
+claiming to check it.
 
 For browser SSE, `EventSource` is usually simpler:
 

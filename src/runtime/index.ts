@@ -82,13 +82,17 @@ export type {
   EndpointResponder,
   EndpointResponseStatus,
   EndpointResponsesContract,
+  EndpointStreamBody,
+  EndpointStreamResponseBody,
   EndpointSuccessBody,
+  HasStreamResponseContract,
   IsEndpointBodyMediaTypeMap,
   NormalizeResponses,
   ResponseBody,
   ResponseBodyForStatus,
   ResponseContract,
   StatusNumber,
+  StreamResponseContract,
   SuccessResponseBody,
 } from './contract'
 export type {
@@ -147,7 +151,13 @@ export type {
   OpenApiDocumentPatch,
   OpenApiRoute,
 } from './openapi'
-export { createResponse, isStatusResponse, respond } from './response'
+export {
+  createResponse,
+  defaultStreamContentType,
+  isStatusResponse,
+  isStreamResponseContract,
+  respond,
+} from './response'
 export type { ResponseOptions, StatusCode, StatusResponse } from './response'
 export { parseValidator, toJsonSchema } from './validator'
 export type {

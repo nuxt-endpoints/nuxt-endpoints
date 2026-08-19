@@ -354,6 +354,60 @@ export default defineEndpointHandler(endpoint, ({ params, respond }) => {
 })
 ```
 
+## Streaming responses
+
+A route that streams its response can still be a declared endpoint. Mark the status `stream: true` and give it the media type it sends:
+
+```ts
+export const endpoint = defineEndpoint({
+  operation: 'exportUsers',
+  query: z.object({ delimiter: z.string().optional() }),
+  responses: {
+    200: { stream: true, contentType: 'text/csv', description: 'CSV export' },
+    404: ErrorBody,
+  },
+})
+
+export default defineEndpointHandler(endpoint, ({ query, respond }) => {
+  return respond(200, toCsvStream(query.delimiter ?? ','))
+})
+```
+
+The handler may return anything the HTTP layer forwards to the socket as-is: a web `ReadableStream`, a Node readable, a native `Response`, a `Blob`, raw bytes, or an already-encoded string. The declared `contentType` is applied for you unless the handler sets one itself; it defaults to `application/octet-stream`.
+
+Nothing about the payload is validated. A stream cannot be buffered and checked without defeating the reason it is a stream, so `stream: true` is a declaration, not a contract on the bytes. That is also why the media type is declared rather than inferred, and why the payload's optional `schema` is named `schema` and not `body` — it documents the stream in the [generated OpenAPI document](/docs/openapi) and is never used to check anything:
+
+```ts
+responses: {
+  200: {
+    stream: true,
+    contentType: 'application/x-ndjson',
+    schema: z.object({ id: z.string(), at: z.string() }),
+  },
+}
+```
+
+On the client, a route with a stream response is a streaming route end to end: the generated client tells the fetcher not to parse the body, so what you get back is the live stream rather than a decoded copy of it once it has all arrived.
+
+```ts
+const stream = await $endpoint('exportUsers')
+const reader = stream.getReader()
+
+// or, when you need the status and headers too
+const response = await $endpoint('exportUsers').raw()
+```
+
+Two consequences follow from the client never parsing the response:
+
+- Every status of that route arrives as a stream, including a validated `404` the contract still declares. Those declarations remain true for the server and for OpenAPI; the client just hands you the bytes.
+- `useEndpoint` and the Vue Query factories are the wrong tools for a streaming route — a stream cannot be cached or serialized into the Nuxt payload. The build warns when a stream route would get a query option factory.
+
+Pass an explicit `responseType` when you want the fetcher to decode after all, which is the usual choice for a file download:
+
+```ts
+const blob = await $endpoint('downloadInvoice', { responseType: 'blob' })
+```
+
 ## Response validation
 
 Response validation is opt-in so production handlers can decide how strict their output boundary should be.

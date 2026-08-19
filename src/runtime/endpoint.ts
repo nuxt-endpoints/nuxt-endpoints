@@ -10,6 +10,7 @@ import type {
   HasEndpointResponses,
   IsSuccessStatus,
   ResponseContract,
+  StreamResponseContract,
   UnknownIfNever,
   WidenCapturedReturn,
 } from './contract'
@@ -36,7 +37,12 @@ import type { RuntimeEvent } from './h3-adapter'
 import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
-import { createResponse, isStatusResponse } from './response'
+import {
+  createResponse,
+  defaultStreamContentType,
+  isStatusResponse,
+  isStreamResponseContract,
+} from './response'
 import type { StatusResponse } from './response'
 import type {
   EndpointHandlerNext,
@@ -344,13 +350,40 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       return {
         status: result.status,
         body: result.body,
-        headers: result.headers,
+        headers: this.withStreamContentType(result.status, result.headers),
         explicitStatus: true,
       }
     }
 
     await this.validateResponse(200, result)
-    return { status: 200, body: result, explicitStatus: false }
+    return {
+      status: 200,
+      body: result,
+      headers: this.withStreamContentType(200, undefined),
+      explicitStatus: false,
+    }
+  }
+
+  /**
+   * Labels a stream response with the media type its contract declares. The
+   * handler still wins: a media type it set through `respond()` options - or
+   * on a native `Response` it returns - is the more specific answer, and a
+   * declaration is only ever the default. Non-stream statuses are untouched;
+   * their `contentType` is documentation for the OpenAPI document, and their
+   * bodies are always serialized as JSON.
+   */
+  private withStreamContentType(
+    status: number,
+    headers: Readonly<Record<string, string>> | undefined,
+  ): Readonly<Record<string, string>> | undefined {
+    const contract = getResponseContract(this.definition, status)
+    if (!isStreamResponseContract(contract)) {
+      return headers
+    }
+    if (headers && Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')) {
+      return headers
+    }
+    return { 'content-type': contract.contentType ?? defaultStreamContentType, ...headers }
   }
 
   private async validateResponse(status: number, body: unknown) {
@@ -368,6 +401,12 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           issues: [{ message: `Response status ${status} is not declared` }],
         },
       })
+    }
+
+    // A stream is declared, never checked: reading it here to validate it
+    // would consume the very thing the handler is streaming.
+    if (isStreamResponseContract(contract)) {
+      return
     }
 
     const schema = getResponseBodySchema(contract)
@@ -434,12 +473,42 @@ export function defineEndpoint<const DEFINITION extends EndpointDefinition>(
   // generic parameter's property can't leak into `DEFINITION` inference for
   // the `return` below.
   validateEndpointBodyDefinition(definition.body)
+  validateEndpointResponseDefinitions(definition.response, definition.responses)
   return new DefinedEndpoint(definition, options)
 }
 
 function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void {
   if (body !== undefined && isBodyMediaTypeMap(body)) {
     validateBodyMediaTypeMapDefinition(body)
+  }
+}
+
+// TypeScript's excess-property check is per-union-member, so a literal that
+// mixes `stream: true` with the validated form's `body` satisfies
+// `ResponseContract` and would then silently have its `body` ignored. Caught
+// here instead, at definition time, which is also build time.
+function validateEndpointResponseDefinitions(
+  response: EndpointDefinition['response'],
+  responses: EndpointDefinition['responses'],
+): void {
+  const declared: [string, ResponseContract][] = responses
+    ? Object.entries(responses)
+    : response
+      ? [['200', response]]
+      : []
+
+  for (const [status, contract] of declared) {
+    if (!isStreamResponseContract(contract)) {
+      continue
+    }
+    if ('body' in contract) {
+      throw new TypeError(
+        `Response ${status} declares both stream: true and body. A stream is never validated - describe it with schema instead, which documents it without claiming it is checked.`,
+      )
+    }
+    if (contract.contentType !== undefined && typeof contract.contentType !== 'string') {
+      throw new TypeError(`Response ${status} declares a stream contentType that is not a string.`)
+    }
   }
 }
 
@@ -759,7 +828,7 @@ function getResponseContract(
   return undefined
 }
 
-function getResponseBodySchema(contract: ResponseContract) {
+function getResponseBodySchema(contract: Exclude<ResponseContract, StreamResponseContract>) {
   if (typeof contract === 'object' && contract !== null && 'body' in contract) {
     return contract.body
   }

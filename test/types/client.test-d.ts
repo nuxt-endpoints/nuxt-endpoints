@@ -132,6 +132,18 @@ type Routes =
         response: Schema<{ ok: true }>
       }
     }
+  | {
+      path: '/api/reports'
+      method: 'get'
+      operation: 'streamReport'
+      definition: {
+        operation: 'streamReport'
+        responses: {
+          200: { stream: true; contentType: 'text/csv' }
+          404: Schema<{ message: string }>
+        }
+      }
+    }
 
 type Client = EndpointClient<Routes>
 
@@ -546,6 +558,19 @@ describe('EndpointClient', () => {
 
     // @ts-expect-error a text/* member's body is the raw string, not URLSearchParams.
     client('/api/export', { method: 'post', mediaType: 'text/plain', body: new URLSearchParams() })
+  })
+
+  it('hands back the live stream for a route that declares one', async () => {
+    expectTypeOf(await client('streamReport')).toEqualTypeOf<ReadableStream<Uint8Array>>()
+
+    // Every status of a streaming route arrives unparsed, including the
+    // validated 404 the contract still declares for OpenAPI.
+    const result = await client('streamReport').result()
+    expectTypeOf(result.body).toEqualTypeOf<ReadableStream<Uint8Array>>()
+    expectTypeOf(result.status).toEqualTypeOf<200 | 404>()
+
+    const raw = await client('streamReport').raw()
+    expectTypeOf(raw.json()).resolves.toEqualTypeOf<ReadableStream<Uint8Array>>()
   })
 
   it('does not need runtime schema values in type tests', () => {
