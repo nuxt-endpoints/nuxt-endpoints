@@ -21,7 +21,7 @@ import {
   setRuntimeResponseStatus,
 } from './h3-adapter'
 import type { RuntimeEvent } from './h3-adapter'
-import type { EndpointIdempotencyPolicy } from './idempotency-policy'
+import type { EndpointRuntime } from './endpoint-runtime'
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
 
@@ -87,7 +87,7 @@ export type EndpointMethodsEventHandler<
     -readonly [KEY in keyof HANDLERS]-?: Awaited<ReturnType<HANDLERS[KEY]>>
   }
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
-  __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => void
+  __set_endpoint_runtime__: (policy: EndpointRuntime | undefined) => void
 }
 
 /**
@@ -179,9 +179,9 @@ export function defineEndpointMethodHandlers<
       }
       subHandler.__set_endpoint_route__(normalized)
     },
-    __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => {
+    __set_endpoint_runtime__: (policy: EndpointRuntime | undefined) => {
       for (const subHandler of Object.values(subHandlers)) {
-        subHandler.__set_idempotency_policy__(policy)
+        subHandler.__set_endpoint_runtime__(policy)
       }
     },
   }) as unknown as EndpointMethodsEventHandler<METHODS, HANDLERS>

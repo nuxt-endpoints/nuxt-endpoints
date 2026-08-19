@@ -14,12 +14,25 @@ type PolicyContext = EndpointIdempotencyContext<EndpointDefinition>
  * are not part of this policy.
  */
 export type EndpointIdempotencyPolicy = {
+  /**
+   * Returns the durable store that records a completed response, so a retry
+   * carrying the same `Idempotency-Key` receives that response instead of
+   * running the handler again. It must return an already-connected adapter
+   * rather than opening a connection per request.
+   */
   storage: (context: PolicyContext) => MaybePromise<IdempotencyStorage>
+  /**
+   * Returns the trusted identity a key belongs to — typically the
+   * authenticated user or tenant — so one caller's key can never address
+   * another's recorded response. Derive it from server state only.
+   */
   scope: (context: PolicyContext) => MaybePromise<string>
   authorization:
     | IdempotencyAuthorizationDelegation
     | ((context: PolicyContext) => MaybePromise<void>)
+  /** How long one in-flight execution may hold its claim. */
   leaseTtlMs?: number
+  /** How long a completed response stays replayable. */
   replayTtlMs?: number
 }
 

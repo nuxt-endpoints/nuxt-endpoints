@@ -1,8 +1,8 @@
 import { createApp, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHooks } from '../src/runtime'
-import type { EndpointHooks } from '../src/runtime'
+import { defineEndpoint, defineEndpointRuntime } from '../src/runtime'
+import type { EndpointRuntime } from '../src/runtime'
 
 async function request(handler: unknown, url: string, init?: RequestInit): Promise<Response> {
   const app = createApp()
@@ -79,14 +79,14 @@ describe('endpoint-level onValidationError', () => {
 })
 
 describe('application-level validation error handler', () => {
-  const appHooks: EndpointHooks = defineEndpointHooks({
+  const appRuntime: EndpointRuntime = defineEndpointRuntime({
     onValidationError: ({ source }) => ({ status: 418, body: { app: true, source } }),
   })
 
   it('applies to an endpoint that declares none', async () => {
     const endpoint = defineEndpoint({ query })
     const handler = endpoint.handler(() => ({ ok: true }))
-    handler.__set_endpoint_hooks__(appHooks)
+    handler.__set_endpoint_runtime__(appRuntime)
 
     const response = await request(handler, 'http://t.local/?page=x')
 
@@ -103,7 +103,7 @@ describe('application-level validation error handler', () => {
       },
     )
     const handler = endpoint.handler(() => ({ ok: true }))
-    handler.__set_endpoint_hooks__(appHooks)
+    handler.__set_endpoint_runtime__(appRuntime)
 
     const claimed = await request(handler, 'http://t.local/?page=x')
     expect(claimed.status).toBe(422)
@@ -115,13 +115,15 @@ describe('application-level validation error handler', () => {
   })
 })
 
-describe('defineEndpointHooks', () => {
+describe('defineEndpointRuntime', () => {
   it('rejects a non-object', () => {
-    expect(() => defineEndpointHooks(null as never)).toThrow(/expects an object/i)
+    expect(() => defineEndpointRuntime(null as never)).toThrow(/expects an object/i)
   })
 
   it('rejects a hook that is not a function', () => {
-    expect(() => defineEndpointHooks({ wrapHandler: 'x' as never })).toThrow(/must be a function/i)
+    expect(() => defineEndpointRuntime({ wrapHandler: 'x' as never })).toThrow(
+      /must be a function/i,
+    )
   })
 })
 
@@ -195,8 +197,8 @@ describe('wrapHandler', () => {
       order.push('handler')
       return { ok: true }
     })
-    handler.__set_endpoint_hooks__(
-      defineEndpointHooks({
+    handler.__set_endpoint_runtime__(
+      defineEndpointRuntime({
         wrapHandler: async (_context, next) => {
           order.push('app:in')
           const response = await next()

@@ -46,24 +46,15 @@ import { inspectValidatorInputObject } from './runtime/validator'
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
   client?: EndpointsClientModuleOptions
-  idempotency?: EndpointsIdempotencyModuleOptions
-  hooks?: EndpointsHooksModuleOptions
+  runtime?: EndpointsRuntimeModuleOptions
 }
 
-export type EndpointsHooksModuleOptions = {
+export type EndpointsRuntimeModuleOptions = {
   /**
-   * Path to the application-wide endpoint hooks module, resolved from the
-   * project root. Defaults to `server/endpoints/hooks`.
+   * Path to the application-wide endpoint runtime module, resolved from the
+   * project root. Defaults to `server/endpoints/runtime`.
    */
   path?: string
-}
-
-export type EndpointsIdempotencyModuleOptions = {
-  /**
-   * Path to the central idempotency policy module, resolved from the
-   * project root. Defaults to `server/endpoints/idempotency`.
-   */
-  policy?: string
 }
 
 const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
@@ -222,18 +213,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     // deferred to `nitro:init` so it can walk Nitro's own resolved scanDirs
     // (project server dir, layer server dirs, custom scanDirs) instead of
     // re-deriving that list here.
-    let idempotencyPolicyPath = options.idempotency?.policy
-      ? await resolveExplicitConventionPath(
-          nuxt,
-          options.idempotency.policy,
-          'endpoints.idempotency.policy',
-        )
+    let runtimePath = options.runtime?.path
+      ? await resolveExplicitConventionPath(nuxt, options.runtime.path, 'endpoints.runtime.path')
       : undefined
-    let idempotencyPolicyPathResolved = options.idempotency?.policy !== undefined
-    let hooksPath = options.hooks?.path
-      ? await resolveExplicitConventionPath(nuxt, options.hooks.path, 'endpoints.hooks')
-      : undefined
-    let hooksPathResolved = options.hooks?.path !== undefined
+    let runtimePathResolved = options.runtime?.path !== undefined
 
     if (resolvedOptions.client.query && !isTanstackVueQueryResolvable(nuxt.options.rootDir)) {
       if (resolvedOptions.client.querySetup === 'auto') {
@@ -302,34 +285,17 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         return generateEndpointHandlerManifest(endpointHandlerManifest)
       },
     })
-    addServerTemplate({
-      filename: `#nuxt-${moduleName}/idempotency-policy`,
-      // A namespace import (rather than `export { default } from '...'`) so a
-      // policy file that forgets its default export still bundles cleanly;
-      // Nitro startup validation reports that mistake with a clear message
-      // instead of Rollup failing the build on a missing default export.
-      getContents: () => {
-        if (!idempotencyPolicyPathResolved) {
-          throw new Error(
-            '[nuxt-endpoints] Idempotency policy template was requested before Nitro route discovery completed.',
-          )
-        }
-        return idempotencyPolicyPath
-          ? `import * as policyModule from '${toImportPath(idempotencyPolicyPath)}'\nexport default policyModule.default\n`
-          : 'export default undefined\n'
-      },
-    })
 
     addServerTemplate({
-      filename: `#nuxt-${moduleName}/hooks`,
+      filename: `#nuxt-${moduleName}/runtime`,
       getContents: () => {
-        if (!hooksPathResolved) {
+        if (!runtimePathResolved) {
           throw new Error(
-            '[nuxt-endpoints] Endpoint hooks template was requested before Nitro route discovery completed.',
+            '[nuxt-endpoints] Endpoint runtime template was requested before Nitro route discovery completed.',
           )
         }
-        return hooksPath
-          ? `import * as handlerModule from '${toImportPath(hooksPath)}'\nexport default handlerModule.default\n`
+        return runtimePath
+          ? `import * as handlerModule from '${toImportPath(runtimePath)}'\nexport default handlerModule.default\n`
           : 'export default undefined\n'
       },
     })
@@ -340,26 +306,18 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     })
     hook('nitro:init', async (nitro) => {
       const generateArtifacts = async () => {
-        if (!options.idempotency?.policy) {
-          idempotencyPolicyPath = await resolveConventionPath(
+        if (!options.runtime?.path) {
+          runtimePath = await resolveConventionPath(
             nuxt.options.rootDir,
             nitro.options.scanDirs,
-            'endpoints/idempotency',
+            'endpoints/runtime',
           )
-          idempotencyPolicyPathResolved = true
-        }
-        if (!options.hooks?.path) {
-          hooksPath = await resolveConventionPath(
-            nuxt.options.rootDir,
-            nitro.options.scanDirs,
-            'endpoints/hooks',
-          )
-          hooksPathResolved = true
+          runtimePathResolved = true
         }
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
           loaders,
-          idempotencyPolicyPath !== undefined,
+          runtimePath !== undefined,
           resolvedOptions.client.query,
           (message) => logger.warn(message),
         )
@@ -393,11 +351,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     addServerImports([
       ...discoveryEvaluatedServerHelpers.map(({ name }) => ({ from: resolve('./runtime'), name })),
-      // defineIdempotencyPolicy needs no jiti shim: the central policy file
+      // defineEndpointRuntime needs no jiti shim: the runtime file
       // is not a discovery-evaluated module (route or contract file), so
       // this auto-import is only ever exercised through Nitro's own bundling.
-      { from: resolve('./runtime'), name: 'defineIdempotencyPolicy' },
-      { from: resolve('./runtime'), name: 'defineEndpointHooks' },
+      { from: resolve('./runtime'), name: 'defineEndpointRuntime' },
     ])
 
     addImports([
@@ -467,7 +424,7 @@ async function composeHandlers(
     const { operation, idempotency, idempotencyRuntimeGaps } = detection
     if (idempotencyRuntimeGaps?.length && !policyFileExists) {
       throw new Error(
-        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no idempotency policy file was found. Add them to .idempotency() or create server/endpoints/idempotency.ts.`,
+        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no endpoint runtime file was found. Add them to .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
       )
     }
     const existingHandlerPath = operation ? operations.get(operation) : undefined

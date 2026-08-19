@@ -7,12 +7,7 @@ declare module '#nuxt-endpoints/server-handlers' {
   export const handlers: unknown
 }
 
-declare module '#nuxt-endpoints/idempotency-policy' {
-  const policy: import('./idempotency-policy').EndpointIdempotencyPolicy | undefined
-  export default policy
-}
-
-declare module '#nuxt-endpoints/hooks' {
-  const hooks: import('./hooks').EndpointHooks | undefined
-  export default hooks
+declare module '#nuxt-endpoints/runtime' {
+  const runtime: import('./endpoint-runtime').EndpointRuntime | undefined
+  export default runtime
 }

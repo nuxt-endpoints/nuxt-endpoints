@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Two extension points on every endpoint, declared with the same key names at
+  either scope — as runtime options on `defineEndpoint()`, or application-wide
+  in `server/endpoints/runtime.ts`. `onValidationError` replaces the response
+  sent when a request does not match its contract; `wrapHandler` wraps handler
+  execution after validation, and returning without calling `next()` answers on
+  the handler's behalf. Wrappers nest application, then endpoint, then that
+  endpoint's idempotency handling, which is now the built-in consumer of a
+  public extension point rather than a privileged one.
+
+### Changed
+
+- **Breaking:** application-wide endpoint settings moved from
+  `server/endpoints/idempotency.ts` to `server/endpoints/runtime.ts`, where the
+  idempotency policy is one key alongside the hooks. `defineIdempotencyPolicy`
+  is replaced by `defineEndpointRuntime({ idempotency: { … } })`, and the module
+  option `endpoints.idempotency.policy` by `endpoints.runtime.path`. One file
+  now holds every application-wide setting that `nuxt.config.ts` cannot,
+  because module options reach the server as JSON and cannot carry functions.
+
 ## 0.3.0 - 2026-08-19
 
 ### Added

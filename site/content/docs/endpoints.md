@@ -210,7 +210,7 @@ in `server/endpoints/hooks.ts`.
 
 ```ts
 // server/endpoints/hooks.ts
-export default defineEndpointHooks({
+export default defineEndpointRuntime({
   onValidationError: ({ kind, source, event }) => ({
     status: 422,
     body: { error: 'invalid_request', field: source, reason: kind },
@@ -276,8 +276,13 @@ which is what makes rate limiting or audit logging count replays too.
 The context is the same one the handler receives, so `context.event`,
 validated `params`, `query`, `headers`, and `body` are all available.
 
-To use a different path for the application-wide hooks, set
-`endpoints: { hooks: { path: 'server/policies/hooks.ts' } }`.
+`server/endpoints/runtime.ts` holds every application-wide endpoint setting
+that `nuxt.config.ts` cannot: module options reach the server as JSON, so they
+cannot carry functions. The [central idempotency policy](/docs/idempotency#central-policy)
+lives in the same file, under its own key.
+
+To use a different path, set
+`endpoints: { runtime: { path: 'server/policies/endpoints.ts' } }`.
 
 ## Request event and middleware context
 

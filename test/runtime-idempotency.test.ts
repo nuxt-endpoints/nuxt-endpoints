@@ -510,10 +510,12 @@ describe('endpoint idempotency runtime', () => {
       const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ required: true })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
-      handler.__set_idempotency_policy__({
-        storage: () => storage,
-        scope: () => 'public',
-        authorization: authorize,
+      handler.__set_endpoint_runtime__({
+        idempotency: {
+          storage: () => storage,
+          scope: () => 'public',
+          authorization: authorize,
+        },
       })
 
       await expect(
@@ -537,10 +539,12 @@ describe('endpoint idempotency runtime', () => {
       })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
-      handler.__set_idempotency_policy__({
-        storage: () => policyStorage,
-        scope: () => 'public',
-        authorization: 'middleware',
+      handler.__set_endpoint_runtime__({
+        idempotency: {
+          storage: () => policyStorage,
+          scope: () => 'public',
+          authorization: 'middleware',
+        },
       })
 
       await expect(
@@ -564,11 +568,13 @@ describe('endpoint idempotency runtime', () => {
       })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
-      handler.__set_idempotency_policy__({
-        storage: () => storage,
-        scope: () => 'public',
-        authorization: 'middleware',
-        leaseTtlMs: 99_000,
+      handler.__set_endpoint_runtime__({
+        idempotency: {
+          storage: () => storage,
+          scope: () => 'public',
+          authorization: 'middleware',
+          leaseTtlMs: 99_000,
+        },
       })
 
       await handler(
@@ -587,11 +593,13 @@ describe('endpoint idempotency runtime', () => {
       })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
-      handler.__set_idempotency_policy__({
-        storage: () => storage,
-        scope: () => 'public',
-        authorization: 'middleware',
-        leaseTtlMs: 12_345,
+      handler.__set_endpoint_runtime__({
+        idempotency: {
+          storage: () => storage,
+          scope: () => 'public',
+          authorization: 'middleware',
+          leaseTtlMs: 12_345,
+        },
       })
 
       await handler(

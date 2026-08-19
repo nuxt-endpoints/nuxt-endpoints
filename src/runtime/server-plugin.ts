@@ -1,7 +1,6 @@
 import { defineNitroPlugin } from 'nitropack/runtime/plugin'
 import endpointsOptions from '#nuxt-endpoints/options'
-import policyModule from '#nuxt-endpoints/idempotency-policy'
-import endpointHooksModule from '#nuxt-endpoints/hooks'
+import endpointRuntimeModule from '#nuxt-endpoints/runtime'
 import type { EndpointDefinition } from './contract'
 import { idempotencyMetadataWithoutRuntimeMessage } from './endpoint'
 import { idempotencyRuntimeOptionKeys } from './idempotency'
@@ -11,7 +10,7 @@ import type {
   EndpointRouteIdentity,
 } from './endpoint'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
-import type { EndpointHooks } from './hooks'
+import type { EndpointRuntime } from './endpoint-runtime'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 
@@ -32,8 +31,7 @@ type HandlerFunction = {
   // below, so the matching member is picked per manifest entry.
   __endpoint_contracts__?: Record<string, DefinedEndpoint<EndpointDefinition>>
   __set_endpoint_route__?: (identity: EndpointRouteIdentity) => void
-  __set_idempotency_policy__?: (policy: EndpointIdempotencyPolicy | undefined) => void
-  __set_endpoint_hooks__?: (hooks: EndpointHooks | undefined) => void
+  __set_endpoint_runtime__?: (runtime: EndpointRuntime | undefined) => void
 }
 
 type HandlerDefinition = {
@@ -45,13 +43,11 @@ type HandlerDefinition = {
 export default defineNitroPlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
-  const policy = assertValidIdempotencyPolicy(policyModule)
-  const endpointHooks = assertValidEndpointHooks(endpointHooksModule)
+  const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
   const document = await initializeEndpointHandlers(
     endpointHandlerManifest as HandlerDefinition[],
     options,
-    policy,
-    endpointHooks,
+    endpointRuntime,
   )
   if (document) {
     setOpenApiDocument(document)
@@ -61,10 +57,9 @@ export default defineNitroPlugin(async () => {
 export async function initializeEndpointHandlers(
   handlers: HandlerDefinition[],
   options: EndpointsRuntimeOptions,
-  policy?: EndpointIdempotencyPolicy,
-  hooks?: EndpointHooks,
+  runtime?: EndpointRuntime,
 ) {
-  const endpoints = await extractEndpoints(handlers, policy, hooks)
+  const endpoints = await extractEndpoints(handlers, runtime)
   if (!options.openApi.enabled) {
     return undefined
   }
@@ -76,8 +71,7 @@ export async function initializeEndpointHandlers(
 
 export async function extractEndpoints(
   definitions: HandlerDefinition[],
-  policy?: EndpointIdempotencyPolicy,
-  hooks?: EndpointHooks,
+  runtime?: EndpointRuntime,
 ) {
   const endpoints = []
 
@@ -91,7 +85,7 @@ export async function extractEndpoints(
     // Every endpoint receives the application-wide hooks, whether or not it
     // declares its own: precedence is resolved per request, not by suppressing
     // this injection.
-    handler.__set_endpoint_hooks__?.(hooks)
+    handler.__set_endpoint_runtime__?.(runtime)
 
     if (contract.definition.idempotency) {
       const marker = contract.__idempotency_runtime_marker__
@@ -110,14 +104,12 @@ export async function extractEndpoints(
         routeTemplate: definition.route,
       })
 
-      const missing = findMissingIdempotencyRuntimeOptions(marker, policy)
+      const missing = findMissingIdempotencyRuntimeOptions(marker, runtime?.idempotency)
       if (missing.length > 0) {
         throw new Error(
-          `[nuxt-endpoints] Idempotent endpoint ${definition.method} ${definition.route} is missing runtime options: ${missing.join(', ')}. Provide them in .idempotency() or define a central policy in server/endpoints/idempotency.ts.`,
+          `[nuxt-endpoints] Idempotent endpoint ${definition.method} ${definition.route} is missing runtime options: ${missing.join(', ')}. Provide them in .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
         )
       }
-
-      handler.__set_idempotency_policy__?.(policy)
     }
 
     endpoints.push({
@@ -166,18 +158,6 @@ function findMissingIdempotencyRuntimeOptions(
   return idempotencyRuntimeOptionKeys.filter((key) => !marker[key] && policy?.[key] === undefined)
 }
 
-function assertValidIdempotencyPolicy(value: unknown): EndpointIdempotencyPolicy | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  if (!isIdempotencyPolicyShape(value)) {
-    throw new Error(
-      '[nuxt-endpoints] server/endpoints/idempotency.ts must default-export defineIdempotencyPolicy({ storage, scope, authorization }).',
-    )
-  }
-  return value
-}
-
 function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyPolicy {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -190,14 +170,20 @@ function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyP
   )
 }
 
-function assertValidEndpointHooks(value: unknown): EndpointHooks | undefined {
+function assertValidEndpointRuntime(value: unknown): EndpointRuntime | undefined {
   if (value === undefined) {
     return undefined
   }
   if (typeof value !== 'object' || value === null) {
     throw new Error(
-      '[nuxt-endpoints] server/endpoints/hooks.ts must default-export defineEndpointHooks({ ... }).',
+      '[nuxt-endpoints] server/endpoints/runtime.ts must default-export defineEndpointRuntime({ ... }).',
     )
   }
-  return value as EndpointHooks
+  const runtime = value as EndpointRuntime
+  if (runtime.idempotency !== undefined && !isIdempotencyPolicyShape(runtime.idempotency)) {
+    throw new Error(
+      '[nuxt-endpoints] The idempotency policy in server/endpoints/runtime.ts needs storage, scope, and authorization.',
+    )
+  }
+  return runtime
 }

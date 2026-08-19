@@ -103,8 +103,8 @@ export type {
 } from './idempotency'
 export { createMemoryIdempotencyStorage } from './idempotency'
 export { defineEndpoint, defineEndpointHandler } from './endpoint'
-export { defineEndpointHooks } from './hooks'
-export type { EndpointHooks } from './hooks'
+export { defineEndpointRuntime } from './endpoint-runtime'
+export type { EndpointRuntime } from './endpoint-runtime'
 export type {
   EndpointHandlerNext,
   EndpointHandlerWrapper,

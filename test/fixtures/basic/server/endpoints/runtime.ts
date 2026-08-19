@@ -1,6 +1,8 @@
-import { defineEndpointHooks } from '../../../../../src/runtime'
+import { createMemoryIdempotencyStorage, defineEndpointRuntime } from '../../../../../src/runtime'
 
-export default defineEndpointHooks({
+const storage = createMemoryIdempotencyStorage()
+
+export default defineEndpointRuntime({
   onValidationError: (failure) => ({
     status: 422,
     body: {
@@ -15,5 +17,10 @@ export default defineEndpointHooks({
       ...response,
       headers: { ...response.headers, 'x-wrapped': String(context.event.method ?? 'unknown') },
     }
+  },
+  idempotency: {
+    storage: () => storage,
+    scope: () => 'integration-fixture',
+    authorization: 'middleware',
   },
 })

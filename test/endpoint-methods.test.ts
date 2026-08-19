@@ -270,12 +270,14 @@ describe('defineEndpointMethods route identity and idempotency policy forwarding
     })
     ;(
       handler as never as {
-        __set_idempotency_policy__: (policy: unknown) => void
+        __set_endpoint_runtime__: (runtime: unknown) => void
       }
-    ).__set_idempotency_policy__({
-      storage: () => storage,
-      scope: () => 'public',
-      authorization: 'middleware',
+    ).__set_endpoint_runtime__({
+      idempotency: {
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      },
     })
 
     const request = () =>

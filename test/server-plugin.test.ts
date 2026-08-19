@@ -5,15 +5,14 @@ import {
   defineEndpointMethodHandlers,
   defineEndpointMethods,
 } from '../src/runtime'
-import type { EndpointIdempotencyPolicy } from '../src/runtime'
+import type { EndpointRuntime } from '../src/runtime'
 
 vi.mock('#nuxt-endpoints/options', () => ({
   default: {
     openApi: { enabled: false, path: '/schema', title: 'Test', version: '1.0.0' },
   },
 }))
-vi.mock('#nuxt-endpoints/idempotency-policy', () => ({ default: undefined }))
-vi.mock('#nuxt-endpoints/hooks', () => ({ default: undefined }))
+vi.mock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
 
 const { extractEndpoints, initializeEndpointHandlers } =
   await import('../src/runtime/server-plugin')
@@ -109,7 +108,7 @@ describe('idempotency runtime option resolution at startup', () => {
     const handler = defineEndpoint({})
       .idempotency({ storage: () => storage, scope: () => 'public', authorization: 'middleware' })
       .handler(() => ({ ok: true }))
-    const setPolicy = vi.spyOn(handler, '__set_idempotency_policy__')
+    const setPolicy = vi.spyOn(handler, '__set_endpoint_runtime__')
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)])).resolves.toHaveLength(1)
     expect(setPolicy).toHaveBeenCalledOnce()
@@ -118,21 +117,23 @@ describe('idempotency runtime option resolution at startup', () => {
 
   it('resolves runtime options the endpoint omits from the central policy', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const policy: EndpointIdempotencyPolicy = {
-      storage: () => storage,
-      scope: () => 'public',
-      authorization: 'middleware',
+    const runtime: EndpointRuntime = {
+      idempotency: {
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      },
     }
     const handler = defineEndpoint({})
       .idempotency({ required: true })
       .handler(() => ({ ok: true }))
-    const setPolicy = vi.spyOn(handler, '__set_idempotency_policy__')
+    const setPolicy = vi.spyOn(handler, '__set_endpoint_runtime__')
 
     await expect(
-      extractEndpoints([route('/api/items', 'post', handler)], policy),
+      extractEndpoints([route('/api/items', 'post', handler)], runtime),
     ).resolves.toHaveLength(1)
     expect(setPolicy).toHaveBeenCalledOnce()
-    expect(setPolicy).toHaveBeenCalledWith(policy)
+    expect(setPolicy).toHaveBeenCalledWith(runtime)
   })
 
   it('fails startup listing the runtime options missing without any central policy', async () => {
@@ -141,19 +142,19 @@ describe('idempotency runtime option resolution at startup', () => {
       .handler(() => ({ ok: true }))
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)])).rejects.toThrow(
-      '[nuxt-endpoints] Idempotent endpoint post /api/items is missing runtime options: storage, authorization. Provide them in .idempotency() or define a central policy in server/endpoints/idempotency.ts.',
+      '[nuxt-endpoints] Idempotent endpoint post /api/items is missing runtime options: storage, authorization. Provide them in .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.',
     )
   })
 
   it('fails startup when the central policy does not cover the remaining gap', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const partialPolicy = { storage: () => storage } as unknown as EndpointIdempotencyPolicy
+    const partialRuntime = { idempotency: { storage: () => storage } } as unknown as EndpointRuntime
     const handler = defineEndpoint({})
       .idempotency({})
       .handler(() => ({ ok: true }))
 
     await expect(
-      extractEndpoints([route('/api/items', 'post', handler)], partialPolicy),
+      extractEndpoints([route('/api/items', 'post', handler)], partialRuntime),
     ).rejects.toThrow(/missing runtime options: scope, authorization/)
   })
 })
@@ -163,20 +164,20 @@ describe('idempotency policy module validation at Nitro startup', () => {
     vi.resetModules()
     vi.doMock('#nuxt-endpoints/options', () => ({ default: disabledOpenApiOptions }))
     vi.doMock('#nuxt-endpoints/server-handlers', () => ({ handlers: [] }))
-    vi.doMock('#nuxt-endpoints/hooks', () => ({ default: undefined }))
-    vi.doMock('#nuxt-endpoints/idempotency-policy', () => ({
-      default: { storage: () => createMemoryIdempotencyStorage() },
+    vi.doMock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
+    vi.doMock('#nuxt-endpoints/runtime', () => ({
+      default: { idempotency: { storage: () => createMemoryIdempotencyStorage() } },
     }))
 
     const plugin = await import('../src/runtime/server-plugin')
     const runPlugin = plugin.default as unknown as () => Promise<void>
     await expect(runPlugin()).rejects.toThrow(
-      '[nuxt-endpoints] server/endpoints/idempotency.ts must default-export defineIdempotencyPolicy({ storage, scope, authorization }).',
+      '[nuxt-endpoints] The idempotency policy in server/endpoints/runtime.ts needs storage, scope, and authorization.',
     )
 
     vi.doUnmock('#nuxt-endpoints/options')
     vi.doUnmock('#nuxt-endpoints/server-handlers')
-    vi.doUnmock('#nuxt-endpoints/idempotency-policy')
+    vi.doUnmock('#nuxt-endpoints/runtime')
     vi.resetModules()
   })
 })

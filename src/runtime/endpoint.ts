@@ -43,7 +43,7 @@ import type {
   EndpointHandlerWrapper,
   EndpointRuntimeResponse,
 } from './interceptor'
-import type { EndpointHooks } from './hooks'
+import type { EndpointRuntime } from './endpoint-runtime'
 import { isValidationErrorResponse } from './validation-error'
 import type {
   EndpointValidationErrorHandler,
@@ -258,7 +258,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     const idempotencyOptions = this.idempotencyOptions
 
     // `routeIdentity` and `idempotencyPolicy` are injected after `.handler()`
-    // returns (via `__set_endpoint_route__`/`__set_idempotency_policy__`), so
+    // returns (via `__set_endpoint_route__`/`__set_endpoint_runtime__`), so
     // the interceptor reads them through getters rather than capturing them
     // by value here.
     const idempotencyWrapper: EndpointHandlerWrapper<DEFINITION> | undefined = idempotencyOptions
@@ -325,12 +325,10 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
         }
         routeIdentity = normalized
       },
-      __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => {
-        idempotencyPolicy = policy
-      },
-      __set_endpoint_hooks__: (hooks: EndpointHooks | undefined) => {
-        appValidationErrorHandler = hooks?.onValidationError
-        appHandlerWrapper = hooks?.wrapHandler
+      __set_endpoint_runtime__: (runtime: EndpointRuntime | undefined) => {
+        appValidationErrorHandler = runtime?.onValidationError
+        appHandlerWrapper = runtime?.wrapHandler
+        idempotencyPolicy = runtime?.idempotency
       },
     })
   }
@@ -394,8 +392,7 @@ export type EndpointEventHandler<
   __endpoint_contract__: DefinedEndpoint<DEFINITION>
   __endpoint_handler_return__: HANDLER_RETURN
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
-  __set_idempotency_policy__: (policy: EndpointIdempotencyPolicy | undefined) => void
-  __set_endpoint_hooks__: (hooks: EndpointHooks | undefined) => void
+  __set_endpoint_runtime__: (runtime: EndpointRuntime | undefined) => void
 }
 
 // Exported so endpoint-methods.ts can compute the same success-body type for

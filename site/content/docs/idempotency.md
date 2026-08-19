@@ -7,18 +7,20 @@ Nuxt Endpoints can add optional `Idempotency-Key` replay protection to a non-ide
 
 ## Central policy
 
-Storage, scope resolution, and authorization are usually the same for every idempotent endpoint in an application. Define them once in `server/endpoints/idempotency.ts`:
+Storage, scope resolution, and authorization are usually the same for every idempotent endpoint in an application. Define them once in `server/endpoints/runtime.ts`, alongside the other [application-wide endpoint settings](/docs/endpoints#hooks):
 
 ```ts
-// server/endpoints/idempotency.ts
+// server/endpoints/runtime.ts
 import { createRedisIdempotencyStorage } from '../utils/idempotency-storage'
 
 const storage = createRedisIdempotencyStorage()
 
-export default defineIdempotencyPolicy({
-  storage: () => storage,
-  scope: ({ event }) => event.context.auth.tenantId,
-  authorization: 'middleware',
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => storage,
+    scope: ({ event }) => event.context.auth.tenantId,
+    authorization: 'middleware',
+  },
 })
 ```
 
@@ -27,7 +29,7 @@ export default defineIdempotencyPolicy({
 - `authorization` (required): either a callback run on every request, including replays, or the literal `'middleware'` asserting that Nitro middleware already made the full authorization decision. There is no implicit default; authentication alone is not that assertion.
 - `leaseTtlMs` / `replayTtlMs` (optional): application-wide TTL defaults.
 
-The policy file is server runtime code: it is bundled into the Nitro server and never evaluated during build-time discovery, so it can hold real infrastructure connections. It cannot live in `nuxt.config.ts` because module options must be serializable and cannot carry these functions into the server bundle. To use a different path, set `endpoints: { idempotency: { policy: 'server/policies/idempotency.ts' } }`.
+The policy file is server runtime code: it is bundled into the Nitro server and never evaluated during build-time discovery, so it can hold real infrastructure connections. It cannot live in `nuxt.config.ts` because module options must be serializable and cannot carry these functions into the server bundle. To use a different path, set `endpoints: { runtime: { path: 'server/policies/endpoints.ts' } }`.
 
 The convention path is looked up in every root that can contribute server routes: the project `server/` directory, extended Nuxt layers, and custom Nitro `scanDirs`. The first match wins, project first.
 
