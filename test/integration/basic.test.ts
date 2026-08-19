@@ -154,6 +154,37 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(response.status).toBe(404)
     })
 
+    it('dispatches every declared method of a multi-method group', async () => {
+      await expect($fetch('/api/multi', { query: { name: 'from-get' } })).resolves.toEqual({
+        name: 'from-get',
+      })
+      await expect(
+        $fetch('/api/multi', { method: 'PUT', body: { name: 'from-put' } }),
+      ).resolves.toEqual({ name: 'from-put' })
+    })
+
+    it('answers undeclared, HEAD, and OPTIONS requests from the group contract', async () => {
+      const notAllowed = await fetch('/api/multi', { method: 'DELETE' })
+      expect(notAllowed.status).toBe(405)
+      expect(notAllowed.headers.get('allow')).toBe('GET, HEAD, OPTIONS, PUT')
+
+      const options = await fetch('/api/multi', { method: 'OPTIONS' })
+      expect(options.status).toBe(204)
+      expect(options.headers.get('allow')).toBe('GET, HEAD, OPTIONS, PUT')
+
+      const head = await fetch('/api/multi', { method: 'HEAD' })
+      expect(head.status).toBe(200)
+      expect(head.headers.get('content-type')).toContain('application/json')
+      await expect(head.text()).resolves.toBe('')
+    })
+
+    it('documents every group member as its own OpenAPI operation', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+
+      expect(schema.paths['/api/multi'].get.operationId).toBe('getMulti')
+      expect(schema.paths['/api/multi'].put.operationId).toBe('putMulti')
+    })
+
     it('injects route metadata and replays idempotent endpoint responses', async () => {
       const request = () =>
         fetch('/api/idempotent', {
@@ -357,19 +388,44 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
 }
 
 function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
-  const routes = Array.from(
-    endpointTypes.matchAll(/\| \{ path: '([^']+)', method: '([^']+)'/g),
-    ([, path, method]) => ({ path, method }),
-  )
+  // Each union member is one line, so a line carrying `__endpoint_contracts__`
+  // came from a multi-method group. Nitro types a method-suffix-free route
+  // file under `InternalApi[path]['default']`, so those paths are compared as
+  // the union of their declared methods instead of method by method.
+  const routes = endpointTypes
+    .split('\n')
+    .flatMap((line) => {
+      const match = line.match(/\| \{ path: '([^']+)', method: '([^']+)'/)
+      if (!match) return []
+      const [, path, method] = match
+      return [{ path, method, group: line.includes('__endpoint_contracts__') }]
+    })
+    .filter((route) => route.path !== undefined && route.method !== undefined)
   if (routes.length === 0) {
     throw new Error('No generated endpoint routes were available for InternalApi comparison.')
   }
-  const assertions = routes
+
+  const groupMethodsByPath = new Map<string, string[]>()
+  for (const route of routes) {
+    if (!route.group) continue
+    const methods = groupMethodsByPath.get(route.path) ?? []
+    methods.push(route.method)
+    groupMethodsByPath.set(route.path, methods)
+  }
+
+  const singleAssertions = routes
+    .filter((route) => !route.group)
     .map(
       ({ path, method }, index) =>
         `type RouteAgreement${index} = Assert<Equal<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
     )
-    .join('\n')
+  const groupAssertions = Array.from(groupMethodsByPath, ([path, methods], index) => {
+    const union = methods
+      .map((method) => `$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>`)
+      .join(' | ')
+    return `type GroupRouteAgreement${index} = Assert<Equal<${union}, InternalApi[${JSON.stringify(path)}]['default']>>`
+  })
+  const assertions = [...singleAssertions, ...groupAssertions].join('\n')
 
   return `import type { $EndpointPathResponse } from '#endpoints'
 import type { InternalApi } from 'nitropack/types'

@@ -16,6 +16,14 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   method: string
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
+  // Set when this entry was expanded from a `defineEndpointMethods()` group
+  // (a single method-suffix-free route file declaring several methods): its
+  // `handler` file exports one dispatcher whose per-method contract and
+  // handler-return types live under `__endpoint_contracts__`/
+  // `__endpoint_method_handler_returns__` rather than the single-endpoint
+  // `__endpoint_contract__`/`__endpoint_handler_return__` markers, so codegen
+  // needs to know which accessor shape to generate.
+  methodGroup?: true
 }
 
 // The slice of `ResolvedEndpointsModuleOptions` (module.ts) the type/client

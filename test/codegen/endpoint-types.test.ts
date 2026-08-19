@@ -24,6 +24,22 @@ const healthHandler: EndpointRouteHandler = {
   method: 'get',
 }
 
+const multiGetHandler: EndpointRouteHandler = {
+  handler: '/server/api/multi.ts',
+  route: '/api/multi',
+  method: 'get',
+  operation: 'getMulti',
+  methodGroup: true,
+}
+
+const multiPutHandler: EndpointRouteHandler = {
+  handler: '/server/api/multi.ts',
+  route: '/api/multi',
+  method: 'put',
+  operation: 'putMulti',
+  methodGroup: true,
+}
+
 const defaultClientOptions: EndpointClientCodegenOptions = {
   client: { result: true, raw: true, effect: false },
 }
@@ -57,6 +73,32 @@ describe('buildEndpointRouteEntryUnion', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler, healthHandler])
 
     expect(union.split('\n')).toHaveLength(2)
+  })
+
+  it('accesses a method-group entry through __endpoint_contracts__/__endpoint_method_handler_returns__ keyed by method', () => {
+    const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
+
+    expect(union).toContain(
+      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['get']['definition']",
+    )
+    expect(union).toContain(
+      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['get']",
+    )
+    expect(union).toContain(
+      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['put']['definition']",
+    )
+    expect(union).toContain(
+      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['put']",
+    )
+    expect(union).not.toContain("'__endpoint_contract__'")
+    expect(union).not.toContain('__endpoint_handler_return__')
+  })
+
+  it('keeps the single-endpoint accessor shape unchanged when methodGroup is not set', () => {
+    const union = buildEndpointRouteEntryUnion([listUsersHandler])
+
+    expect(union).not.toContain('__endpoint_contracts__')
+    expect(union).not.toContain('__endpoint_method_handler_returns__')
   })
 })
 

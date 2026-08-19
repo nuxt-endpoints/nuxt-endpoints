@@ -23,6 +23,12 @@ type EndpointsRuntimeOptions = {
 
 type HandlerFunction = {
   __endpoint_contract__?: DefinedEndpoint<EndpointDefinition>
+  // Present on a defineEndpointMethodHandlers() dispatcher instead of
+  // __endpoint_contract__: one DefinedEndpoint per declared method, keyed by
+  // that method. Every manifest entry for a method-group route shares the
+  // same dispatcher (same `load()`), differing only in `definition.method`
+  // below, so the matching member is picked per manifest entry.
+  __endpoint_contracts__?: Record<string, DefinedEndpoint<EndpointDefinition>>
   __set_endpoint_route__?: (identity: EndpointRouteIdentity) => void
   __set_idempotency_policy__?: (policy: EndpointIdempotencyPolicy | undefined) => void
 }
@@ -70,12 +76,13 @@ export async function extractEndpoints(
 
   for (const definition of definitions) {
     const handler = await resolveHandler(definition)
-    if (!handler.__endpoint_contract__) {
+    const contract = resolveEndpointContract(handler, definition)
+    if (!contract) {
       continue
     }
 
-    if (handler.__endpoint_contract__.definition.idempotency) {
-      const marker = handler.__endpoint_contract__.__idempotency_runtime_marker__
+    if (contract.definition.idempotency) {
+      const marker = contract.__idempotency_runtime_marker__
       if (!marker) {
         throw new Error(
           idempotencyMetadataWithoutRuntimeMessage(`for ${definition.method} ${definition.route}`),
@@ -104,11 +111,36 @@ export async function extractEndpoints(
     endpoints.push({
       path: definition.route,
       method: definition.method,
-      definition: handler.__endpoint_contract__.definition,
+      definition: contract.definition,
     })
   }
 
   return endpoints
+}
+
+// A method-group dispatcher (`__endpoint_contracts__`) exposes one
+// DefinedEndpoint per declared method instead of a single
+// `__endpoint_contract__`; every manifest entry for such a route shares the
+// same dispatcher, so the member matching this entry's own method is the one
+// that applies here. Codegen only ever emits a manifest entry whose method
+// was itself read from that same `__endpoint_contracts__` map (see
+// composeHandlers in module.ts), so a missing member here means the running
+// build's manifest and the loaded handler module have drifted apart.
+function resolveEndpointContract(
+  handler: HandlerFunction,
+  definition: HandlerDefinition,
+): DefinedEndpoint<EndpointDefinition> | undefined {
+  if (!handler.__endpoint_contracts__) {
+    return handler.__endpoint_contract__
+  }
+
+  const member = handler.__endpoint_contracts__[definition.method]
+  if (!member) {
+    throw new Error(
+      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method in its defineEndpointMethods() group. Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
+    )
+  }
+  return member
 }
 
 async function resolveHandler(definition: HandlerDefinition): Promise<HandlerFunction> {

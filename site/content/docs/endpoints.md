@@ -66,6 +66,61 @@ await $endpoint.getUser({ params: { id: '123' } })
 - `headers`: header schemas are useful for explicit authentication or versioning boundaries.
 - `body`: JSON request bodies are the first-class body format in the current API.
 
+## Multiple methods on one route
+
+A route file without a method suffix can declare several methods at once. Each
+member is an ordinary `defineEndpoint()` contract, so operations, response
+statuses, media-type bodies, and idempotency all work per method:
+
+```ts
+// server/api/users/[id].ts — no method suffix
+export const endpoints = defineEndpointMethods({
+  get: defineEndpoint({
+    operation: 'getUser',
+    params: z.object({ id: z.coerce.number() }),
+    response: User,
+  }),
+  put: defineEndpoint({
+    operation: 'updateUser',
+    params: z.object({ id: z.coerce.number() }),
+    body: UpdateUser,
+    responses: { 200: User, 404: NotFound },
+  }),
+})
+
+export default defineEndpointMethodHandlers(endpoints, {
+  get: ({ params }) => findUser(params.id),
+  put: ({ params, body, respond }) => respond(200, updateUser(params.id, body)),
+})
+```
+
+The generated client calls each method on the one path, and every member keeps
+its own request and response types:
+
+```ts
+await $endpoint('/api/users/:id', { method: 'get', params: { id: '1' } })
+await $endpoint('updateUser', { params: { id: '1' }, body: { name: 'Tom' } })
+```
+
+The dispatcher answers the whole route:
+
+- Declared methods run their own handler, with their own validation.
+- `HEAD` runs the `GET` member and returns its status and headers with no body.
+- `OPTIONS` answers `204` with an `Allow` header.
+- Anything else gets `405` with the same `Allow` header, listing the declared
+  methods plus the derived `HEAD` and `OPTIONS`.
+
+Declaring `head` or `options` yourself is an error — they are derived — and so
+are empty groups, `connect`/`trace`, and handler maps whose keys do not match
+the group. Groups belong on method-suffix-free files: putting one in
+`users.get.ts` fails the build, because the other methods would be
+unreachable. The reverse also fails: a single `defineEndpoint()` in a
+suffix-free file cannot know which method it serves.
+
+Use single-method files when a route has one method — nothing about them
+changes. Reach for a group when one path genuinely serves several methods and
+you would rather keep them together.
+
 ## Media-type request bodies
 
 A `body` contract can also be a map from media types to schemas. The request's

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createMemoryIdempotencyStorage, defineEndpoint } from '../src/runtime'
+import {
+  createMemoryIdempotencyStorage,
+  defineEndpoint,
+  defineEndpointMethodHandlers,
+  defineEndpointMethods,
+} from '../src/runtime'
 import type { EndpointIdempotencyPolicy } from '../src/runtime'
 
 vi.mock('#nuxt-endpoints/options', () => ({
@@ -177,3 +182,81 @@ describe('idempotency policy module validation at Nitro startup', () => {
 function route(path: string, method: string, handler: object) {
   return { route: path, method, load: async () => handler }
 }
+
+describe('method-group startup handling', () => {
+  it('collects every declared method of a defineEndpointMethods() group', async () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ operation: 'getMulti' }),
+      put: defineEndpoint({ operation: 'putMulti' }),
+    })
+    const dispatcher = defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ ok: true }),
+      put: () => ({ ok: true }),
+    })
+
+    const extracted = await extractEndpoints([
+      route('/api/multi', 'get', dispatcher),
+      route('/api/multi', 'put', dispatcher),
+    ])
+
+    expect(extracted).toHaveLength(2)
+    expect(extracted.map((endpoint) => endpoint.definition.operation)).toEqual([
+      'getMulti',
+      'putMulti',
+    ])
+  })
+
+  it('applies idempotency runtime-gap validation per group member independently', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ operation: 'getMulti' }),
+      post: defineEndpoint({ operation: 'postMulti' }).idempotency({
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      }),
+    })
+    const dispatcher = defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ ok: true }),
+      post: () => ({ ok: true }),
+    })
+
+    await expect(
+      extractEndpoints([
+        route('/api/multi', 'get', dispatcher),
+        route('/api/multi', 'post', dispatcher),
+      ]),
+    ).resolves.toHaveLength(2)
+  })
+
+  it('fails startup when an idempotent group member is missing runtime options', async () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ operation: 'getMulti' }),
+      post: defineEndpoint({ operation: 'postMulti' }).idempotency({ scope: () => 'public' }),
+    })
+    const dispatcher = defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ ok: true }),
+      post: () => ({ ok: true }),
+    })
+
+    await expect(
+      extractEndpoints([
+        route('/api/multi', 'get', dispatcher),
+        route('/api/multi', 'post', dispatcher),
+      ]),
+    ).rejects.toThrow(/missing runtime options: storage, authorization/)
+  })
+
+  it('fails startup when a manifest entry declares a method absent from its group', async () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ operation: 'getMulti' }),
+    })
+    const dispatcher = defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ ok: true }),
+    })
+
+    await expect(extractEndpoints([route('/api/multi', 'delete', dispatcher)])).rejects.toThrow(
+      /has no matching method in its defineEndpointMethods\(\) group/,
+    )
+  })
+})

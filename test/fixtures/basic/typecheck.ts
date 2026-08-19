@@ -174,6 +174,26 @@ async function checkClient() {
     userResultOperationState.data.value.body.id.toFixed()
   }
 
+  // Multi-method group: every declared method is callable on the one path,
+  // and each carries its own request and response contract.
+  const multiGet = await client('/api/multi', { method: 'get', query: { name: 'nuxt' } })
+  multiGet.name.toUpperCase()
+
+  const multiPut = await client('/api/multi', { method: 'put', body: { name: 'nuxt' } })
+  multiPut.name.toUpperCase()
+
+  const multiGetByOperation = await client('getMulti', { query: { name: 'nuxt' } })
+  multiGetByOperation.name.toUpperCase()
+
+  const multiPutByOperation = await client('putMulti', { body: { name: 'nuxt' } })
+  multiPutByOperation.name.toUpperCase()
+
+  // @ts-expect-error delete is not declared on the group.
+  await client('/api/multi', { method: 'delete' })
+
+  // @ts-expect-error the put member's body follows its own schema.
+  await client('/api/multi', { method: 'put', body: { name: 1 } })
+
   const searchState = await useClient('/api/search', {
     method: 'get',
     query: { q: 'nuxt' },
@@ -198,6 +218,11 @@ const userPathResponse: $EndpointPathResponse<'/api/users/:id', 'get'> = {
 const searchPath: EndpointPath = '/api/search'
 const searchMethod: EndpointMethod<'/api/search'> = 'get'
 
+// A group contributes one entry per declared method, so the path's method
+// union carries both.
+const multiGetMethod: EndpointMethod<'/api/multi'> = 'get'
+const multiPutMethod: EndpointMethod<'/api/multi'> = 'put'
+
 const invalidUserResponse: $EndpointResponse<'getUser'> = {
   // @ts-expect-error response id is generated from the endpoint response schema and must be a number.
   id: 'wrong',
@@ -209,4 +234,6 @@ void userResponse
 void userPathResponse
 void searchPath
 void searchMethod
+void multiGetMethod
+void multiPutMethod
 void invalidUserResponse

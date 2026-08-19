@@ -106,7 +106,16 @@ export function hasEndpointDefinition(fileContent: string): boolean {
     while (index < fileContent.length && isIdentifierPart(fileContent[index])) {
       index += 1
     }
-    if (fileContent.slice(identifierStart, index) !== 'defineEndpoint') {
+    const identifier = fileContent.slice(identifierStart, index)
+    // `defineEndpointMethods(` is included alongside `defineEndpoint(` so an
+    // inline method group (`defineEndpointMethods({...})` declared in the
+    // same route file as its `defineEndpointMethodHandlers()` call) is
+    // detected as co-located, exactly like a single inline `defineEndpoint()`.
+    // The identifier scan above always consumes a full token before this
+    // comparison runs, so `defineEndpointMethodHandlers` (which contains
+    // `defineEndpointMethods` as a prefix) never matches here by accident —
+    // covered by a dedicated regression test.
+    if (identifier !== 'defineEndpoint' && identifier !== 'defineEndpointMethods') {
       continue
     }
 
@@ -178,7 +187,12 @@ function findEndpointHandlerArgument(fileContent: string): HandlerArgumentAnalys
     while (index < fileContent.length && isIdentifierPart(fileContent[index])) {
       index += 1
     }
-    if (fileContent.slice(identifierStart, index) !== 'defineEndpointHandler') {
+    const identifier = fileContent.slice(identifierStart, index)
+    // `defineEndpointMethodHandlers(` is included alongside
+    // `defineEndpointHandler(` so a method group's handler map — its first
+    // argument, the `defineEndpointMethods()` return value — is discovered
+    // the same way a single endpoint's contract argument is.
+    if (identifier !== 'defineEndpointHandler' && identifier !== 'defineEndpointMethodHandlers') {
       continue
     }
 
@@ -257,8 +271,16 @@ function readExportedMember(module: unknown, importedName: string): unknown {
   return importedName === 'default' ? exports.default : exports[importedName]
 }
 
+// Accepts both carrier shapes an imported contract module can export: a
+// single `defineEndpoint()` result (`definition`) and a
+// `defineEndpointMethods()` group (`__endpoint_methods__: true`, `methods`).
 function isEndpointCarrierCandidate(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && 'definition' in value
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('definition' in value ||
+      (value as { __endpoint_methods__?: unknown }).__endpoint_methods__ === true)
+  )
 }
 
 export function skipTrivia(source: string, start: number): number {

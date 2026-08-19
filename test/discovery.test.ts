@@ -28,6 +28,35 @@ describe('analyzeEndpointContractSource', () => {
     ).toEqual({ kind: 'co-located' })
   })
 
+  it('reports co-located for an inline defineEndpointMethods() group', () => {
+    expect(
+      analyzeEndpointContractSource(`
+        export const endpoints = defineEndpointMethods({
+          get: defineEndpoint({ operation: 'getMulti' }),
+          put: defineEndpoint({ operation: 'putMulti' }),
+        })
+
+        export default defineEndpointMethodHandlers(endpoints, {
+          get: () => ({ ok: true }),
+          put: () => ({ ok: true }),
+        })
+      `),
+    ).toEqual({ kind: 'co-located' })
+  })
+
+  it('resolves a named import passed to defineEndpointMethodHandlers as the group contract', () => {
+    expect(
+      analyzeEndpointContractSource(`
+        import { endpoints } from './contract'
+
+        export default defineEndpointMethodHandlers(endpoints, {
+          get: () => ({ ok: true }),
+          put: () => ({ ok: true }),
+        })
+      `),
+    ).toEqual({ kind: 'imported', specifier: './contract', importedName: 'endpoints' })
+  })
+
   it('resolves a named import passed to defineEndpointHandler', () => {
     expect(
       analyzeEndpointContractSource(`
@@ -248,6 +277,37 @@ describe('resolveEndpointCarrierSource', () => {
     )
   })
 
+  it('never loads the route module when a method group is imported from a contract module', async () => {
+    const carrier = {
+      __endpoint_methods__: true,
+      methods: {
+        get: { definition: { operation: 'getMulti' } },
+        put: { definition: { operation: 'putMulti' } },
+      },
+    }
+    const loadModule = vi.fn(async (path: string) =>
+      path === '/server/contracts/multi.ts'
+        ? { module: { endpoints: carrier } }
+        : { error: new Error('unexpected') },
+    )
+    const resolveImport = vi.fn(() => '/server/contracts/multi.ts')
+    const loaders = createLoaders({ loadModule, resolveImport })
+
+    const result = await resolveEndpointCarrierSource(
+      `
+        import { endpoints } from './contracts/multi'
+        export default defineEndpointMethodHandlers(endpoints, { get: () => ({}), put: () => ({}) })
+      `,
+      '/server/api/multi.ts',
+      loaders,
+    )
+
+    expect(result).toEqual({ kind: 'contract', carrier })
+    expect(loadModule).toHaveBeenCalledTimes(1)
+    expect(loadModule).toHaveBeenCalledWith('/server/contracts/multi.ts')
+    expect(loadModule).not.toHaveBeenCalledWith('/server/api/multi.ts')
+  })
+
   it('extracts the default export as the carrier', async () => {
     const carrier = { definition: { operation: 'getUser' } }
     const loadModule = vi.fn(async () => ({ module: { default: carrier } }))
@@ -308,6 +368,29 @@ describe('endpoint source detection', () => {
     expect(hasEndpointDefinition(`const text = 'defineEndpoint({})'`)).toBe(false)
     expect(hasEndpointDefinition('const text = `defineEndpoint({})`')).toBe(false)
     expect(hasEndpointDefinition(`factory.defineEndpoint({})`)).toBe(false)
+  })
+
+  it('detects an inline defineEndpointMethods() group call', () => {
+    expect(
+      hasEndpointDefinition(`
+      export const endpoints = defineEndpointMethods({
+        get: defineEndpoint({ operation: 'getMulti' }),
+      })
+    `),
+    ).toBe(true)
+  })
+
+  it('does not match defineEndpointMethodHandlers even though it starts with defineEndpointMethods', () => {
+    // A route file that only imports its group contract calls
+    // defineEndpointMethodHandlers() but never defineEndpointMethods()
+    // itself; hasEndpointDefinition must stay false so this route is treated
+    // as an imported-contract case, not a co-located one.
+    expect(
+      hasEndpointDefinition(`
+      import { endpoints } from './contract'
+      export default defineEndpointMethodHandlers(endpoints, { get: () => ({ ok: true }) })
+    `),
+    ).toBe(false)
   })
 })
 
