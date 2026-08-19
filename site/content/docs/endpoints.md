@@ -206,10 +206,10 @@ Two caveats:
 
 Two extension points sit on every endpoint, and both are declared the same way
 at either scope: as runtime options on `defineEndpoint()`, or application-wide
-in `server/endpoints/hooks.ts`.
+in `server/endpoints/runtime.ts`.
 
 ```ts
-// server/endpoints/hooks.ts
+// server/endpoints/runtime.ts
 export default defineEndpointRuntime({
   onValidationError: ({ kind, source, event }) => ({
     status: 422,
@@ -278,8 +278,10 @@ validated `params`, `query`, `headers`, and `body` are all available.
 
 `server/endpoints/runtime.ts` holds every application-wide endpoint setting
 that `nuxt.config.ts` cannot: module options reach the server as JSON, so they
-cannot carry functions. The [central idempotency policy](/docs/idempotency#central-policy)
-lives in the same file, under its own key.
+cannot carry functions or the connections those functions close over. Two more
+settings live in the same file under their own keys — the
+[central idempotency policy](/docs/idempotency#central-policy) and
+[OpenAPI document metadata](/docs/openapi#document-metadata).
 
 To use a different path, set
 `endpoints: { runtime: { path: 'server/policies/endpoints.ts' } }`.

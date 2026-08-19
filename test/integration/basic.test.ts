@@ -152,6 +152,20 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(received).toBe('id;name\nu_1;Tom\n')
     })
 
+    it('layers application-owned document metadata into the OpenAPI schema', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+
+      // `document` is deep-merged, so the generated operations survive it.
+      expect(schema.servers).toEqual([{ url: 'https://api.example.test' }])
+      expect(schema.components.securitySchemes.bearerAuth).toEqual({
+        type: 'http',
+        scheme: 'bearer',
+      })
+      expect(schema.paths['/api/users/{id}'].get.operationId).toBe('getUser')
+      // `extend` runs last, on the merged document.
+      expect(schema.security).toEqual([{ bearerAuth: [] }])
+    })
+
     it('documents a stream response in the OpenAPI schema', async () => {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
       const response = schema.paths['/api/export'].get.responses['200']

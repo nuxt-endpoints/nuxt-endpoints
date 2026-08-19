@@ -66,6 +66,12 @@ export async function initializeEndpointHandlers(
   return createOpenApiDocument(endpoints, {
     title: options.openApi.title,
     version: options.openApi.version,
+    // `document` and `extend` cannot come from `nuxt.config.ts`: one carries
+    // arbitrary nested values and the other is a function, and module options
+    // reach the server as JSON. They arrive from the endpoint runtime file for
+    // the same reason the idempotency policy does.
+    document: runtime?.openApi?.document,
+    extend: runtime?.openApi?.extend,
   })
 }
 

@@ -159,6 +159,47 @@ describe('idempotency runtime option resolution at startup', () => {
   })
 })
 
+describe('OpenAPI document layering from the endpoint runtime file', () => {
+  const enabledOpenApiOptions = {
+    openApi: { enabled: true, path: '/schema', title: 'Test', version: '1.0.0' },
+  }
+
+  it('merges the runtime file document patch and runs extend last', async () => {
+    const endpoint = defineEndpoint({ operation: 'getItem' }).handler(() => ({ ok: true }))
+    const runtime: EndpointRuntime = {
+      openApi: {
+        document: { servers: [{ url: 'https://api.example.test' }] },
+        extend: (document) => {
+          document.security = [{ bearerAuth: [] }]
+        },
+      },
+    }
+
+    const document = await initializeEndpointHandlers(
+      [route('/api/items', 'get', endpoint)],
+      enabledOpenApiOptions,
+      runtime,
+    )
+
+    expect(document?.servers).toEqual([{ url: 'https://api.example.test' }])
+    expect(document?.security).toEqual([{ bearerAuth: [] }])
+    // The patch must not displace what the contracts generated.
+    expect(document?.paths['/api/items']?.get?.operationId).toBe('getItem')
+  })
+
+  it('generates the document unchanged when the runtime file declares no openApi', async () => {
+    const endpoint = defineEndpoint({ operation: 'getItem' }).handler(() => ({ ok: true }))
+
+    const document = await initializeEndpointHandlers(
+      [route('/api/items', 'get', endpoint)],
+      enabledOpenApiOptions,
+    )
+
+    expect(document?.servers).toBeUndefined()
+    expect(document?.paths['/api/items']?.get?.operationId).toBe('getItem')
+  })
+})
+
 describe('idempotency policy module validation at Nitro startup', () => {
   it('fails startup when the policy file default-exports an invalid shape', async () => {
     vi.resetModules()

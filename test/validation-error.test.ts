@@ -125,6 +125,18 @@ describe('defineEndpointRuntime', () => {
       /must be a function/i,
     )
   })
+
+  it('rejects a malformed openApi section', () => {
+    expect(() => defineEndpointRuntime({ openApi: 'x' as never })).toThrow(
+      /"openApi" must be an object/,
+    )
+    expect(() => defineEndpointRuntime({ openApi: { document: 'x' as never } })).toThrow(
+      /"openApi.document" must be an object/,
+    )
+    expect(() => defineEndpointRuntime({ openApi: { extend: 'x' as never } })).toThrow(
+      /"openApi.extend" must be a function/,
+    )
+  })
 })
 
 describe('wrapHandler', () => {

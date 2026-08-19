@@ -23,4 +23,17 @@ export default defineEndpointRuntime({
     scope: () => 'integration-fixture',
     authorization: 'middleware',
   },
+  openApi: {
+    document: {
+      servers: [{ url: 'https://api.example.test' }],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer' },
+        },
+      },
+    },
+    extend: (document) => {
+      document.security = [{ bearerAuth: [] }]
+    },
+  },
 })

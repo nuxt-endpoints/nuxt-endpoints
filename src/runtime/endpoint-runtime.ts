@@ -6,6 +6,7 @@
 // so moving one between scopes is a move rather than a rewrite.
 import type { EndpointDefinition } from './contract'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
+import type { OpenApiDocument, OpenApiDocumentPatch } from './openapi'
 import type { EndpointHandlerWrapper } from './interceptor'
 import type { EndpointValidationErrorHandler } from './validation-error'
 
@@ -26,6 +27,30 @@ export type EndpointRuntime = {
    * protection with `.idempotency()`. Any endpoint may override each part.
    */
   idempotency?: EndpointIdempotencyPolicy
+  /**
+   * Everything the generated OpenAPI document needs that no endpoint contract
+   * can supply: servers, security schemes, tags, and any last-mile edit.
+   */
+  openApi?: EndpointOpenApiRuntime
+}
+
+/**
+ * The document-level half of OpenAPI generation. Endpoint contracts describe
+ * operations; nothing about an endpoint says where the API is deployed or how
+ * it is authenticated, so those belong to the application and live here.
+ */
+export type EndpointOpenApiRuntime = {
+  /**
+   * Deep-merged into the generated document before it is served. Use it for
+   * declarative additions: `servers`, `components.securitySchemes`, `tags`.
+   */
+  document?: OpenApiDocumentPatch
+  /**
+   * Runs last, on the merged document, for anything a patch cannot express -
+   * reading generated operation ids, or attaching `security` to specific
+   * paths. Mutate the document in place.
+   */
+  extend?: (document: OpenApiDocument) => void
 }
 
 export function defineEndpointRuntime(runtime: EndpointRuntime): EndpointRuntime {
@@ -40,6 +65,17 @@ export function defineEndpointRuntime(runtime: EndpointRuntime): EndpointRuntime
   }
   if (runtime.idempotency !== undefined && typeof runtime.idempotency !== 'object') {
     throw new TypeError('defineEndpointRuntime(): "idempotency" must be a policy object.')
+  }
+  if (runtime.openApi !== undefined) {
+    if (typeof runtime.openApi !== 'object' || runtime.openApi === null) {
+      throw new TypeError('defineEndpointRuntime(): "openApi" must be an object.')
+    }
+    if (runtime.openApi.document !== undefined && typeof runtime.openApi.document !== 'object') {
+      throw new TypeError('defineEndpointRuntime(): "openApi.document" must be an object.')
+    }
+    if (runtime.openApi.extend !== undefined && typeof runtime.openApi.extend !== 'function') {
+      throw new TypeError('defineEndpointRuntime(): "openApi.extend" must be a function.')
+    }
   }
   return runtime
 }

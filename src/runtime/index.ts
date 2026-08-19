@@ -108,7 +108,7 @@ export type {
 export { createMemoryIdempotencyStorage } from './idempotency'
 export { defineEndpoint, defineEndpointHandler } from './endpoint'
 export { defineEndpointRuntime } from './endpoint-runtime'
-export type { EndpointRuntime } from './endpoint-runtime'
+export type { EndpointOpenApiRuntime, EndpointRuntime } from './endpoint-runtime'
 export type {
   EndpointHandlerNext,
   EndpointHandlerWrapper,

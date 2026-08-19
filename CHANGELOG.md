@@ -4,6 +4,13 @@
 
 ### Added
 
+- Application-owned OpenAPI document metadata, under an `openApi` key on
+  `server/endpoints/runtime.ts`. `document` is deep-merged into the generated
+  document and `extend` runs last on the merged result, which is how servers,
+  security schemes, tags, and any last-mile edit reach the schema. Both existed
+  on `createOpenApiDocument` already but were unreachable from a Nuxt app: the
+  document is built inside the server plugin, and neither a nested patch nor a
+  callback can travel through JSON-serialized module options.
 - Stream response declarations. A status declared as
   `{ stream: true, contentType, schema? }` keeps a streaming route inside its
   contract instead of forcing it to drop `responses` and become an untyped raw
