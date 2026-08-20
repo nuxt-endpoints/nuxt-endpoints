@@ -126,6 +126,18 @@ describe('Nitro built-in OpenAPI overlap', () => {
     expect(warn.mock.calls[0]![0]).toContain('/docs/openapi.json')
   })
 
+  it('compares the two routes the way h3 registers them', () => {
+    const warn = vi.fn()
+
+    expect(() =>
+      assertOpenApiRoutesDoNotOverlap(
+        nitro({ dev: true, experimental: { openAPI: true }, openAPI: { route: '/schema/' } }),
+        'schema',
+        warn,
+      ),
+    ).toThrow(/same route this module serves its own document on/)
+  })
+
   it('fails the build when both documents claim the same route', () => {
     const warn = vi.fn()
 

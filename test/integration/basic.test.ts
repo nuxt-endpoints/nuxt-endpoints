@@ -152,6 +152,21 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(received).toBe('id;name\nu_1;Tom\n')
     })
 
+    it('serves an endpoint whose route came from nitro.handlers, not from scanning', async () => {
+      // The handler file lives outside every scanned directory, so this route
+      // exists only because discovery reads Nitro's configured handlers too.
+      await expect($fetch('/custom/report?id=r_1')).resolves.toEqual({
+        id: 'r_1',
+        source: 'custom-route',
+      })
+
+      const validationFailure = await fetch('/custom/report')
+      expect(validationFailure.status).toBe(422)
+
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      expect(schema.paths['/custom/report'].get.operationId).toBe('getCustomReport')
+    })
+
     it('layers application-owned document metadata into the OpenAPI schema', async () => {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
 

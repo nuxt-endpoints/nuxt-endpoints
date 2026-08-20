@@ -674,6 +674,14 @@ export function getEndpointFromCarrier(
 // Two documents at two routes is legal, so it warns; two documents at one
 // route is not, because whichever handler Nitro registered last silently wins.
 //
+// Deliberately narrow: this compares two fixed literal paths that come from two
+// config keys, and is not a general route-conflict detector. Both are always
+// static - neither key accepts a parameter or a wildcard - so comparing them
+// after the same normalization h3 applies at registration is exact for this
+// pair. Any wider claim would need Nitro's whole handler list plus its route
+// matcher, and would still not be able to speak for handlers a plugin
+// registers at runtime.
+//
 // Exported for focused unit testing without a Nitro instance.
 export function assertOpenApiRoutesDoNotOverlap(
   nitro: NitroWithEndpointHandlers,
@@ -684,7 +692,7 @@ export function assertOpenApiRoutesDoNotOverlap(
   if (!nitroRoute) {
     return
   }
-  if (nitroRoute === schemaPath) {
+  if (comparableRoutePath(nitroRoute) === comparableRoutePath(schemaPath)) {
     throw new Error(
       `[nuxt-endpoints] Nitro's built-in OpenAPI document is configured for ${nitroRoute}, the same route this module serves its own document on. Two handlers on one route leave which document is served up to registration order. Change endpoints.openApi.path or nitro.openAPI.route.`,
     )
@@ -706,6 +714,14 @@ function resolveNitroOpenApiRoute(nitro: NitroWithEndpointHandlers): string | un
     return undefined
   }
   return options.openAPI?.route || '/_openapi.json'
+}
+
+// h3 registers every route with its trailing slash removed, so `/schema/` and
+// `/schema` are the same route to the router even though they are different
+// strings in config.
+function comparableRoutePath(path: string): string {
+  const withLeadingSlash = normalizePath(path)
+  return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash
 }
 
 // Read from the evaluated contract rather than from source text: a stream

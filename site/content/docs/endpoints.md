@@ -427,6 +427,48 @@ export const endpoint = defineEndpoint(
 )
 ```
 
+## Routes registered by configuration
+
+Discovery does not depend on file scanning. It reads Nitro's configured handlers alongside its scanned ones, so a route registered through `nitro.handlers` — or by another Nuxt module calling `addServerHandler` — is an ordinary endpoint: validated, in the generated client, typed identically, and in the OpenAPI document.
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  nitro: {
+    handlers: [
+      {
+        route: '/custom/report',
+        method: 'get',
+        handler: resolve('server/custom-routes/report.get.ts'),
+      },
+    ],
+  },
+})
+```
+
+```ts
+// server/custom-routes/report.get.ts — outside every scanned directory
+export const endpoint = defineEndpoint({
+  operation: 'getCustomReport',
+  query: z.object({ id: z.string() }),
+  responses: {
+    200: z.object({ id: z.string(), source: z.literal('custom-route') }),
+  },
+})
+
+export default defineEndpointHandler(endpoint, ({ query, respond }) => {
+  return respond(200, { id: query.id, source: 'custom-route' })
+})
+```
+
+```ts
+const report = await $endpoint('getCustomReport', { query: { id: 'r_1' } })
+```
+
+One requirement: the handler entry's `handler` must be a path to a real source file with a JS or TS extension. That is what discovery evaluates to read the contract, so a handler given as an inline function, or as a virtual module specifier, is skipped rather than guessed at — it still serves requests, it is just not an endpoint.
+
+The route template is yours to choose and does not have to sit under `/api`. It is still subject to the [route template limits](/docs/limits): no catch-all and no optional parameter, because the generated client could not build those URLs.
+
 ## Separate contract files
 
 Endpoint metadata is collected during Nuxt type generation by evaluating the module that defines the contract. With a co-located contract, that module is the route file itself — so its top-level code runs at build time too. Routes whose top-level code is heavy (opens connections, reads required environment) can move the contract to a sibling `.endpoint-contract` file instead, keeping it right next to the handler:

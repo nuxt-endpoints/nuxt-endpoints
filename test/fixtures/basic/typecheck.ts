@@ -205,6 +205,15 @@ async function checkClient() {
   // @ts-expect-error a streaming route's body is never the parsed 404 shape.
   void exportedResult.body.message
 
+  // A route registered through `nitro.handlers` is typed exactly like a
+  // scanned one - the generated client cannot tell them apart.
+  const customReport = await client('getCustomReport', { query: { id: 'r_1' } })
+  customReport.id.toUpperCase()
+  customReport.source.toUpperCase()
+
+  // @ts-expect-error query.id is required by the endpoint contract.
+  await client('getCustomReport', { query: {} })
+
   const searchState = await useClient('/api/search', {
     method: 'get',
     query: { q: 'nuxt' },

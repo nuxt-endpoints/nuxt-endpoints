@@ -11,6 +11,11 @@
   on `createOpenApiDocument` already but were unreachable from a Nuxt app: the
   document is built inside the server plugin, and neither a nested patch nor a
   callback can travel through JSON-serialized module options.
+- Documentation for endpoints on routes registered through `nitro.handlers` or
+  `addServerHandler` rather than by file scanning. Discovery already read
+  Nitro's configured handlers alongside its scanned ones, so this was supported
+  and unstated; it is now documented, covered by a fixture outside every
+  scanned directory, and type-checked through the generated client.
 - A build-time report on Nitro's own OpenAPI document. With
   `nitro.experimental.openAPI` enabled, two documents are served at two routes;
   the module now warns and names both, explaining that Nitro's cannot see
