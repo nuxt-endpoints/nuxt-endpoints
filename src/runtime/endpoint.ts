@@ -9,8 +9,8 @@ import type {
   HandlerReturn,
   HasEndpointResponses,
   IsSuccessStatus,
+  MediaResponseContract,
   ResponseContract,
-  StreamResponseContract,
   UnknownIfNever,
   WidenCapturedReturn,
 } from './contract'
@@ -37,11 +37,13 @@ import type { RuntimeEvent } from './h3-adapter'
 import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
+import { negotiateMediaType } from './accept'
 import {
   createResponse,
-  defaultStreamContentType,
+  isJsonMediaType,
+  isMediaResponseContract,
   isStatusResponse,
-  isStreamResponseContract,
+  mediaTypesOf,
 } from './response'
 import type { StatusResponse } from './response'
 import type {
@@ -199,7 +201,14 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       idempotencyOptions !== undefined
         ? (idempotencyRuntimeMarker ?? createIdempotencyRuntimeMarker(() => false))
         : false
+    this.offeredMediaTypes = offeredResponseMediaTypes(definition)
+    // One representation is not a negotiation: the endpoint sends what it
+    // declared regardless of `Accept`, so neither the 406 nor `Vary` applies.
+    this.negotiates = this.offeredMediaTypes.length > 1
   }
+
+  private readonly offeredMediaTypes: readonly string[]
+  private readonly negotiates: boolean
 
   // Two overloads (rather than one generic signature with a default type
   // param) because a default type param on an optional parameter defeats
@@ -281,6 +290,8 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           this.definition,
           event,
           idempotencyOptions?.headerName,
+          this.offeredMediaTypes,
+          this.negotiates,
         )
         if (!contextResult.success) {
           return applyValidationErrorResponse(
@@ -290,6 +301,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
               this.options.onValidationError,
               appValidationErrorHandler,
             ),
+            this.negotiates,
           ) as EndpointHandlerSuccessBody<DEFINITION, unknown>
         }
 
@@ -343,6 +355,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     handler: (context: EndpointContext<DEFINITION>) => unknown,
     context: EndpointContext<DEFINITION>,
   ): Promise<EndpointRuntimeResponse> {
+    const negotiated = context.responseMediaType as string | undefined
     const result = await handler(context)
 
     if (isStatusResponse(result)) {
@@ -350,7 +363,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       return {
         status: result.status,
         body: result.body,
-        headers: this.withStreamContentType(result.status, result.headers),
+        headers: this.withResponseHeaders(result.status, negotiated, result.headers),
         explicitStatus: true,
       }
     }
@@ -359,31 +372,40 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     return {
       status: 200,
       body: result,
-      headers: this.withStreamContentType(200, undefined),
+      headers: this.withResponseHeaders(200, negotiated, undefined),
       explicitStatus: false,
     }
   }
 
   /**
-   * Labels a stream response with the media type its contract declares. The
-   * handler still wins: a media type it set through `respond()` options - or
-   * on a native `Response` it returns - is the more specific answer, and a
-   * declaration is only ever the default. Non-stream statuses are untouched;
-   * their `contentType` is documentation for the OpenAPI document, and their
-   * bodies are always serialized as JSON.
+   * Sends the media type this status promises - the negotiated one for a media
+   * response, `contentType` for a validated JSON body that is not plain
+   * `application/json`. Applied to the response rather than merely documented,
+   * which is the difference between a contract and a comment.
+   *
+   * The handler still wins: a media type it set through `respond()` options,
+   * or on a native `Response` it returns, is the more specific answer, and a
+   * declaration is only ever the default.
+   *
+   * `Vary: Accept` is added whenever this endpoint negotiates at all, on every
+   * status. It describes the route, not one answer: a cache that saw only the
+   * CSV response must still know the JSON one exists.
    */
-  private withStreamContentType(
+  private withResponseHeaders(
     status: number,
+    negotiated: string | undefined,
     headers: Readonly<Record<string, string>> | undefined,
   ): Readonly<Record<string, string>> | undefined {
-    const contract = getResponseContract(this.definition, status)
-    if (!isStreamResponseContract(contract)) {
+    const declared = getDeclaredContentType(this.definition, status, negotiated)
+    const hasHandlerContentType =
+      headers && Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')
+    const contentType =
+      declared && !hasHandlerContentType ? { 'content-type': declared } : undefined
+
+    if (!this.negotiates && !contentType) {
       return headers
     }
-    if (headers && Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')) {
-      return headers
-    }
-    return { 'content-type': contract.contentType ?? defaultStreamContentType, ...headers }
+    return withVaryOnAccept(this.negotiates, { ...contentType, ...headers })
   }
 
   private async validateResponse(status: number, body: unknown) {
@@ -403,9 +425,10 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       })
     }
 
-    // A stream is declared, never checked: reading it here to validate it
-    // would consume the very thing the handler is streaming.
-    if (isStreamResponseContract(contract)) {
+    // A media response is declared, never checked. There is no schema to
+    // check it against, and for a stream, reading it here would consume the
+    // very thing the handler is streaming.
+    if (isMediaResponseContract(contract)) {
       return
     }
 
@@ -483,10 +506,11 @@ function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void 
   }
 }
 
-// TypeScript's excess-property check is per-union-member, so a literal that
-// mixes `stream: true` with the validated form's `body` satisfies
-// `ResponseContract` and would then silently have its `body` ignored. Caught
-// here instead, at definition time, which is also build time.
+// The two response forms are kept apart here rather than by the type system
+// alone: TypeScript's excess-property check is per-union-member, so a literal
+// mixing keys from both satisfies `ResponseContract` and would then have half
+// of itself silently ignored. Checked at definition time, which is also build
+// time.
 function validateEndpointResponseDefinitions(
   response: EndpointDefinition['response'],
   responses: EndpointDefinition['responses'],
@@ -498,18 +522,72 @@ function validateEndpointResponseDefinitions(
       : []
 
   for (const [status, contract] of declared) {
-    if (!isStreamResponseContract(contract)) {
+    if (isMediaResponseContract(contract)) {
+      if ('body' in contract) {
+        throw new TypeError(
+          `Response ${status} declares both media and body. A media response is never validated - describe it with schema instead, which documents it without claiming it is checked.`,
+        )
+      }
+      validateMediaTypeDeclarations(status, mediaTypesOf(contract))
       continue
     }
-    if ('body' in contract) {
+
+    const contentType = getValidatedContentType(contract)
+    if (contentType === undefined) {
+      continue
+    }
+    if (typeof contentType !== 'string') {
+      throw new TypeError(`Response ${status} declares a contentType that is not a string.`)
+    }
+    // A validated body is serialized as JSON, so a non-JSON media type here
+    // would describe one thing and send another. `media` is the door for that,
+    // and it is named in the message rather than left to be discovered.
+    if (!isJsonMediaType(contentType)) {
       throw new TypeError(
-        `Response ${status} declares both stream: true and body. A stream is never validated - describe it with schema instead, which documents it without claiming it is checked.`,
+        `Response ${status} declares contentType '${contentType}' on a validated body, which is always sent as JSON. Declare media: '${contentType}' instead - it sends what the handler returns and documents that media type.`,
       )
     }
-    if (contract.contentType !== undefined && typeof contract.contentType !== 'string') {
-      throw new TypeError(`Response ${status} declares a stream contentType that is not a string.`)
-    }
   }
+}
+
+/**
+ * Checks declared media types the way the request side checks its media-type
+ * map keys. Without this, `media: ['csv', 'json']` or the comma-joined
+ * `media: 'text/csv, application/json'` reach the runtime intact and turn into
+ * a permanent 406 or a nonsense `Content-Type` - a typo becoming a silent
+ * outage rather than a build error.
+ */
+function validateMediaTypeDeclarations(status: string, mediaTypes: readonly string[]): void {
+  if (mediaTypes.length === 0) {
+    throw new TypeError(`Response ${status} declares an empty list of media types.`)
+  }
+
+  const seen = new Set<string>()
+  for (const mediaType of mediaTypes) {
+    if (typeof mediaType !== 'string' || mediaType.trim() === '') {
+      throw new TypeError(`Response ${status} declares an empty media type.`)
+    }
+    if (mediaType !== mediaType.trim() || mediaType !== mediaType.toLowerCase()) {
+      throw new TypeError(
+        `Response ${status} declares media type "${mediaType}", which must be lowercase and free of surrounding whitespace.`,
+      )
+    }
+    if (!/^[\w.+-]+\/[\w.+-]+$/.test(mediaType)) {
+      throw new TypeError(
+        `Response ${status} declares "${mediaType}", which is not a single type/subtype media type. Declare each one as its own array entry.`,
+      )
+    }
+    if (seen.has(mediaType)) {
+      throw new TypeError(`Response ${status} declares media type "${mediaType}" more than once.`)
+    }
+    seen.add(mediaType)
+  }
+}
+
+function getValidatedContentType(contract: ResponseContract): unknown {
+  return typeof contract === 'object' && contract !== null && 'contentType' in contract
+    ? contract.contentType
+    : undefined
 }
 
 // One signature, deliberately not overloaded: any preceding overload defeats
@@ -545,6 +623,8 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   definition: DEFINITION,
   event: RuntimeEvent,
   excludedHeaderName?: string,
+  offeredMediaTypes: readonly string[] = [],
+  negotiates = false,
 ): Promise<BuildContextResult<DEFINITION>> {
   const params = await parsePart(definition.params, event.context.params || {})
   if (!params.success) return validationFailure(event, 'params', params.issues)
@@ -578,6 +658,32 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   }
   if (!body.success) return validationFailure(event, 'body', body.issues)
 
+  // Negotiated before the handler runs, and refused there too: a request that
+  // accepts nothing this endpoint can produce is answered without executing a
+  // handler whose output could never be sent.
+  let responseMediaType: string | undefined
+  if (negotiates) {
+    const accept = getRuntimeRequestHeaders(event).accept ?? null
+    responseMediaType = negotiateMediaType(accept, offeredMediaTypes)
+    if (responseMediaType === undefined) {
+      return {
+        success: false,
+        failure: {
+          kind: 'accept',
+          source: 'headers',
+          received: accept,
+          supportedMediaTypes: offeredMediaTypes,
+          event,
+        },
+      }
+    }
+  } else {
+    // A single declared representation still reaches the handler here, so the
+    // field means the same thing whether or not the endpoint negotiates: what
+    // this response is being sent as.
+    responseMediaType = offeredMediaTypes[0]
+  }
+
   return {
     success: true,
     context: {
@@ -588,6 +694,7 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
       headers: headers.value,
       body: body.value,
       bodyMediaType,
+      responseMediaType,
       respond: createResponse,
     } as EndpointContext<DEFINITION>,
   }
@@ -653,6 +760,23 @@ function validationFailure(
 function defaultValidationErrorResponse(
   failure: EndpointValidationFailure,
 ): EndpointValidationErrorResponse {
+  if (failure.kind === 'accept') {
+    return {
+      status: 406,
+      statusText: 'Not Acceptable',
+      body: {
+        statusCode: 406,
+        statusMessage: 'Not Acceptable',
+        data: {
+          message: 'This endpoint cannot produce any media type the request accepts.',
+          received: failure.received,
+          supportedMediaTypes: [...failure.supportedMediaTypes],
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    }
+  }
+
   if (failure.kind === 'media-type') {
     return {
       status: 415,
@@ -701,10 +825,54 @@ function resolveValidationErrorResponse(
 function applyValidationErrorResponse(
   event: RuntimeEvent,
   response: EndpointValidationErrorResponse,
+  negotiates: boolean,
 ): unknown {
   setRuntimeResponseStatus(event, response.status, response.statusText)
-  setRuntimeResponseHeaders(event, { 'content-type': 'application/json', ...response.headers })
+  setRuntimeResponseHeaders(
+    event,
+    // A refusal varies by `Accept` as much as an answer does - the 406 most of
+    // all, since it is the response a cache must never reuse for a client that
+    // accepts something else.
+    withVaryOnAccept(negotiates, { 'content-type': 'application/json', ...response.headers }),
+  )
   return response.body
+}
+
+/**
+ * Adds `Accept` to `Vary` rather than replacing it. `Vary` lists the request
+ * fields an answer depends on, so a handler that declared its own
+ * (`Accept-Encoding`, say) is stating something additional, not something
+ * competing - letting either side win would drop a real dependency and hand
+ * caches a wrong answer. Case is normalized so a handler's `Vary` and this one
+ * cannot end up as two separate header entries.
+ */
+function withVaryOnAccept(
+  negotiates: boolean,
+  headers: Record<string, string>,
+): Record<string, string> {
+  if (!negotiates) {
+    return headers
+  }
+
+  const merged: Record<string, string> = {}
+  const declared: string[] = []
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'vary') {
+      declared.push(value)
+      continue
+    }
+    merged[name] = value
+  }
+
+  const fields = ['Accept']
+  for (const field of declared.join(',').split(',')) {
+    const trimmed = field.trim()
+    if (trimmed !== '' && !fields.some((known) => known.toLowerCase() === trimmed.toLowerCase())) {
+      fields.push(trimmed)
+    }
+  }
+  merged.vary = fields.join(', ')
+  return merged
 }
 
 function toRequestValidationIssue(issue: ValidationIssue): RequestValidationIssue {
@@ -815,6 +983,64 @@ function applyEndpointResponse(event: RuntimeEvent, response: EndpointRuntimeRes
   return response.body
 }
 
+// The media type this status promises, or `undefined` when it is plain
+// `application/json` and the HTTP layer's own default already says so.
+//
+// For a media response the negotiated type wins, but only when this status
+// actually offers it: a route can negotiate `text/csv` for its 200 and still
+// answer 404 with a JSON problem document, and that answer must not be
+// mislabelled as CSV.
+function getDeclaredContentType(
+  definition: EndpointDefinition,
+  status: number,
+  negotiated: string | undefined,
+): string | undefined {
+  const contract = getResponseContract(definition, status)
+  if (!contract) {
+    return undefined
+  }
+  if (isMediaResponseContract(contract)) {
+    const offered = mediaTypesOf(contract)
+    return negotiated && offered.includes(negotiated) ? negotiated : offered[0]
+  }
+  const contentType = getValidatedContentType(contract)
+  return typeof contentType === 'string' ? contentType : undefined
+}
+
+/**
+ * Every media type the endpoint can produce, across all of its statuses, in
+ * declaration order and de-duplicated. This is what `Accept` is negotiated
+ * against, and its order is the endpoint's own preference.
+ */
+function offeredResponseMediaTypes(definition: EndpointDefinition): readonly string[] {
+  const responses =
+    definition.responses ?? (definition.response ? { 200: definition.response } : undefined)
+  if (!responses) {
+    return []
+  }
+
+  const offered: string[] = []
+  for (const [status, contract] of Object.entries(responses)) {
+    // Success statuses only, matching `ResponseMediaTypes`: a media-typed
+    // error is not an alternative the caller picks between, and offering one
+    // would let a request negotiate its way into a 406.
+    if (!isSuccessStatusKey(status) || !isMediaResponseContract(contract)) {
+      continue
+    }
+    for (const mediaType of mediaTypesOf(contract)) {
+      if (!offered.includes(mediaType)) {
+        offered.push(mediaType)
+      }
+    }
+  }
+  return offered
+}
+
+function isSuccessStatusKey(status: string): boolean {
+  const parsed = Number(status)
+  return Number.isInteger(parsed) && parsed >= 200 && parsed < 300
+}
+
 function getResponseContract(
   definition: EndpointDefinition,
   status: number,
@@ -828,7 +1054,7 @@ function getResponseContract(
   return undefined
 }
 
-function getResponseBodySchema(contract: Exclude<ResponseContract, StreamResponseContract>) {
+function getResponseBodySchema(contract: Exclude<ResponseContract, MediaResponseContract>) {
   if (typeof contract === 'object' && contract !== null && 'body' in contract) {
     return contract.body
   }

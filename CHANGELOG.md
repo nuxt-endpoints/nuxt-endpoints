@@ -22,15 +22,38 @@
   endpoint contracts because `defineRouteMeta()` reads JSON literals only. If
   both are configured for the same route the build fails instead of leaving the
   served document up to handler registration order.
-- Stream response declarations. A status declared as
-  `{ stream: true, contentType, schema? }` keeps a streaming route inside its
-  contract instead of forcing it to drop `responses` and become an untyped raw
-  route: the status and its media type reach the OpenAPI document, the declared
-  media type is applied unless the handler sets its own, and the payload is
-  never validated — a stream cannot be buffered and checked without defeating
-  the reason it is a stream. The generated client treats such a route as
-  streaming end to end, telling the fetcher not to parse the body so callers
-  receive the live stream rather than a decoded copy of it.
+- Non-JSON response declarations, through one door. A status declared as
+  `{ media: '<type>', schema? }` keeps XML, CSV, file downloads, event streams,
+  and raw bytes inside the contract instead of forcing the route to drop
+  `responses` and become an untyped raw route: the media type reaches both the
+  wire and the OpenAPI document, and the payload is never validated — there is
+  no schema to check it against, and a stream cannot be buffered and checked
+  without defeating the reason it is a stream. The generated client treats such
+  a route as unparsed end to end, telling the fetcher not to read the body so
+  callers receive the live stream rather than a decoded copy of it.
+- `Accept`-based content negotiation for media responses. `media` accepts an
+  array, and the runtime selects per RFC 9110 — quality weights honored, a more
+  specific range overriding a wider one, `q=0` a refusal — then hands the choice
+  to the handler as `responseMediaType`, narrowed to the declared union. A
+  request that accepts nothing the endpoint can produce is refused with `406`
+  before the handler runs, through `onValidationError` like any other failure.
+  Every response of a negotiating endpoint carries `Vary: Accept`, and the
+  client's typed `accept` option is part of the TanStack Query cache key.
+  Declaration order is the endpoint's preference: it breaks ties and answers a
+  request that expresses none. This is the mirror image of a media-type request
+  body, and it is affordable here only because nothing on the response side is
+  typed by media type — negotiating a _validated_ body would still need an
+  answer to where non-JSON encoders come from.
+- Every framework-generated response is in the OpenAPI document, not just the
+  idempotency ones: the `400` any validating endpoint can answer with, the `415`
+  a media-type-map body can answer with, and the `406` a negotiating endpoint
+  can answer with. Each is derived from the contract alone, and a status the
+  author also declared is merged as a `oneOf` rather than hidden.
+- A validated response body may be labelled with a `+json` profile such as
+  `application/problem+json`, and that media type is now actually sent. It was
+  previously accepted, written into the OpenAPI document, and then silently
+  ignored at runtime, so the document claimed one media type while the response
+  carried `application/json`.
 - Two extension points on every endpoint, declared with the same key names at
   either scope — as runtime options on `defineEndpoint()`, or application-wide
   in `server/endpoints/runtime.ts`. `onValidationError` replaces the response
@@ -40,8 +63,52 @@
   endpoint's idempotency handling, which is now the built-in consumer of a
   public extension point rather than a privileged one.
 
+### Fixed
+
+- An array `media` did not type-check. `ResponseBody` and
+  `HasMediaResponseContract` still matched `{ media: string }` only, so a status
+  declaring several representations typed its handler body as `never` and lost
+  the client's unparsed-stream type while the runtime streamed it anyway.
+- The client's `accept` option destroyed caller headers that arrived as a
+  `Headers` instance or a tuple list, which is how the idempotency helper hands
+  them on — so passing both `accept` and `idempotencyKey` dropped the
+  `Idempotency-Key` and turned an idempotent write into an ordinary one.
+- Negotiation was computed over every status rather than the successful ones,
+  so a media-typed error status made an otherwise single-representation
+  endpoint start answering `406`, and a request could negotiate an error's
+  media type and have the success response mislabelled with it.
+- `Vary: Accept` was missing from the `406` itself, from validation failures,
+  and from idempotency replays, and a handler that declared its own `Vary`
+  silently replaced it instead of adding to it.
+- An idempotent endpoint answering with a media 2xx recorded `{}` for replay —
+  `JSON.stringify` does not fail on a `ReadableStream` or a `Blob` — and
+  replayed that empty object to the retry. Those bodies are now refused.
+- Declared media types are validated at definition time, matching the request
+  side: `media: 'text/csv, application/json'` and `media: ['csv', 'json']` now
+  fail the build instead of becoming a nonsense `Content-Type` or an endpoint
+  that answers `406` to everything.
+
 ### Changed
 
+- **Breaking:** the `stream: true` response variant is replaced by `media`.
+  `{ stream: true, contentType: 'text/csv' }` becomes `{ media: 'text/csv' }`.
+  `stream` was the wrong name for the general non-JSON door — returning an XML
+  string is not streaming — and one required key reads better than a boolean
+  plus an optional one. The media type has no default any more: taking this
+  door means knowing what you are sending.
+- **Breaking:** the generated client route config's `stream` flag is now
+  `mediaResponse`, and `EndpointMediaBody` is now `EndpointMediaResponseBody`.
+  The old names described the ofetch option and not the contract concept — a
+  30-byte `text/csv` string is not a stream. `isJsonMediaType` is no longer
+  exported, matching its request-side counterpart; `mediaTypesOf` and
+  `ResponseMediaTypes` now are.
+- **Breaking:** a non-string or empty `accept` client option throws instead of
+  being ignored, matching `mediaType` and `idempotencyKey`. A silently dropped
+  `accept` comes back as the wrong representation, which is harder to trace.
+- **Breaking:** `contentType` on a validated response body is restricted to
+  JSON media types and fails the build otherwise, naming `media` as the
+  replacement. A validated body is always serialized as JSON, so any other
+  value described one thing and sent another.
 - **Breaking:** application-wide endpoint settings moved from
   `server/endpoints/idempotency.ts` to `server/endpoints/runtime.ts`, where the
   idempotency policy is one key alongside the hooks. `defineIdempotencyPolicy`

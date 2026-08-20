@@ -3,10 +3,10 @@ import type {
   EndpointClientOptionsAreOptional,
   EndpointDefinition,
   EndpointResponsesContract,
-  EndpointStreamResponseBody,
+  EndpointMediaResponseStream,
   EndpointSuccessBody,
   HasEndpointResponses,
-  HasStreamResponseContract,
+  HasMediaResponseContract,
   HttpMethod,
   IsSuccessStatus,
   NormalizeResponses,
@@ -389,23 +389,23 @@ export type TypedRawResponse<STATUS extends number, OK extends boolean, BODY> = 
 }
 
 /**
- * The body type for one declared status. A route that declares any stream
- * response is a streaming route end to end - `createEndpointRequest` tells
- * the fetcher not to parse it - so every status arrives as the live stream,
- * including the JSON error shapes the contract still documents for OpenAPI.
+ * The body type for one declared status. A route with any media response is
+ * unparsed end to end - `createEndpointRequest` tells the fetcher not to read
+ * it - so every status arrives as the live stream, including the JSON error
+ * shapes the contract still documents for OpenAPI.
  */
 type EndpointClientBody<
   RESPONSES extends EndpointResponsesContract,
   STATUS extends keyof RESPONSES,
 > =
-  HasStreamResponseContract<RESPONSES> extends true
-    ? EndpointStreamResponseBody
+  HasMediaResponseContract<RESPONSES> extends true
+    ? EndpointMediaResponseStream
     : EndpointWireValue<ResponseBody<RESPONSES[STATUS]>>
 
 export type RouteResponseBody<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
-    ? HasStreamResponseContract<NormalizeResponses<ROUTE['definition']>> extends true
-      ? EndpointStreamResponseBody
+    ? HasMediaResponseContract<NormalizeResponses<ROUTE['definition']>> extends true
+      ? EndpointMediaResponseStream
       : EndpointWireValue<EndpointSuccessBody<ROUTE['definition']>>
     : InferredHandlerSuccessBody<RouteHandlerReturn<ROUTE>>
 
@@ -618,11 +618,11 @@ export type EndpointClientRouteConfig = {
     required: boolean
   }
   /**
-   * Set when the route declares a stream response. Build-time metadata, the
-   * runtime half of the `HasStreamResponseContract` type branch: it is what
+   * Set when the route declares a media response. Build-time metadata, the
+   * runtime half of the `HasMediaResponseContract` type branch: it is what
    * tells the fetcher to hand back the body unread.
    */
-  stream?: boolean
+  mediaResponse?: true
 }
 
 export type EndpointClientRouteConfigInput =
@@ -885,15 +885,16 @@ export function createEndpointRequest(
   options: Record<string, unknown> = {},
   runtimeOptions: EndpointRequestRuntimeOptions = {},
 ): EndpointRequestFunctions {
-  const { params, idempotencyKey, mediaType, ...fetchOptions } = options
+  const { params, idempotencyKey, mediaType, accept, ...fetchOptions } = options
   applyIdempotencyClientOptions(route, fetchOptions, idempotencyKey)
+  applyAcceptClientOptions(fetchOptions, accept)
   // `mediaType` is a client-only selector for a media-type-map `body`
   // contract (see `EndpointBodyMediaTypeClientOptions` in contract.ts) - it
   // is never a wire value itself, so it is destructured out above and only
   // reaches `applyMediaTypeClientOptions` for header bookkeeping, never the
   // fetcher's options.
   applyMediaTypeClientOptions(fetchOptions, mediaType)
-  applyStreamClientOptions(route, fetchOptions)
+  applyMediaResponseClientOptions(route, fetchOptions)
   const path = replaceParams(route.path, params)
   const fetcher = runtimeOptions.fetcher
 
@@ -935,16 +936,68 @@ export function createEndpointRequest(
 }
 
 /**
- * Stops the fetcher from parsing a streaming route's response, so the caller
- * receives the body while it is still arriving rather than a decoded copy of
- * it once it has all arrived. An explicit caller `responseType` still wins -
- * asking for `'blob'` on a download is a legitimate choice.
+ * Asks the server for one of the representations the endpoint declares. Sent
+ * as `Accept`, and destructured out of the caller's options rather than passed
+ * through, because it is a contract-level selector rather than a fetch option.
+ * A header the caller set explicitly wins.
  */
-function applyStreamClientOptions(
+function applyAcceptClientOptions(fetchOptions: Record<string, unknown>, accept: unknown): void {
+  if (accept === undefined) {
+    return
+  }
+  // Strict like its sibling selectors (`mediaType`, `idempotencyKey`) rather
+  // than silently ignoring a wrong value: a dropped `accept` would come back
+  // as the wrong representation, which is harder to trace than a throw.
+  if (typeof accept !== 'string' || accept.trim() === '') {
+    throw new TypeError('Endpoint accept option must be a non-empty string')
+  }
+
+  const headers = fetchOptions.headers
+  // `HeadersInit` has three shapes and all three reach the fetcher. Treating
+  // only the record case as this once did discarded every caller header for
+  // the other two - including the `Idempotency-Key` set moments earlier, which
+  // turned an idempotent write into an ordinary one.
+  if (headers instanceof Headers) {
+    if (headers.has('accept')) {
+      return
+    }
+    const nextHeaders = new Headers(headers)
+    nextHeaders.set('accept', accept)
+    fetchOptions.headers = nextHeaders
+    return
+  }
+  if (Array.isArray(headers)) {
+    const nextHeaders = new Headers(headers as [string, string][])
+    if (nextHeaders.has('accept')) {
+      return
+    }
+    nextHeaders.set('accept', accept)
+    fetchOptions.headers = nextHeaders
+    return
+  }
+  if (headers !== undefined && (typeof headers !== 'object' || headers === null)) {
+    throw new TypeError('Endpoint headers must be a Headers object, tuple list, or record')
+  }
+
+  const headerRecord = (headers ?? {}) as Record<string, unknown>
+  if (Object.keys(headerRecord).some((name) => name.toLowerCase() === 'accept')) {
+    return
+  }
+  fetchOptions.headers = { ...headerRecord, accept }
+}
+
+/**
+ * Stops the fetcher from parsing the response of a route with a media
+ * response, so the caller receives the body while it is still arriving rather
+ * than a decoded copy of it once it has all arrived. An explicit caller
+ * `responseType` still wins - asking for `'blob'` on a download is a
+ * legitimate choice.
+ */
+function applyMediaResponseClientOptions(
   route: EndpointClientRouteConfig,
   fetchOptions: Record<string, unknown>,
 ): void {
-  if (!route.stream || fetchOptions.responseType !== undefined) {
+  if (!route.mediaResponse || fetchOptions.responseType !== undefined) {
     return
   }
   fetchOptions.responseType = 'stream'
@@ -1427,7 +1480,7 @@ function isJsonResponseBody(data: unknown): boolean {
     data !== null &&
     !(data instanceof Blob) &&
     // An unread stream is bytes of some declared media type, never JSON. It
-    // reaches here whenever a route declares a stream response, because the
+    // reaches here whenever a route declares a media response, because the
     // fetcher was told not to parse that route's body.
     !(data instanceof ReadableStream)
   )

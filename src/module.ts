@@ -38,7 +38,7 @@ import {
 } from './runtime/endpoint'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './runtime/endpoint-methods'
 import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
-import { isStreamResponseContract } from './runtime/response'
+import { isMediaResponseContract } from './runtime/response'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
 import { mutationHttpMethodList, queryHttpMethodList } from './runtime/tanstack-query'
@@ -155,8 +155,8 @@ type EndpointMethodDetection = {
   idempotency?: EndpointIdempotencyMetadata
   /** Runtime options (storage/scope/authorization) the endpoint itself did not provide. */
   idempotencyRuntimeGaps?: readonly string[]
-  /** Set when any declared status is a stream, making this a streaming route. */
-  stream?: true
+  /** Set when any declared status is a media response, so it is never parsed. */
+  mediaResponse?: true
 }
 
 // A single-endpoint route's detection stays exactly the shape it always was
@@ -435,7 +435,7 @@ async function composeHandlers(
       )
     }
 
-    const { operation, idempotency, idempotencyRuntimeGaps, stream } = detection
+    const { operation, idempotency, idempotencyRuntimeGaps, mediaResponse } = detection
     if (idempotencyRuntimeGaps?.length && !policyFileExists) {
       throw new Error(
         `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no endpoint runtime file was found. Add them to .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
@@ -462,9 +462,9 @@ async function composeHandlers(
       )
     }
 
-    if (operation && stream && queryClientEnabled && queryHttpMethods.has(method)) {
+    if (operation && mediaResponse && queryClientEnabled && queryHttpMethods.has(method)) {
       warn(
-        `Operation "${operation}" declares a stream response. Its Vue Query option factory is still generated, but a stream cannot be cached or serialized into the Nuxt payload - call it with $endpoint(...).raw() instead.`,
+        `Operation "${operation}" declares a media response, so its body is never parsed. Its Vue Query option factory is still generated, but an unread stream cannot be cached or serialized into the Nuxt payload - call it with $endpoint(...).raw() instead.`,
       )
     }
 
@@ -473,7 +473,7 @@ async function composeHandlers(
       route,
       method,
       ...(operation ? { operation } : {}),
-      ...(stream ? { stream: true as const } : {}),
+      ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
     })
@@ -645,7 +645,7 @@ export function getEndpointFromCarrier(
   }
 
   const operation = typeof definition.operation === 'string' ? definition.operation : undefined
-  const stream = hasStreamResponse(definition)
+  const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
   let idempotencyRuntimeGaps: readonly string[] | undefined
   if (idempotency) {
@@ -660,7 +660,7 @@ export function getEndpointFromCarrier(
   }
   return {
     ...(operation ? { operation } : {}),
-    ...(stream ? { stream: true as const } : {}),
+    ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
     ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
   }
@@ -724,13 +724,13 @@ function comparableRoutePath(path: string): string {
   return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash
 }
 
-// Read from the evaluated contract rather than from source text: a stream
+// Read from the evaluated contract rather than from source text: a media
 // response is plain serializable metadata, so discovery already has the real
 // value here and does not have to guess at it.
-function hasStreamResponse(definition: EndpointCarrierDefinition): boolean {
+function hasMediaResponse(definition: EndpointCarrierDefinition): boolean {
   const responses =
     definition.responses ?? (definition.response ? { 200: definition.response } : {})
-  return Object.values(responses).some(isStreamResponseContract)
+  return Object.values(responses).some(isMediaResponseContract)
 }
 
 // `false` marks an endpoint with hand-written (unsupported) idempotency

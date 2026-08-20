@@ -87,7 +87,7 @@ Contract-side, endpoint-only:
 - `headerName` (optional, default `Idempotency-Key`): overrides the header name. Matching is case-insensitive.
 - `required` (optional, default `false`): whether the header is mandatory. Reflected in the generated client type.
 - `replayStatuses` (optional): extra declared statuses to record for replay. Successful `2xx` responses are recorded by default.
-- `fingerprint` (optional): projects the request into the stored fingerprint. The default projection is validated `params`, `query`, and `body`, with no headers or event state. Provide this when behavior depends on a header or other request state, such as currency or API version.
+- `fingerprint` (optional): projects the request into the stored fingerprint. The default projection is validated `params`, `query`, and `body`, with no headers or event state. Provide this when behavior depends on a header or other request state, such as currency or API version — or on the [negotiated media type](/docs/endpoints#several-representations-of-one-status), since a retry asking for a different representation otherwise replays the first one.
 
 Runtime, policy-defaulted and endpoint-overridable:
 
@@ -123,6 +123,8 @@ TanStack Query and Infinite Query include `idempotencyKey` in the cache key segm
 ## Storage
 
 `createMemoryIdempotencyStorage()` is process-local and intended for development and tests only: its records disappear on restart and are not shared across processes.
+
+A media 2xx cannot be recorded for replay: a stream, a `Blob`, or raw bytes have no serializable snapshot, so an idempotent endpoint that answers with one fails loudly rather than replaying an empty object.
 
 Production deployments must provide a durable adapter, such as Redis or SQL, implementing the `IdempotencyStorage` contract (`claim` / `complete` / `release`), and that implementation must be atomic. Durable-adapter conformance requirements and Redis/SQL recipes are documented in the project's storage recipes.
 

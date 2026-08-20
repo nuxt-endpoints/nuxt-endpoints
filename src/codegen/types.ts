@@ -16,9 +16,9 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   method: string
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
-  // Set when the route declares a stream response, so the generated client
+  // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.
-  stream?: true
+  mediaResponse?: true
   // Set when this entry was expanded from a `defineEndpointMethods()` group
   // (a single method-suffix-free route file declaring several methods): its
   // `handler` file exports one dispatcher whose per-method contract and

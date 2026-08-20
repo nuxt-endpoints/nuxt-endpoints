@@ -103,7 +103,7 @@ Module options (OpenAPI route, optional client methods, the Vue Query adapter) a
 Guides:
 
 - [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started) — install, configure, and what gets generated
-- [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, streaming responses, response validation
+- [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses & Effect](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses-and-effect) — success-body, `.result()`, `.raw()`, and `.effect()` call shapes
 - [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — generated TanStack Vue Query option factories and SSR setup

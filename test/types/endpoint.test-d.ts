@@ -340,7 +340,7 @@ describe('tuple and literal response contracts', () => {
   it('accepts every body shape the HTTP layer forwards for a stream status', () => {
     const endpoint = defineEndpoint({
       responses: {
-        200: { stream: true, contentType: 'text/csv' },
+        200: { media: 'text/csv' },
         404: z.object({ message: z.string() }),
       },
     })
@@ -354,5 +354,45 @@ describe('tuple and literal response contracts', () => {
     defineEndpointHandler(endpoint, ({ respond: send }) => send(404, { message: 'gone' }))
     // @ts-expect-error the 404 body is still checked against its schema.
     defineEndpointHandler(endpoint, ({ respond: send }) => send(404, { detail: 'gone' }))
+  })
+
+  it('narrows responseMediaType to the declared media types', () => {
+    const negotiating = defineEndpoint({
+      responses: {
+        200: { media: ['text/csv', 'application/json'] },
+        404: z.object({ message: z.string() }),
+      },
+    })
+
+    defineEndpointHandler(negotiating, ({ responseMediaType, respond: send }) => {
+      expectTypeOf(responseMediaType).toEqualTypeOf<'text/csv' | 'application/json'>()
+      // Answered on the validated status rather than the negotiated one: the
+      // body type of an array `media` status is still `never` (see the note in
+      // media-response.test.ts), which is a separate gap from the narrowing
+      // this test is about.
+      return send(404, { message: 'gone' })
+    })
+
+    const single = defineEndpoint({
+      responses: {
+        200: { media: 'text/csv' },
+      },
+    })
+
+    defineEndpointHandler(single, ({ responseMediaType, respond: send }) => {
+      expectTypeOf(responseMediaType).toEqualTypeOf<'text/csv'>()
+      return send(200, new ReadableStream())
+    })
+
+    const validated = defineEndpoint({
+      responses: {
+        200: z.object({ id: z.number() }),
+      },
+    })
+
+    defineEndpointHandler(validated, ({ responseMediaType }) => {
+      expectTypeOf(responseMediaType).toEqualTypeOf<undefined>()
+      return { id: 1 }
+    })
   })
 })

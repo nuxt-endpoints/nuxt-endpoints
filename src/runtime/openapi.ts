@@ -1,7 +1,7 @@
 import { isBodyMediaTypeMap } from './body-media-type'
 import type { EndpointDefinition, EndpointResponsesContract, ResponseContract } from './contract'
 import { isPathParamSegment, pathParamNames, replacePathParams } from './path-template'
-import { defaultStreamContentType, isStreamResponseContract } from './response'
+import { isMediaResponseContract, mediaTypesOf } from './response'
 import {
   createJsonSchemaContext,
   getJsonSchemaComponents,
@@ -327,38 +327,137 @@ function createResponses(
         omitUndefined({
           description: responseDescription(response),
           headers: responseHeaders(response, schemaContext),
-          content: {
-            [responseContentType(response)]: {
-              schema: responseSchema(response, schemaContext),
-            },
-          },
+          content: Object.fromEntries(
+            responseContentTypes(response).map((contentType) => [
+              contentType,
+              { schema: responseSchema(response, schemaContext) },
+            ]),
+          ),
         }),
       ]
     }),
   ) as OpenApiOperation['responses']
 
-  if (definition.idempotency) {
-    for (const status of [400, 409, 422] as const) {
-      const existing = generated[status]
-      const frameworkSchema = idempotencyProblemSchema(status, definition.idempotency.required)
-      const existingProblem = existing?.content['application/problem+json']
-      generated[status] = {
-        ...existing,
-        description: existing?.description ?? 'Idempotency request failure',
-        content: {
-          ...existing?.content,
-          'application/problem+json': {
-            ...existingProblem,
-            schema: existingProblem
-              ? { oneOf: [existingProblem.schema, frameworkSchema] }
-              : frameworkSchema,
-          },
+  // The framework answers some requests itself, and a document that lists only
+  // the statuses an author wrote down is incomplete in a way a consumer cannot
+  // detect. Every generated status is merged in, never overwritten: an author
+  // who also declared that status keeps their schema alongside this one.
+  for (const { status, description, mediaType, schema } of frameworkResponses(definition)) {
+    const existing = generated[status]
+    const existingMedia = existing?.content[mediaType]
+    generated[status] = {
+      ...existing,
+      description: existing?.description ?? description,
+      content: {
+        ...existing?.content,
+        [mediaType]: {
+          ...existingMedia,
+          schema: existingMedia ? { oneOf: [existingMedia.schema, schema] } : schema,
         },
-      }
+      },
     }
   }
 
   return generated
+}
+
+type FrameworkResponse = {
+  status: number
+  description: string
+  mediaType: string
+  schema: JsonSchema
+}
+
+/**
+ * The responses the runtime can produce without the handler being involved.
+ * Each is derived from the contract alone, so the document says exactly what
+ * this endpoint's configuration makes reachable: a `400` once anything is
+ * validated, a `415` for a media-type-map body, a `406` when the endpoint
+ * negotiates, and the idempotency trio.
+ *
+ * These describe the default bodies. An endpoint or application that replaces
+ * them through `onValidationError` is describing its own shapes, and should
+ * declare those statuses in the contract - where they merge with these rather
+ * than being hidden by them.
+ */
+function frameworkResponses(definition: EndpointDefinition): readonly FrameworkResponse[] {
+  const responses: FrameworkResponse[] = []
+
+  if (definition.params || definition.query || definition.headers || definition.body) {
+    responses.push({
+      status: 400,
+      description: 'Request validation failure',
+      mediaType: 'application/json',
+      schema: requestFailureSchema(400, 'Validation Error'),
+    })
+  }
+
+  if (definition.body && isBodyMediaTypeMap(definition.body)) {
+    responses.push({
+      status: 415,
+      description: 'The request Content-Type is not declared by this endpoint',
+      mediaType: 'application/json',
+      schema: requestFailureSchema(415, 'Unsupported Media Type'),
+    })
+  }
+
+  if (negotiatedMediaTypes(definition).length > 1) {
+    responses.push({
+      status: 406,
+      description: 'No declared media type is acceptable to the request',
+      mediaType: 'application/json',
+      schema: requestFailureSchema(406, 'Not Acceptable'),
+    })
+  }
+
+  if (definition.idempotency) {
+    for (const status of [400, 409, 422] as const) {
+      responses.push({
+        status,
+        description: 'Idempotency request failure',
+        mediaType: 'application/problem+json',
+        schema: idempotencyProblemSchema(status, definition.idempotency.required),
+      })
+    }
+  }
+
+  return responses
+}
+
+// Mirrors `defaultValidationErrorResponse` in endpoint.ts. The two are kept in
+// step by the integration test that reads a real failure response and compares
+// it against the generated document.
+function requestFailureSchema(status: number, statusMessage: string): JsonSchema {
+  return {
+    type: 'object',
+    required: ['statusCode', 'statusMessage', 'data'],
+    properties: {
+      statusCode: { type: 'integer', enum: [status] },
+      statusMessage: { type: 'string', enum: [statusMessage] },
+      data: { type: 'object' },
+    },
+  }
+}
+
+// Successful statuses only, matching the runtime's negotiation scope.
+function negotiatedMediaTypes(definition: EndpointDefinition): readonly string[] {
+  const responses = normalizeResponses(definition)
+  const offered: string[] = []
+  for (const [status, contract] of Object.entries(responses)) {
+    const parsed = Number(status)
+    if (!Number.isInteger(parsed) || parsed < 200 || parsed >= 300) {
+      continue
+    }
+    if (!isMediaResponseContract(contract)) {
+      continue
+    }
+    for (const mediaType of mediaTypesOf(contract)) {
+      if (!offered.includes(mediaType)) {
+        offered.push(mediaType)
+      }
+    }
+  }
+  return offered
 }
 
 function idempotencyProblemSchema(status: 400 | 409 | 422, required: boolean): JsonSchema {
@@ -413,10 +512,10 @@ function responseSchema(
   response: ResponseContract,
   schemaContext: JsonSchemaConversionContext,
 ): JsonSchema {
-  // A stream declares no validated body. Its optional `schema` is
+  // A media response declares no validated body. Its optional `schema` is
   // documentation the author opted into; without one, the payload is
   // described the way OpenAPI describes any opaque byte sequence.
-  if (isStreamResponseContract(response)) {
+  if (isMediaResponseContract(response)) {
     return response.schema
       ? toJsonSchema(response.schema, schemaContext, { mode: 'output' })
       : { type: 'string', contentEncoding: 'binary' }
@@ -425,6 +524,13 @@ function responseSchema(
     return toJsonSchema(response.body, schemaContext, { mode: 'output' })
   }
   return toJsonSchema(response, schemaContext, { mode: 'output' })
+}
+
+function responseContentTypes(response: ResponseContract): readonly string[] {
+  if (isMediaResponseContract(response)) {
+    return mediaTypesOf(response)
+  }
+  return [responseContentType(response)]
 }
 
 function responseContentType(response: ResponseContract): string {
@@ -436,7 +542,7 @@ function responseContentType(response: ResponseContract): string {
   ) {
     return response.contentType
   }
-  return isStreamResponseContract(response) ? defaultStreamContentType : 'application/json'
+  return 'application/json'
 }
 
 function responseHeaders(

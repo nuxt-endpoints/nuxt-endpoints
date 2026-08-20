@@ -82,17 +82,18 @@ export type {
   EndpointResponder,
   EndpointResponseStatus,
   EndpointResponsesContract,
-  EndpointStreamBody,
-  EndpointStreamResponseBody,
+  EndpointMediaResponseBody,
+  EndpointMediaResponseStream,
   EndpointSuccessBody,
-  HasStreamResponseContract,
+  HasMediaResponseContract,
   IsEndpointBodyMediaTypeMap,
   NormalizeResponses,
   ResponseBody,
   ResponseBodyForStatus,
   ResponseContract,
   StatusNumber,
-  StreamResponseContract,
+  MediaResponseContract,
+  ResponseMediaTypes,
   SuccessResponseBody,
 } from './contract'
 export type {
@@ -151,11 +152,14 @@ export type {
   OpenApiDocumentPatch,
   OpenApiRoute,
 } from './openapi'
+// `isJsonMediaType` stays internal, matching its request-side counterpart
+// `isSupportedBodyMediaType`: both exist to validate a declaration at
+// definition time, not to be called by applications.
 export {
   createResponse,
-  defaultStreamContentType,
+  isMediaResponseContract,
   isStatusResponse,
-  isStreamResponseContract,
+  mediaTypesOf,
   respond,
 } from './response'
 export type { ResponseOptions, StatusCode, StatusResponse } from './response'

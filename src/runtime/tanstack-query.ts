@@ -566,6 +566,11 @@ function requestSegment(record: Record<string, unknown>): unknown {
   if (record.mediaType !== undefined) {
     picked.mediaType = record.mediaType
   }
+  // `accept` selects which representation the server sends, so two calls that
+  // differ only in it are different cached values, not the same one.
+  if (record.accept !== undefined) {
+    picked.accept = record.accept
+  }
   if (record.idempotencyKey !== undefined) {
     picked.idempotencyKey = record.idempotencyKey
   }

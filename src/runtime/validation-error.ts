@@ -23,6 +23,22 @@ export type EndpointValidationFailure =
       supportedMediaTypes: readonly string[]
       event: RuntimeEvent
     }
+  | {
+      /**
+       * The response-side counterpart of `media-type`: the endpoint can only
+       * produce media types the request refused. It carries the same two field
+       * names so one handler can shape both, but they mean mirrored things -
+       * `supportedMediaTypes` is what this endpoint can *produce* rather than
+       * consume, and `received` is the raw `Accept` header (a weighted list,
+       * not a single type, so there is nothing to normalize it to).
+       */
+      kind: 'accept'
+      source: 'headers'
+      /** The request's raw Accept header, or `null` when it sent none. */
+      received: string | null
+      supportedMediaTypes: readonly string[]
+      event: RuntimeEvent
+    }
 
 export type EndpointValidationErrorResponse = {
   status: number

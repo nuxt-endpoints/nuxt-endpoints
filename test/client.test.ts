@@ -384,11 +384,11 @@ describe('createEndpointClient', () => {
     })
   })
 
-  describe('stream routes', () => {
-    it('sets responseType: stream in the fetcher options for a route declared as a stream', async () => {
+  describe('media response routes', () => {
+    it('sets responseType: stream in the fetcher options for a media response route', async () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', stream: true },
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
       ])
 
       await client('exportUsers')
@@ -399,7 +399,7 @@ describe('createEndpointClient', () => {
       })
     })
 
-    it('does not set responseType for a route without the stream flag', async () => {
+    it('does not set responseType for a route without a media response', async () => {
       fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
       const client = createEndpointClient([
         { path: '/api/users/:id', method: 'get', operation: 'getUser' },
@@ -414,7 +414,7 @@ describe('createEndpointClient', () => {
     it('preserves an explicit caller responseType over the stream default', async () => {
       fetchMock.mockResolvedValue(new Blob())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', stream: true },
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
       ])
 
       await client('exportUsers', { responseType: 'blob' })
@@ -423,6 +423,102 @@ describe('createEndpointClient', () => {
         method: 'get',
         responseType: 'blob',
       })
+    })
+
+    it('sends the accept option as the accept header without leaking it to the fetcher', async () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+      ])
+
+      await client('exportUsers', { accept: 'application/json' })
+
+      const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
+      expect(calledOptions).not.toHaveProperty('accept')
+      expect(calledOptions).toEqual({
+        method: 'get',
+        responseType: 'stream',
+        headers: { accept: 'application/json' },
+      })
+    })
+
+    it('lets a caller-set Accept header win over the accept option', async () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+      ])
+
+      await client('exportUsers', {
+        accept: 'application/json',
+        headers: { Accept: 'text/csv' },
+      } as never)
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/export', {
+        method: 'get',
+        responseType: 'stream',
+        headers: { Accept: 'text/csv' },
+      })
+    })
+
+    it('rejects an accept option that is not a non-empty string', () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+      ])
+
+      // Rejected rather than ignored, like its sibling selectors: a dropped
+      // `accept` comes back as the wrong representation, which is harder to
+      // trace than a throw.
+      expect(() => client('exportUsers', { accept: 123 })).toThrow(
+        /accept option must be a non-empty string/,
+      )
+      expect(() => client('exportUsers', { accept: '  ' })).toThrow(
+        /accept option must be a non-empty string/,
+      )
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps every caller header when they arrive as a Headers instance', async () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        {
+          path: '/api/export',
+          method: 'post',
+          operation: 'createExport',
+          mediaResponse: true,
+          idempotency: { headerName: 'Idempotency-Key', required: true },
+        },
+      ])
+
+      await client('createExport', {
+        accept: 'application/json',
+        idempotencyKey: 'request-1',
+        headers: new Headers({ authorization: 'Bearer token' }),
+      } as never)
+
+      const calledOptions = fetchMock.mock.calls[0]![1] as { headers: Headers }
+      // The idempotency key is set on a Headers instance first, so flattening
+      // that instance here would silently turn an idempotent write into an
+      // ordinary one.
+      expect(calledOptions.headers.get('idempotency-key')).toBe('request-1')
+      expect(calledOptions.headers.get('authorization')).toBe('Bearer token')
+      expect(calledOptions.headers.get('accept')).toBe('application/json')
+    })
+
+    it('keeps every caller header when they arrive as a tuple list', async () => {
+      fetchMock.mockResolvedValue(new ReadableStream())
+      const client = createEndpointClient([
+        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+      ])
+
+      await client('exportUsers', {
+        accept: 'application/json',
+        headers: [['authorization', 'Bearer token']],
+      } as never)
+
+      const calledOptions = fetchMock.mock.calls[0]![1] as { headers: Headers }
+      expect(calledOptions.headers.get('authorization')).toBe('Bearer token')
+      expect(calledOptions.headers.get('accept')).toBe('application/json')
     })
   })
 

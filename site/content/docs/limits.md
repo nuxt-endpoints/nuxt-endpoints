@@ -25,9 +25,9 @@ A route whose template contains a catch-all (`[...slug]`) or optional parameter 
 
 ### Response bodies are JSON-first
 
-Request bodies accept [media-type maps](/docs/endpoints#media-type-request-bodies) — JSON, URL-encoded forms, multipart uploads, and raw text. Validated response bodies remain JSON-first: response media types on a validated status are documentation only, and there is no response content negotiation.
+Request bodies accept [media-type maps](/docs/endpoints#media-type-request-bodies) — JSON, URL-encoded forms, multipart uploads, and raw text. Validated response bodies are JSON: a validated status may be labelled with a `+json` profile such as `application/problem+json`, and nothing else.
 
-A [stream response](/docs/endpoints#streaming-responses) is the one declared non-JSON status. It carries its own media type and reaches OpenAPI, but nothing about its payload is validated and its chunks are not typed. Use [Low-level HTTP](/docs/low-level-http) for file downloads, redirects, proxies, and native Web Responses.
+Everything non-JSON goes through the single [media response](/docs/endpoints#non-json-responses) door. It carries its own media type, reaches OpenAPI, and can offer [several representations negotiated from `Accept`](/docs/endpoints#several-representations-of-one-status) — but nothing about its payload is validated, and its chunks are not typed. Use [Low-level HTTP](/docs/low-level-http) for redirects, proxies, and native Web Responses that should not be modelled as a status at all.
 
 Contracted JSON responses use the supported Nitro line's wire-type mapping. Native `Response`, files, and custom response parsers are outside the generated JSON body type.
 

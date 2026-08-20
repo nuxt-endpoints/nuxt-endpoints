@@ -57,7 +57,7 @@ Both are optional. With neither, the document is exactly what the route contract
 
 Request schemas, response schemas, summaries, route paths, and optional operation IDs are collected from discovered endpoint definitions. When `operation` is omitted, a stable operationId is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
 
-A [streaming response](/docs/endpoints#streaming-responses) appears like any other status. Its media type is the declared `contentType`, defaulting to `application/octet-stream`, and its schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload — or one chunk of it — in more detail.
+A [media response](/docs/endpoints#non-json-responses) appears like any other status. Its content keys are the declared `media` — one entry per type when it declares several — and each schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload, or one chunk of it, in more detail. A validated status labelled with a `+json` profile is keyed by that profile instead of `application/json`.
 
 ## Nitro's own OpenAPI
 
@@ -68,3 +68,16 @@ It describes the same routes, but it cannot describe their contracts. Its per-ro
 So the two do not merge. Enabling both serves two documents at two routes, and the module warns about it at build time, naming both. If both are configured for the _same_ route the build fails instead: two handlers on one route leave which document is served up to registration order.
 
 Keep Nitro's enabled only if you want its bundled UI. Nothing stops you from pointing your own Scalar or Swagger UI at `/_endpoints/schema`.
+
+## Framework-generated responses
+
+Some responses the runtime produces itself, without the handler being involved, and they are in the document because a consumer cannot detect them otherwise:
+
+- `400` once the endpoint validates any request part;
+- `415` when the request body is a [media-type map](/docs/endpoints#media-type-request-bodies);
+- `406` when the endpoint [negotiates](/docs/endpoints#several-representations-of-one-status);
+- `400`, `409`, and `422` for an [idempotent](/docs/idempotency) endpoint.
+
+Each is derived from the contract alone, so the document lists exactly what that endpoint's configuration makes reachable. Declaring one of those statuses yourself does not hide the generated shape — the two are merged as a `oneOf`, so the document keeps describing both.
+
+The schemas describe the default bodies. An endpoint or application that replaces them through [`onValidationError`](/docs/endpoints#hooks) is describing its own shapes, and should declare those statuses in the contract.

@@ -131,11 +131,14 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
     })
 
-    it('streams a declared stream response with its declared media type', async () => {
+    it('streams the preferred media response when the request states no preference', async () => {
       const response = await fetch('/api/export?delimiter=;')
 
       expect(response.status).toBe(200)
+      // Two representations are declared and `text/csv` is declared first, so
+      // it is what a request expressing no preference gets.
       expect(response.headers.get('content-type')).toContain('text/csv')
+      expect(response.headers.get('vary')).toBe('Accept')
       // Read it as a stream rather than with .text(): the point of the
       // declaration is that nothing buffered it on the way out.
       const reader = response.body!.getReader()
@@ -150,6 +153,52 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       }
 
       expect(received).toBe('id;name\nu_1;Tom\n')
+    })
+
+    it('negotiates the JSON representation of the same status from Accept', async () => {
+      const response = await fetch('/api/export', {
+        headers: { accept: 'application/json' },
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('application/json')
+      expect(response.headers.get('vary')).toBe('Accept')
+      await expect(response.json()).resolves.toEqual([
+        ['id', 'name'],
+        ['u_1', 'Tom'],
+      ])
+    })
+
+    it('answers 406 when it can produce nothing the request accepts', async () => {
+      const response = await fetch('/api/export', {
+        headers: { accept: 'application/xml' },
+      })
+
+      expect(response.status).toBe(406)
+      await expect(response.json()).resolves.toMatchObject({
+        statusCode: 406,
+        statusMessage: 'Not Acceptable',
+        data: {
+          received: 'application/xml',
+          supportedMediaTypes: ['text/csv', 'application/json'],
+        },
+      })
+    })
+
+    it('varies on Accept for every representation the endpoint serves', async () => {
+      // The route negotiates, so `Vary` describes the route rather than one
+      // answer: a cache holding the CSV must still know the JSON exists.
+      const responses = await Promise.all([
+        fetch('/api/export'),
+        fetch('/api/export', { headers: { accept: 'text/csv' } }),
+        fetch('/api/export', { headers: { accept: 'application/json' } }),
+        fetch('/api/export', { headers: { accept: '*/*' } }),
+      ])
+
+      for (const response of responses) {
+        expect(response.status).toBe(200)
+        expect(response.headers.get('vary')).toBe('Accept')
+      }
     })
 
     it('serves an endpoint whose route came from nitro.handlers, not from scanning', async () => {
@@ -181,16 +230,37 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(schema.security).toEqual([{ bearerAuth: [] }])
     })
 
-    it('documents a stream response in the OpenAPI schema', async () => {
+    it('documents every declared media type of a media response in the OpenAPI schema', async () => {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
       const response = schema.paths['/api/export'].get.responses['200']
 
-      expect(response.description).toBe('CSV export')
-      expect(response.content).toHaveProperty('text/csv')
+      expect(response.description).toBe('User export')
+      expect(Object.keys(response.content)).toEqual(['text/csv', 'application/json'])
       expect(response.content['text/csv'].schema).toEqual({
         type: 'string',
         contentEncoding: 'binary',
       })
+      expect(response.content['application/json'].schema).toEqual({
+        type: 'string',
+        contentEncoding: 'binary',
+      })
+    })
+
+    it('sends a validated body as application/problem+json and documents it as such', async () => {
+      const response = await fetch('/api/problem')
+
+      expect(response.status).toBe(404)
+      expect(response.headers.get('content-type')).toContain('application/problem+json')
+      await expect(response.json()).resolves.toEqual({
+        type: 'https://example.com/probs/not-found',
+        title: 'Not Found',
+        status: 404,
+      })
+
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      expect(schema.paths['/api/problem'].get.responses['404'].content).toHaveProperty(
+        'application/problem+json',
+      )
     })
 
     it('serializes response-schema outputs to their JSON wire representation', async () => {

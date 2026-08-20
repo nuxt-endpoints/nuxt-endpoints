@@ -42,12 +42,12 @@ export type IsEndpointBodyMediaTypeMap<BODY> = [BODY] extends [ValidatorSchema]
     : false
 
 /**
- * What a handler may return for a status declared as a stream. These are the
+ * What a handler may return for a status declared by media type. These are the
  * values the underlying HTTP layer forwards to the socket untouched, rather
  * than serializing: a web `ReadableStream`, a Node readable, a native
  * `Response`, a `Blob`, raw bytes, or an already-encoded string.
  */
-export type EndpointStreamBody =
+export type EndpointMediaResponseBody =
   | ReadableStream
   | Response
   | Blob
@@ -72,25 +72,32 @@ type NodeReadableStream = {
 }
 
 /**
- * A response whose payload the runtime never reads. The handler produces the
- * bytes; the library only records what the endpoint promises to send, so a
- * streaming route keeps its place in the contract - its status, its media
- * type, and its OpenAPI entry - instead of having to drop `responses`
- * entirely and become an untyped raw route.
+ * The one door out of JSON. A status declared by media type instead of by
+ * schema keeps its place in the contract - its status, its media type, and its
+ * OpenAPI entry - while handing the payload entirely to the handler: XML, CSV,
+ * a file, an event stream, arbitrary bytes.
  *
- * Nothing here is validated: a stream cannot be buffered and checked without
- * defeating the reason it is a stream.
+ * Nothing here is validated, and that is the whole distinction from the
+ * `{ body }` form. Declaring the media type rather than defaulting it is
+ * deliberate: taking this door means knowing what you are sending.
  */
-export type StreamResponseContract = {
-  stream: true
-  /** Media type sent for this status. Defaults to `application/octet-stream`. */
-  contentType?: string
+export type MediaResponseContract = {
+  /**
+   * Media type sent for this status, e.g. `'text/csv'`. Required.
+   *
+   * An array offers several representations of the same status and turns on
+   * `Accept` negotiation: the runtime picks one, tells the handler which
+   * through `responseMediaType`, and answers 406 when the request accepts
+   * none. Declaration order is the endpoint's preference - it breaks ties and
+   * answers a request that expresses none.
+   */
+  media: string | readonly string[]
   description?: string
   headers?: Record<string, ValidatorSchema>
   /**
    * Documentation only: describes the payload, or one chunk of it, in the
-   * generated OpenAPI document. Deliberately not named `body` - the `body` of
-   * a non-stream response contract is validated, and this never is.
+   * generated OpenAPI document. Deliberately not named `body` - a `body` is
+   * validated, and this never is.
    */
   schema?: ValidatorSchema
 }
@@ -100,31 +107,43 @@ export type ResponseContract =
   | {
       body: ValidatorSchema
       description?: string
+      /**
+       * Media type for this validated JSON body. Restricted to JSON media
+       * types (`application/json` and any `+json` profile such as
+       * `application/problem+json`), because a validated body is always
+       * serialized as JSON - anything else is `media` instead. Applied to the
+       * response, not just to the OpenAPI document.
+       */
       contentType?: string
       headers?: Record<string, ValidatorSchema>
     }
-  | StreamResponseContract
+  | MediaResponseContract
 
 export type EndpointResponsesContract = Record<number | string, ResponseContract>
 
 /**
- * What the client hands back for a streaming route. The fetcher is told not
- * to parse the response, so this is the live body rather than a decoded copy
- * of it.
+ * What the client hands back for a route with a media response. The fetcher is
+ * told not to parse it, so this is the live body rather than a decoded copy of
+ * it once it has all arrived.
  */
-export type EndpointStreamResponseBody = ReadableStream<Uint8Array>
+export type EndpointMediaResponseStream = ReadableStream<Uint8Array>
 
 /**
- * Whether any declared status streams. This is a property of the whole route,
- * not of one status: a client that must not parse the response cannot parse
- * *part* of it, so one stream declaration decides how every status of that
- * route is delivered.
+ * Whether any declared status is a media response. This is a property of the
+ * whole route, not of one status: a client that must not parse the response
+ * cannot parse *part* of it, so one media declaration decides how every status
+ * of that route is delivered.
  */
-export type HasStreamResponseContract<RESPONSES extends EndpointResponsesContract> = true extends {
-  [STATUS in keyof RESPONSES]: RESPONSES[STATUS] extends { stream: true } ? true : false
+export type HasMediaResponseContract<RESPONSES extends EndpointResponsesContract> = true extends {
+  [STATUS in keyof RESPONSES]: RESPONSES[STATUS] extends DeclaredMediaResponse ? true : false
 }[keyof RESPONSES]
   ? true
   : false
+
+// Matches both shapes `MediaResponseContract.media` accepts. Written once and
+// reused so the single and the negotiated form can never drift apart at the
+// type level the way they did when each predicate spelled out `{ media: string }`.
+type DeclaredMediaResponse = { media: string | readonly string[] }
 
 export type EndpointIdempotencyMetadata<
   HEADER_NAME extends string = string,
@@ -158,8 +177,45 @@ export type EndpointContext<DEFINITION extends EndpointDefinition> = {
    * schema `body` contract or when there is no `body` contract at all.
    */
   bodyMediaType: InferBodyMediaType<DEFINITION['body']>
+  /**
+   * The media type negotiated from the request's `Accept` header, when this
+   * endpoint declares any `media` response. Narrowed to the declared union, so
+   * a handler offering several representations can branch on it exhaustively.
+   * `undefined` when no status declares a media type.
+   */
+  responseMediaType: InferResponseMediaType<DEFINITION>
   respond: EndpointResponder<DEFINITION>
 }
+
+/**
+ * The media types this endpoint can be asked for: the representations of its
+ * *successful* statuses.
+ *
+ * Deliberately not every status. A media-typed error - a `problem+json` 404,
+ * an HTML error page - is not an alternative the caller chooses between; it is
+ * what happens instead. Including those would let a request negotiate its way
+ * into a 406 by asking for an error's media type, and would make adding one to
+ * a single-representation endpoint silently start refusing clients.
+ */
+export type ResponseMediaTypes<DEFINITION extends EndpointDefinition> = {
+  [STATUS in keyof NormalizeResponses<DEFINITION>]: IsSuccessStatus<
+    StatusNumber<STATUS>
+  > extends true
+    ? NormalizeResponses<DEFINITION>[STATUS] extends { media: infer MEDIA }
+      ? MEDIA extends readonly (infer ITEM extends string)[]
+        ? ITEM
+        : MEDIA extends string
+          ? MEDIA
+          : never
+      : never
+    : never
+}[keyof NormalizeResponses<DEFINITION>]
+
+type InferResponseMediaType<DEFINITION extends EndpointDefinition> = [
+  ResponseMediaTypes<DEFINITION>,
+] extends [never]
+  ? undefined
+  : ResponseMediaTypes<DEFINITION>
 
 // Branches on `IsEndpointBodyMediaTypeMap` up front (rather than composing a
 // shared `body` field type into one object, the way `params`/`query`/
@@ -184,7 +240,8 @@ type EndpointSingleBodyClientOptions<DEFINITION extends EndpointDefinition> = Op
     headers: InferInputOrNever<DEFINITION['headers']>
     body: InferInputOrNever<DEFINITION['body']>
   }> &
-    EndpointIdempotencyClientOptions<DEFINITION>
+    EndpointIdempotencyClientOptions<DEFINITION> &
+    EndpointAcceptClientOptions<DEFINITION>
 >
 
 type EndpointMediaTypeBodyClientOptions<DEFINITION extends EndpointDefinition> =
@@ -198,7 +255,8 @@ type EndpointMediaTypeBodyClientOptions<DEFINITION extends EndpointDefinition> =
           headers: InferInputOrNever<DEFINITION['headers']>
         }> &
           EndpointBodyMediaTypeClientOptions<BODY> &
-          EndpointIdempotencyClientOptions<DEFINITION>
+          EndpointIdempotencyClientOptions<DEFINITION> &
+          EndpointAcceptClientOptions<DEFINITION>
       >
     : never
 
@@ -360,6 +418,15 @@ type RemoveNever<T extends Record<string, unknown>> = {
   [KEY in keyof T as T[KEY] extends never ? never : KEY]: T[KEY]
 }
 
+// Sent as the `Accept` header. Optional even when several representations are
+// declared: omitting it takes the endpoint's own first-declared preference,
+// which is a better default than making every caller choose.
+type EndpointAcceptClientOptions<DEFINITION extends EndpointDefinition> = [
+  ResponseMediaTypes<DEFINITION>,
+] extends [never]
+  ? {}
+  : { accept?: ResponseMediaTypes<DEFINITION> }
+
 type EndpointIdempotencyClientOptions<DEFINITION extends EndpointDefinition> = DEFINITION extends {
   idempotency: { required: true }
 }
@@ -473,8 +540,8 @@ export type SuccessResponseBody<RESPONSES extends EndpointResponsesContract> = {
     : never
 }[keyof RESPONSES]
 
-export type ResponseBody<RESPONSE> = RESPONSE extends { stream: true }
-  ? EndpointStreamBody
+export type ResponseBody<RESPONSE> = RESPONSE extends DeclaredMediaResponse
+  ? EndpointMediaResponseBody
   : RESPONSE extends { body: infer BODY extends ValidatorSchema }
     ? InferOutput<BODY>
     : RESPONSE extends ValidatorSchema

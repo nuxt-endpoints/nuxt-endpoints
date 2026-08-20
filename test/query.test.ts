@@ -257,6 +257,27 @@ describe('TanStack Query adapter', () => {
       expect(jsonKey).not.toEqual(multipartKey)
     })
 
+    // `accept` picks which representation the server sends back, so it is part
+    // of what is cached, not part of how it was asked for. Reached through the
+    // dynamic factory for the same reason as `mediaType` above: `listUsers`'s
+    // typed contract declares no media response, so no typed call site can
+    // pass it.
+    it('includes accept in cache identity so representations do not collide', () => {
+      const listUsersDynamic = queryOptions.listUsers as unknown as (
+        options: Record<string, unknown>,
+      ) => EndpointQueryOptionsObject<unknown>
+
+      const csvKey = listUsersDynamic({ query: { a: 1, b: 2 }, accept: 'text/csv' }).queryKey
+      const jsonKey = listUsersDynamic({
+        query: { a: 1, b: 2 },
+        accept: 'application/json',
+      }).queryKey
+      const sameCsvKey = listUsersDynamic({ query: { a: 1, b: 2 }, accept: 'text/csv' }).queryKey
+
+      expect(csvKey).not.toEqual(jsonKey)
+      expect(csvKey).toEqual(sameCsvKey)
+    })
+
     it('excludes headers from the key', () => {
       const key1 = queryOptions.listUsers({
         query: { a: 1, b: 2 },

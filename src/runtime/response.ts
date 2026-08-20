@@ -1,22 +1,39 @@
-import type { StreamResponseContract } from './contract'
+import type { MediaResponseContract } from './contract'
 
 export type StatusCode = number
 
-/** Media type sent for a stream response that does not declare one. */
-export const defaultStreamContentType = 'application/octet-stream'
+/**
+ * Whether a declared response hands its payload to the socket untouched. A
+ * string `media` is the discriminant: a validator schema never carries one,
+ * and neither does the validated `{ body }` form - that one declares a
+ * `contentType` instead, which is checked to be a JSON media type.
+ */
+export function isMediaResponseContract(contract: unknown): contract is MediaResponseContract {
+  if (typeof contract !== 'object' || contract === null || !('media' in contract)) {
+    return false
+  }
+  const media = (contract as { media: unknown }).media
+  return typeof media === 'string' || Array.isArray(media)
+}
 
 /**
- * Whether a declared response hands its payload to the socket untouched. The
- * `stream: true` marker is the discriminant: a validator schema never carries
- * it, and neither does the validated `{ body }` form.
+ * The media types a declared response offers, in declaration order. That order
+ * is the endpoint's own preference, and negotiation uses it to break ties and
+ * to answer a request that expresses none.
  */
-export function isStreamResponseContract(contract: unknown): contract is StreamResponseContract {
-  return (
-    typeof contract === 'object' &&
-    contract !== null &&
-    'stream' in contract &&
-    (contract as { stream: unknown }).stream === true
-  )
+export function mediaTypesOf(contract: MediaResponseContract): readonly string[] {
+  return typeof contract.media === 'string' ? [contract.media] : contract.media
+}
+
+/**
+ * Whether a media type still describes a JSON payload. Covers
+ * `application/json` and every `+json` profile - `application/problem+json`,
+ * `application/vnd.api+json`, `application/ld+json` - which are the cases
+ * where a validated body and a non-default media type genuinely coexist.
+ */
+export function isJsonMediaType(mediaType: string): boolean {
+  const essence = mediaType.split(';')[0]!.trim().toLowerCase()
+  return /^application\/([\w.-]+\+)?json$/.test(essence)
 }
 
 export type ResponseOptions<HEADERS extends Record<string, string> = Record<string, string>> = {

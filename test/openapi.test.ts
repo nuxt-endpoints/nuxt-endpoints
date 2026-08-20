@@ -611,8 +611,8 @@ describe('createOpenApiDocument', () => {
     ])
   })
 
-  describe('stream response contracts', () => {
-    it('describes a stream with no contentType or schema as binary octet-stream content', () => {
+  describe('media response contracts', () => {
+    it('uses the declared media as the content key, describing an unschemed payload as binary', () => {
       const document = createOpenApiDocument([
         {
           path: '/api/export',
@@ -620,7 +620,7 @@ describe('createOpenApiDocument', () => {
           definition: {
             operation: 'exportUsers',
             responses: {
-              200: { stream: true },
+              200: { media: 'text/csv' },
             },
           },
         },
@@ -628,14 +628,14 @@ describe('createOpenApiDocument', () => {
 
       expect(document.paths['/api/export'].get.responses[200]).toMatchObject({
         content: {
-          'application/octet-stream': {
+          'text/csv': {
             schema: { type: 'string', contentEncoding: 'binary' },
           },
         },
       })
     })
 
-    it('uses a declared contentType and description', () => {
+    it('uses a declared media and description', () => {
       const document = createOpenApiDocument([
         {
           path: '/api/export',
@@ -643,7 +643,7 @@ describe('createOpenApiDocument', () => {
           definition: {
             operation: 'exportUsers',
             responses: {
-              200: { stream: true, contentType: 'text/csv', description: 'CSV export' },
+              200: { media: 'text/csv', description: 'CSV export' },
             },
           },
         },
@@ -659,7 +659,7 @@ describe('createOpenApiDocument', () => {
       })
     })
 
-    it('converts a declared schema into the JSON Schema documenting the stream instead of the binary placeholder', () => {
+    it('converts a declared schema into the JSON Schema documenting the media response instead of the binary placeholder', () => {
       const document = createOpenApiDocument([
         {
           path: '/api/export',
@@ -668,8 +668,7 @@ describe('createOpenApiDocument', () => {
             operation: 'exportUsers',
             responses: {
               200: {
-                stream: true,
-                contentType: 'text/csv',
+                media: 'text/csv',
                 schema: z.object({ id: z.string(), name: z.string() }),
               },
             },
@@ -684,6 +683,202 @@ describe('createOpenApiDocument', () => {
           id: { type: 'string' },
           name: { type: 'string' },
         },
+      })
+    })
+
+    it('emits one content entry per declared media type, each describing the same payload', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: {
+              200: { media: ['text/csv', 'application/json'] },
+            },
+          },
+        },
+      ])
+
+      const content = document.paths['/api/export'].get.responses[200].content
+      expect(Object.keys(content)).toEqual(['text/csv', 'application/json'])
+      expect(content['text/csv'].schema).toEqual({ type: 'string', contentEncoding: 'binary' })
+      expect(content['application/json'].schema).toEqual(content['text/csv'].schema)
+    })
+
+    it('documents every declared media type with the declared schema', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: {
+              200: {
+                media: ['text/csv', 'application/json'],
+                schema: z.object({ id: z.string(), name: z.string() }),
+              },
+            },
+          },
+        },
+      ])
+
+      const content = document.paths['/api/export'].get.responses[200].content
+      const schema = {
+        type: 'object',
+        required: ['id', 'name'],
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+        },
+      }
+
+      expect(Object.keys(content)).toEqual(['text/csv', 'application/json'])
+      expect(content['text/csv'].schema).toEqual(schema)
+      expect(content['application/json'].schema).toEqual(schema)
+    })
+
+    it('uses a validated contentType as the content key instead of application/json', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/problem',
+          method: 'get',
+          definition: {
+            operation: 'getProblem',
+            responses: {
+              404: {
+                body: z.object({ type: z.string(), title: z.string() }),
+                contentType: 'application/problem+json',
+              },
+            },
+          },
+        },
+      ])
+
+      expect(document.paths['/api/problem'].get.responses[404]).toMatchObject({
+        content: {
+          'application/problem+json': {
+            schema: {
+              type: 'object',
+              required: ['type', 'title'],
+              properties: {
+                type: { type: 'string' },
+                title: { type: 'string' },
+              },
+            },
+          },
+        },
+      })
+    })
+  })
+
+  describe('framework-generated responses', () => {
+    it('documents the validation failure any validating endpoint can answer with', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/users/:id',
+          method: 'get',
+          definition: {
+            operation: 'getUser',
+            params: z.object({ id: z.string() }),
+            responses: { 200: z.object({ id: z.string() }) },
+          },
+        },
+      ])
+
+      const failure = document.paths['/api/users/{id}'].get.responses[400]
+      expect(failure.content['application/json'].schema).toMatchObject({
+        properties: {
+          statusCode: { enum: [400] },
+          statusMessage: { enum: ['Validation Error'] },
+        },
+      })
+    })
+
+    it('documents nothing extra for an endpoint that validates nothing', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/health',
+          method: 'get',
+          definition: { operation: 'health', responses: { 200: z.object({ ok: z.boolean() }) } },
+        },
+      ])
+
+      expect(Object.keys(document.paths['/api/health'].get.responses)).toEqual(['200'])
+    })
+
+    it('documents the 415 a media-type-map body can answer with', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/upload',
+          method: 'post',
+          definition: {
+            operation: 'createUpload',
+            body: {
+              'application/json': z.object({ name: z.string() }),
+              'multipart/form-data': z.object({ name: z.string() }),
+            },
+            responses: { 201: z.object({ name: z.string() }) },
+          },
+        },
+      ])
+
+      expect(
+        document.paths['/api/upload'].post.responses[415].content['application/json'].schema,
+      ).toMatchObject({ properties: { statusCode: { enum: [415] } } })
+    })
+
+    it('documents the 406 a negotiating endpoint can answer with', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: {
+            operation: 'exportUsers',
+            responses: { 200: { media: ['text/csv', 'application/json'] } },
+          },
+        },
+      ])
+
+      expect(
+        document.paths['/api/export'].get.responses[406].content['application/json'].schema,
+      ).toMatchObject({ properties: { statusCode: { enum: [406] } } })
+    })
+
+    it('documents no 406 when the endpoint offers a single representation', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/export',
+          method: 'get',
+          definition: { operation: 'exportUsers', responses: { 200: { media: 'text/csv' } } },
+        },
+      ])
+
+      expect(document.paths['/api/export'].get.responses[406]).toBeUndefined()
+    })
+
+    it('keeps an author-declared status alongside the generated one', () => {
+      const document = createOpenApiDocument([
+        {
+          path: '/api/users',
+          method: 'post',
+          definition: {
+            operation: 'createUser',
+            body: z.object({ name: z.string() }),
+            responses: {
+              201: z.object({ id: z.string() }),
+              400: z.object({ reason: z.string() }),
+            },
+          },
+        },
+      ])
+
+      const declared = document.paths['/api/users'].post.responses[400]
+      expect(declared.content['application/json'].schema).toMatchObject({
+        oneOf: [
+          { properties: { reason: { type: 'string' } } },
+          { properties: { statusCode: { enum: [400] } } },
+        ],
       })
     })
   })

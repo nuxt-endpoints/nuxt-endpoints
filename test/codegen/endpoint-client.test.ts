@@ -23,7 +23,7 @@ const exportUsersHandler: EndpointRouteHandler = {
   route: '/api/export',
   method: 'get',
   operation: 'exportUsers',
-  stream: true,
+  mediaResponse: true,
 }
 
 describe('generateEndpointClient', () => {
@@ -57,20 +57,20 @@ describe('generateEndpointClient', () => {
     expect(content).not.toContain('"idempotency"')
   })
 
-  it('emits stream: true in the route config for a handler that declares a stream response', () => {
+  it('emits mediaResponse: true in the route config for a handler that declares one', () => {
     const content = generateEndpointClient(resolve, [exportUsersHandler], {
       client: { result: true, raw: true, effect: false },
     })
 
-    expect(content).toContain('"stream": true')
+    expect(content).toContain('"mediaResponse": true')
   })
 
-  it('omits the stream field for handlers without a stream response', () => {
+  it('omits the mediaResponse field for handlers without one', () => {
     const content = generateEndpointClient(resolve, [healthHandler], {
       client: { result: true, raw: true, effect: false },
     })
 
-    expect(content).not.toContain('"stream"')
+    expect(content).not.toContain('"mediaResponse"')
   })
 
   it('exports useEndpointResult and imports its factory only when result is enabled', () => {

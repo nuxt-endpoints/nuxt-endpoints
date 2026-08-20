@@ -139,7 +139,7 @@ type Routes =
       definition: {
         operation: 'streamReport'
         responses: {
-          200: { stream: true; contentType: 'text/csv' }
+          200: { media: ['text/csv', 'application/json'] }
           404: Schema<{ message: string }>
         }
       }
@@ -561,7 +561,8 @@ describe('EndpointClient', () => {
   })
 
   it('hands back the live stream for a route that declares one', async () => {
-    expectTypeOf(await client('streamReport')).toEqualTypeOf<ReadableStream<Uint8Array>>()
+    const report = await client('streamReport')
+    expectTypeOf(report).toEqualTypeOf<ReadableStream<Uint8Array>>()
 
     // Every status of a streaming route arrives unparsed, including the
     // validated 404 the contract still declares for OpenAPI.
@@ -571,6 +572,21 @@ describe('EndpointClient', () => {
 
     const raw = await client('streamReport').raw()
     expectTypeOf(raw.json()).resolves.toEqualTypeOf<ReadableStream<Uint8Array>>()
+  })
+
+  it('accepts any declared media type as the accept option, and nothing else', async () => {
+    // The body is the live stream either way: `accept` chooses a
+    // representation, it does not change how the response is delivered.
+    const csv = await client('streamReport', { accept: 'text/csv' })
+    expectTypeOf(csv).toEqualTypeOf<ReadableStream<Uint8Array>>()
+
+    client('streamReport', { accept: 'application/json' })
+    client('streamReport')
+
+    // @ts-expect-error accept must be one of the media types the endpoint declares.
+    client('streamReport', { accept: 'application/xml' })
+    // @ts-expect-error accept is not an option for a route with no media response.
+    client('getUser', { params: { id: '1' }, accept: 'application/json' })
   })
 
   it('does not need runtime schema values in type tests', () => {

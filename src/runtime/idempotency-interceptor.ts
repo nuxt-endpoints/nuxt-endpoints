@@ -64,6 +64,11 @@ const replaySafeResponseHeaders = new Set([
   'cache-control',
   'content-language',
   'content-type',
+  // A replay bypasses handler execution, so anything the response layer would
+  // otherwise add has to survive here or be lost. `Vary` describes which
+  // request fields the recorded answer depended on, and dropping it would let
+  // a cache reuse this representation for a client that asked for another.
+  'vary',
   'etag',
   'last-modified',
   'location',
@@ -429,6 +434,19 @@ function isReplayableStatus(status: number, additionalStatuses: readonly number[
   return (status >= 200 && status < 300) || additionalStatuses.includes(status)
 }
 
+function isUnserializableMediaBody(body: unknown): boolean {
+  return (
+    (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) ||
+    (typeof Blob !== 'undefined' && body instanceof Blob) ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body) ||
+    // A Node readable, matched the way the HTTP layer sniffs for one.
+    (typeof body === 'object' &&
+      body !== null &&
+      typeof (body as { pipe?: unknown }).pipe === 'function')
+  )
+}
+
 type IdempotencyBodySnapshot =
   | { hasBody: false; serializedBody: ''; body: undefined }
   | { hasBody: true; serializedBody: string; body: unknown }
@@ -440,6 +458,15 @@ function createIdempotencyBodySnapshot(body: unknown): IdempotencyBodySnapshot {
     }
     if (typeof Response !== 'undefined' && body instanceof Response) {
       throw new TypeError('Native Response values are not supported by idempotency replay')
+    }
+    // Every other member of `EndpointMediaResponseBody` has to be rejected explicitly,
+    // because `JSON.stringify` does not fail on them - a `ReadableStream` or a
+    // `Blob` serializes to `{}` and a `Uint8Array` to `{"0":...}`. Recording
+    // that would replay an empty object to a caller who was promised bytes.
+    if (isUnserializableMediaBody(body)) {
+      throw new TypeError(
+        'Streamed and binary response bodies are not supported by idempotency replay',
+      )
     }
     const serialized = JSON.stringify(body)
     if (serialized === undefined) {

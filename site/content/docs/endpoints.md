@@ -356,16 +356,16 @@ export default defineEndpointHandler(endpoint, ({ params, respond }) => {
 })
 ```
 
-## Streaming responses
+## Non-JSON responses
 
-A route that streams its response can still be a declared endpoint. Mark the status `stream: true` and give it the media type it sends:
+A validated response body is always sent as JSON — that is what having a schema for it means. Everything else goes through one door: declare the status by its media type instead of by a schema.
 
 ```ts
 export const endpoint = defineEndpoint({
   operation: 'exportUsers',
   query: z.object({ delimiter: z.string().optional() }),
   responses: {
-    200: { stream: true, contentType: 'text/csv', description: 'CSV export' },
+    200: { media: 'text/csv', description: 'CSV export' },
     404: ErrorBody,
   },
 })
@@ -375,21 +375,97 @@ export default defineEndpointHandler(endpoint, ({ query, respond }) => {
 })
 ```
 
-The handler may return anything the HTTP layer forwards to the socket as-is: a web `ReadableStream`, a Node readable, a native `Response`, a `Blob`, raw bytes, or an already-encoded string. The declared `contentType` is applied for you unless the handler sets one itself; it defaults to `application/octet-stream`.
+The same door covers every case that is not JSON — XML, CSV, a file download, an event stream, arbitrary bytes:
 
-Nothing about the payload is validated. A stream cannot be buffered and checked without defeating the reason it is a stream, so `stream: true` is a declaration, not a contract on the bytes. That is also why the media type is declared rather than inferred, and why the payload's optional `schema` is named `schema` and not `body` — it documents the stream in the [generated OpenAPI document](/docs/openapi) and is never used to check anything:
+```ts
+responses: {
+  200: { media: 'application/xml' },
+  200: { media: 'application/pdf' },
+  200: { media: 'text/event-stream' },
+  200: { media: 'application/octet-stream' },
+}
+```
+
+The handler may return anything the HTTP layer forwards to the socket as-is: a web `ReadableStream`, a Node readable, a native `Response`, a `Blob`, raw bytes, or an already-encoded string. The declared media type is sent for you unless the handler sets one itself.
+
+Nothing about the payload is validated, and that is the whole distinction from `body`. There is no schema to check it against, and a stream cannot be buffered and checked without defeating the reason it is a stream. The media type is required rather than defaulted, because taking this door means knowing what you are sending. An optional `schema` documents the payload — or one chunk of it — in the [generated OpenAPI document](/docs/openapi), and is named `schema` rather than `body` precisely because it never checks anything:
 
 ```ts
 responses: {
   200: {
-    stream: true,
-    contentType: 'application/x-ndjson',
+    media: 'application/x-ndjson',
     schema: z.object({ id: z.string(), at: z.string() }),
   },
 }
 ```
 
-On the client, a route with a stream response is a streaming route end to end: the generated client tells the fetcher not to parse the body, so what you get back is the live stream rather than a decoded copy of it once it has all arrived.
+### Several representations of one status
+
+Give `media` an array and the status has more than one representation. The runtime negotiates from the request's `Accept` header, tells the handler which one to produce, and sends that media type:
+
+```ts
+export const endpoint = defineEndpoint({
+  operation: 'exportUsers',
+  responses: {
+    200: { media: ['text/csv', 'application/json'], description: 'User export' },
+    404: ErrorBody,
+  },
+})
+
+export default defineEndpointHandler(endpoint, ({ responseMediaType, respond }) => {
+  // narrowed to 'text/csv' | 'application/json'
+  return respond(200, responseMediaType === 'text/csv' ? toCsv(rows) : JSON.stringify(rows))
+})
+```
+
+This is the mirror image of a [media-type request body](#media-type-request-bodies): that one reads `Content-Type` and answers 415, this one reads `Accept` and answers 406.
+
+Only _successful_ statuses take part. A media-typed error — a `problem+json` 404, an HTML error page — is not an alternative the caller chooses between; it is what happens instead. So adding one to an endpoint never starts refusing clients, and a request cannot negotiate its way into an error's media type.
+
+Declaration order is the endpoint's own preference. It breaks ties between equally acceptable types, and it answers a request that expresses no preference at all — an absent header, or `*/*`. That is what makes omitting `accept` on the client a sensible default rather than an arbitrary one.
+
+Each media type must be a single lowercase `type/subtype`, and the build fails otherwise — `media: 'text/csv, application/json'` and `media: ['csv', 'json']` are rejected rather than becoming a nonsense `Content-Type` or an endpoint that answers 406 to everything.
+
+Selection follows RFC 9110: quality weights are honored, a more specific range overrides a wider one that would otherwise apply, and `q=0` is a refusal rather than a weak preference. When nothing the endpoint can produce is acceptable, the request is refused with `406 Not Acceptable` **before the handler runs** — there is no point executing a handler whose output could never be sent. That refusal goes through [`onValidationError`](#hooks) like any other, with `kind: 'accept'`.
+
+Every response of a negotiating endpoint carries `Vary: Accept` — including the 406, and including statuses that are not media responses. The header describes the route, not one answer: a cache that only ever saw the CSV must still know the JSON exists. A handler that declares its own `Vary` adds to it rather than replacing it, because `Vary` is a list of what the answer depended on and dropping an entry hands caches a wrong answer.
+
+On the client, `accept` asks for one of the declared types and is typed to them:
+
+```ts
+const json = await $endpoint('exportUsers', { accept: 'application/json' })
+```
+
+It is optional — omitting it takes the endpoint's preference — and it is part of the TanStack Query cache key, so two calls that differ only in `accept` are two cached values.
+
+An endpoint that negotiates and also uses [`Idempotency-Key`](/docs/idempotency) needs `Accept` in its fingerprint, or a retry that asks for a different representation replays the first one. Pass `fingerprint` to include it.
+
+`responseMediaType` is present whenever the endpoint declares any media type, not only when it negotiates: with a single declared type it is that type. The field always means the same thing — what this response is being sent as.
+
+### JSON with a different media type
+
+`application/problem+json` and other `+json` profiles are still JSON, so they keep their schema and stay validated. Label them with `contentType` on the validated form, and the header is sent:
+
+```ts
+responses: {
+  404: {
+    body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
+    contentType: 'application/problem+json',
+  },
+}
+```
+
+`contentType` accepts JSON media types only. A non-JSON value there would describe one thing and send another, so the build fails and names `media` as the replacement:
+
+```
+Response 200 declares contentType 'application/xml' on a validated body,
+which is always sent as JSON. Declare media: 'application/xml' instead —
+it sends what the handler returns and documents that media type.
+```
+
+### On the client
+
+A route with any media response is unparsed end to end: the generated client tells the fetcher not to read the body, so what you get back is the live stream rather than a decoded copy of it once it has all arrived.
 
 ```ts
 const stream = await $endpoint('exportUsers', { query: { delimiter: ';' } })
@@ -402,7 +478,7 @@ const response = await $endpoint('exportUsers', { query: {} }).raw()
 Two consequences follow from the client never parsing the response:
 
 - Every status of that route arrives as a stream, including a validated `404` the contract still declares. Those declarations remain true for the server and for OpenAPI; the client just hands you the bytes.
-- `useEndpoint` and the Vue Query factories are the wrong tools for a streaming route — a stream cannot be cached or serialized into the Nuxt payload. The build warns when a stream route would get a query option factory.
+- `useEndpoint` and the Vue Query factories are the wrong tools for such a route — an unread stream cannot be cached or serialized into the Nuxt payload. The build warns when one would get a query option factory.
 
 Pass an explicit `responseType` when you want the fetcher to decode after all, which is the usual choice for a file download:
 

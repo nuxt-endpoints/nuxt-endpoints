@@ -7,7 +7,9 @@ Nuxt Endpoints is strongest for JSON REST APIs. Use `response` or `responses` wh
 
 For lower-level HTTP behavior, omit `response` and `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
 
-Response type checking only applies when a route opts into a response contract. If a route needs to return a file, redirect, proxy response, or another native `Response`, leave the response contract out and handle the client side as raw HTTP. Streams are the exception: they have a [first-class declaration](/docs/endpoints#streaming-responses) that keeps them in the contract without pretending their payload is validated.
+Response type checking only applies when a route opts into a response contract. If a route needs to return a redirect, a proxy response, or another native `Response` that should not be modelled as a status at all, leave the response contract out and handle the client side as raw HTTP.
+
+Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and event streams all have a [first-class declaration](/docs/endpoints#non-json-responses) that keeps them in the contract without pretending their payload is validated.
 
 ```ts
 export const endpoint = defineEndpoint({
@@ -31,7 +33,32 @@ There is intentionally no `useEndpointRaw`. Native `Response`, `Headers`, and st
 
 ## File downloads
 
-Return a native `Response` with download headers. Keep the request side typed, and read the body from `.raw()` on the client.
+A download is a media response like any other, so it can stay in the contract:
+
+```ts
+// server/api/files/[id].get.ts
+export const endpoint = defineEndpoint({
+  operation: 'downloadFile',
+  params: z.object({ id: z.string() }),
+  responses: {
+    200: { media: 'application/pdf', description: 'Invoice PDF' },
+  },
+})
+
+export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
+  const file = await loadFile(params.id)
+
+  return respond(200, file.bytes, {
+    headers: { 'content-disposition': `attachment; filename="${file.name}"` },
+  })
+})
+```
+
+```ts
+const blob = await $endpoint('downloadFile', { params: { id: 'invoice-1' }, responseType: 'blob' })
+```
+
+When the content type varies per file and cannot be declared, drop the response contract and return a native `Response` instead, reading the body from `.raw()` on the client.
 
 ```ts
 // server/api/files/[id].get.ts
@@ -102,8 +129,8 @@ This route is outside the generated endpoint client until multipart request cont
 
 ## Streaming and SSE
 
-Streaming is no longer a reason to leave the contract. Declare the status with
-[`stream: true`](/docs/endpoints#streaming-responses) and the route keeps its
+Streaming is no longer a reason to leave the contract. Declare the status by
+its [media type](/docs/endpoints#non-json-responses) and the route keeps its
 place in OpenAPI and in the generated client, which stops parsing that route's
 body so callers receive the live stream.
 
@@ -112,7 +139,7 @@ body so callers receive the live stream.
 export const endpoint = defineEndpoint({
   operation: 'streamEvents',
   responses: {
-    200: { stream: true, contentType: 'text/event-stream' },
+    200: { media: 'text/event-stream' },
   },
 })
 
@@ -137,9 +164,8 @@ the body should not be parsed.
 
 The chunks themselves stay untyped. Declaring their shape would need a complete
 chunk, cancellation, and error contract, and the demand in the ecosystem is for
-streaming to work at all rather than for typed chunks — so `stream: true`
-declares that a stream is sent, and `schema` documents it, without either
-claiming to check it.
+streaming to work at all rather than for typed chunks — so `media` declares
+what is sent, and `schema` documents it, without either claiming to check it.
 
 For browser SSE, `EventSource` is usually simpler:
 

@@ -184,30 +184,107 @@ describe('DefinedEndpoint', () => {
     })
   })
 
-  it('rejects a declared response that mixes stream: true with body', async () => {
+  it('rejects a declared response that mixes media with body', async () => {
     const { defineEndpoint } = await import('../src/runtime')
 
     expect(() =>
       defineEndpoint({
         operation: 'exportUsers',
         responses: {
-          200: { stream: true, body: userResponse } as never,
+          200: { media: 'text/csv', body: userResponse } as never,
         },
       }),
-    ).toThrow(/declares both stream: true and body/)
+    ).toThrow(/declares both media and body/)
   })
 
-  it('rejects a declared stream contentType that is not a string', async () => {
+  it('rejects a declared media list with no media types in it', async () => {
     const { defineEndpoint } = await import('../src/runtime')
 
     expect(() =>
       defineEndpoint({
         operation: 'exportUsers',
         responses: {
-          200: { stream: true, contentType: 123 as never },
+          200: { media: [] },
         },
       }),
-    ).toThrow(/stream contentType that is not a string/)
+    ).toThrow(/empty list of media types/)
+  })
+
+  it('rejects a declared media list containing an empty media type', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { media: ['text/csv', ''] },
+        },
+      }),
+    ).toThrow(/declares an empty media type/)
+  })
+
+  it('rejects a media type that is not a single lowercase type/subtype', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    // A comma-joined string is an easy typo now that the array form exists,
+    // and would otherwise be sent verbatim as one Content-Type.
+    expect(() =>
+      defineEndpoint({ responses: { 200: { media: 'text/csv, application/json' } } }),
+    ).toThrow(/not a single type\/subtype media type/)
+    // Without the shape check these reach the runtime and negotiate to
+    // nothing, so every request to the endpoint would answer 406.
+    expect(() => defineEndpoint({ responses: { 200: { media: ['csv', 'json'] } } })).toThrow(
+      /not a single type\/subtype media type/,
+    )
+    expect(() => defineEndpoint({ responses: { 200: { media: 'TEXT/CSV' } } })).toThrow(
+      /must be lowercase/,
+    )
+    expect(() => defineEndpoint({ responses: { 200: { media: ' text/csv' } } })).toThrow(
+      /must be lowercase and free of surrounding whitespace/,
+    )
+  })
+
+  it('rejects a media type declared twice for one status', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({ responses: { 200: { media: ['text/csv', 'text/csv'] } } }),
+    ).toThrow(/declares media type "text\/csv" more than once/)
+  })
+
+  it('rejects a declared contentType that is not a string', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { body: userResponse, contentType: 123 as never },
+        },
+      }),
+    ).toThrow(/declares a contentType that is not a string/)
+  })
+
+  it('rejects a non-JSON contentType on a validated body', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { body: userResponse, contentType: 'text/csv' },
+        },
+      }),
+    ).toThrow(/on a validated body, which is always sent as JSON/)
+
+    expect(() =>
+      defineEndpoint({
+        operation: 'exportUsers',
+        responses: {
+          200: { body: userResponse, contentType: 'text/csv' },
+        },
+      }),
+    ).toThrow(/media: 'text\/csv'/)
   })
 })
 

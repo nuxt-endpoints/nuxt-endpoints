@@ -152,30 +152,30 @@ describe('Nitro built-in OpenAPI overlap', () => {
   })
 })
 
-describe('stream response detection', () => {
-  it('reports stream: true for a carrier declaring a stream response via responses', () => {
+describe('media response detection', () => {
+  it('reports mediaResponse: true for a carrier declaring a media response via responses', () => {
     const detection = getEndpointFromCarrier({
       definition: {
         operation: 'exportUsers',
         responses: {
-          200: { stream: true, contentType: 'text/csv' },
+          200: { media: 'text/csv' },
           404: { message: 'not used at build time' } as never,
         },
       },
     })
 
-    expect(detection).toEqual({ operation: 'exportUsers', stream: true })
+    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
   })
 
-  it('reports stream: true for a carrier declaring a stream response via a bare response', () => {
+  it('reports mediaResponse: true for a carrier declaring a media response via a bare response', () => {
     const detection = getEndpointFromCarrier({
       definition: {
         operation: 'exportUsers',
-        response: { stream: true },
+        response: { media: 'text/csv' },
       },
     })
 
-    expect(detection).toEqual({ operation: 'exportUsers', stream: true })
+    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
   })
 
   it('reports no stream key when the carrier declares only validated responses', () => {
