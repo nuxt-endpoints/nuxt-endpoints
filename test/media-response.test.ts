@@ -321,25 +321,11 @@ describe('media response contracts', () => {
       })
     }
 
-    it('takes the endpoint preference when the request sends no Accept header', async () => {
-      const endpoint = createNegotiatingEndpoint()
-      const negotiated: (string | undefined)[] = []
-
-      const handler = defineEndpointHandler(endpoint, ({ responseMediaType, respond }) => {
-        negotiated.push(responseMediaType)
-        return respond(200, createReadableStream())
-      })
-
-      await handler(createEvent())
-
-      expect(negotiated).toEqual(['text/csv'])
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-        vary: 'Accept',
-        'content-type': 'text/csv',
-      })
-    })
-
-    it('sends the exactly requested media type', async () => {
+    // Which media type wins for a given header is `negotiateMediaType`'s job
+    // and is covered in test/accept.test.ts. What the endpoint layer owns is
+    // that the result reaches both the handler and the response, so one case
+    // proves it - the others differed only in the header string.
+    it('hands the negotiated media type to the handler and sends it', async () => {
       const endpoint = createNegotiatingEndpoint()
       const negotiated: (string | undefined)[] = []
 
@@ -349,24 +335,6 @@ describe('media response contracts', () => {
       })
 
       await handler(createEvent({ accept: 'application/json' }))
-
-      expect(negotiated).toEqual(['application/json'])
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-        vary: 'Accept',
-        'content-type': 'application/json',
-      })
-    })
-
-    it('follows the q weights rather than the endpoint preference', async () => {
-      const endpoint = createNegotiatingEndpoint()
-      const negotiated: (string | undefined)[] = []
-
-      const handler = defineEndpointHandler(endpoint, ({ responseMediaType, respond }) => {
-        negotiated.push(responseMediaType)
-        return respond(200, createReadableStream())
-      })
-
-      await handler(createEvent({ accept: 'text/csv;q=0.3, application/json;q=0.9' }))
 
       expect(negotiated).toEqual(['application/json'])
       expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {

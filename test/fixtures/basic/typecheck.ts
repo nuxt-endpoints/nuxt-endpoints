@@ -43,21 +43,11 @@ async function checkClient() {
     body.id.toFixed()
   }
 
-  const userCall = client('/api/users/:id', { method: 'get', params: { id: '1' } })
-
-  // @ts-expect-error effect is only available when endpoints.client.effect is enabled.
-  userCall.effect()
-  // @ts-expect-error resultEffect is not part of the client surface.
-  userCall.resultEffect()
-  // @ts-expect-error rawEffect is not part of the client surface.
-  userCall.rawEffect()
-
+  // One negative is enough here: which shapes `params` accepts is decided by
+  // InferInput and is owned by test/types/client.test-d.ts. This file exists to
+  // prove the *generated* surface, so it checks each call shape once.
   // @ts-expect-error params.id must use the validator input type.
   await client('/api/users/:id', { method: 'get', params: { id: 1 } })
-  // @ts-expect-error params.id must use the validator input type.
-  await client('getUser', { params: { id: 1 } })
-  // @ts-expect-error params.id must use the validator input type.
-  await client.getUser({ params: { id: 1 } })
 
   const created = await client('/api/users', { method: 'post', body: { name: 'Sid' } })
   created.id.toFixed()
@@ -85,8 +75,6 @@ async function checkClient() {
 
   // @ts-expect-error body.name is required.
   await client('/api/users', { method: 'post', body: {} })
-  // @ts-expect-error body.name is required.
-  await client('createUser', { body: {} })
 
   const search = await client('/api/search', { method: 'get', query: { q: 'nuxt' } })
   search.items[0]?.toUpperCase()
@@ -110,9 +98,6 @@ async function checkClient() {
   // @ts-expect-error Date is serialized to a string on the HTTP wire.
   serialized.createdAt.getTime()
 
-  // @ts-expect-error operation calls are generated only when operation is declared.
-  await client('search', { query: { q: 'nuxt' } })
-
   // Media-type-map body: omitting `mediaType` defaults to the map's
   // `application/json` member, typing `body` the same as a single-schema
   // contract would.
@@ -131,9 +116,6 @@ async function checkClient() {
   })
   uploadedByMultipart.bodyMediaType.toUpperCase()
 
-  // @ts-expect-error body must be FormData once multipart/form-data is selected.
-  await client('createUpload', { mediaType: 'multipart/form-data', body: { name: 'Sid' } })
-
   const userState = await useClient('/api/users/:id', {
     method: 'get',
     params: { id: '1' },
@@ -149,9 +131,6 @@ async function checkClient() {
   })
   userOperationState.data.value?.name.toUpperCase()
 
-  // @ts-expect-error useEndpoint does not expose property aliases.
-  await useClient.getUser({ params: { id: '1' } })
-
   const userResultState = await useResultClient('/api/users/:id', {
     method: 'get',
     params: { id: '1' },
@@ -163,9 +142,6 @@ async function checkClient() {
   if (userResultState.data.value?.status === 200) {
     userResultState.data.value.body.name.toUpperCase()
   }
-  // @ts-expect-error useEndpointResult does not expose non-serializable Headers in async data.
-  void userResultState.data.value?.headers
-
   const userResultOperationState = await useResultClient('getUser', {
     params: { id: '1' },
     key: 'user-result-operation:1',

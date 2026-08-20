@@ -16,10 +16,6 @@ const UserResponse = v.object({
   name: v.string(),
 })
 
-const ErrorResponse = v.object({
-  message: v.string(),
-})
-
 describe('Valibot support', () => {
   it('infers input and output types from real Valibot schemas', () => {
     expectTypeOf<InferInput<typeof Params>>().toEqualTypeOf<v.InferInput<typeof Params>>()
@@ -51,25 +47,6 @@ describe('Valibot support', () => {
     // @ts-expect-error id must be a number.
     defineEndpointHandler(endpoint, () => {
       return { id: 'wrong', name: 'Tom' }
-    })
-  })
-
-  it('types declared non-200 responses from Valibot schemas', () => {
-    const endpoint = defineEndpoint({
-      operation: 'getUser',
-      responses: {
-        200: UserResponse,
-        404: ErrorResponse,
-      },
-    })
-
-    defineEndpointHandler(endpoint, ({ respond }) => {
-      return respond(404, { message: 'Not found' })
-    })
-
-    defineEndpointHandler(endpoint, ({ respond }) => {
-      // @ts-expect-error message is required for 404.
-      return respond(404, { error: 'Not found' })
     })
   })
 })

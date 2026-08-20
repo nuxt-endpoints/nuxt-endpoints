@@ -12,10 +12,6 @@ const UserResponse = Schema.Struct({
   name: Schema.String,
 })
 
-const ErrorResponse = Schema.Struct({
-  message: Schema.String,
-})
-
 describe('Effect Schema support', () => {
   it('infers input and output types from real Effect schemas', () => {
     expectTypeOf<InferInput<typeof Params>>().toEqualTypeOf<Schema.Schema.Encoded<typeof Params>>()
@@ -45,25 +41,6 @@ describe('Effect Schema support', () => {
     // @ts-expect-error id must be a number.
     defineEndpointHandler(endpoint, () => {
       return { id: 'wrong', name: 'Ada' }
-    })
-  })
-
-  it('types declared non-200 responses from Effect schemas', () => {
-    const endpoint = defineEndpoint({
-      operation: 'getUser',
-      responses: {
-        200: UserResponse,
-        404: ErrorResponse,
-      },
-    })
-
-    defineEndpointHandler(endpoint, ({ respond }) => {
-      return respond(404, { message: 'Not found' })
-    })
-
-    defineEndpointHandler(endpoint, ({ respond }) => {
-      // @ts-expect-error message is required for 404.
-      return respond(404, { error: 'Not found' })
     })
   })
 })

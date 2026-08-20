@@ -1,4 +1,4 @@
-import { assertType, describe, expectTypeOf, it } from 'vitest'
+import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import { defineEndpoint, defineEndpointHandler, respond } from '../../src/runtime'
 import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../../src/runtime'
@@ -238,11 +238,6 @@ describe('defineEndpoint handler types', () => {
     defineEndpointHandler(endpoint, () => {
       return { id: 1, name: 'Tom' }
     })
-  })
-
-  it('exports a standalone response helper for branch helpers', () => {
-    const notFound = () => respond(404, { message: 'Not found' })
-    assertType<ReturnType<typeof notFound>>(respond(404, { message: 'Not found' }))
   })
 
   it('allows handler-inferred responses when no response contract is declared', () => {

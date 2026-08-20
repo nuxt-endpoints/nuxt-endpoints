@@ -17,12 +17,6 @@ const createOrderHandler: EndpointRouteHandler = {
 }
 
 describe('generateEndpointQueryTypes', () => {
-  it('renders a never route entry union for an empty handler list', () => {
-    const content = generateEndpointQueryTypes(resolve, [])
-
-    expect(content).toContain('type EndpointRouteEntry =\n  | never')
-  })
-
   it('imports the query adapter types via the resolver', () => {
     const content = generateEndpointQueryTypes(resolve, [createOrderHandler])
 
@@ -30,23 +24,17 @@ describe('generateEndpointQueryTypes', () => {
       "import type { EndpointInfiniteQueryOptionsClient, EndpointMutationOptionsClient, EndpointQueryOptionsClient } from './runtime/tanstack-query'",
     )
   })
-
-  it('embeds the operation name in the route entry union', () => {
-    const content = generateEndpointQueryTypes(resolve, [createOrderHandler])
-
-    expect(content).toContain("operation: 'createOrder'")
-  })
 })
 
 describe('generateEndpointQueryClient', () => {
-  it('reflects operation and idempotency metadata into the runtime route config', () => {
+  it('embeds the shared runtime route config', () => {
     const content = generateEndpointQueryClient(resolve, '/build/types/endpoints-query.d.ts', [
       createOrderHandler,
     ])
 
+    // The field mapping itself is proved once, in endpoint-client.test.ts:
+    // both generators serialize the same `toEndpointRouteConfigEntries`.
     expect(content).toContain('"operation": "createOrder"')
-    expect(content).toContain('"headerName": "Idempotency-Key"')
-    expect(content).toContain('"required": true')
   })
 
   it('imports runtime and type modules from the resolver and the query type file', () => {

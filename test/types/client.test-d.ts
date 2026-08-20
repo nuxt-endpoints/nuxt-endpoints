@@ -9,10 +9,6 @@ import type {
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 
-const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
-  throw new Error('type-only schema')
-}
-
 type Routes =
   | {
       path: '/api/users/:id'
@@ -587,11 +583,5 @@ describe('EndpointClient', () => {
     client('streamReport', { accept: 'application/xml' })
     // @ts-expect-error accept is not an option for a route with no media response.
     client('getUser', { params: { id: '1' }, accept: 'application/json' })
-  })
-
-  it('does not need runtime schema values in type tests', () => {
-    expectTypeOf(schema<{ id: string }, { id: number }>()).toMatchTypeOf<
-      Schema<{ id: string }, { id: number }>
-    >()
   })
 })

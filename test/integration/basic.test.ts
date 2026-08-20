@@ -462,7 +462,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(queryTypes).toContain("operation: 'getDynamic'")
     })
 
-    it('type-checks the generated #endpoints client against endpoint contracts', async () => {
+    it('agrees with the generated Nitro InternalApi for every route', async () => {
       const buildDir = getBuildDir(useTestContext)
       const tsconfigPath = join(buildDir, 'endpoints-typecheck.json')
       const internalApiAgreementPath = join(buildDir, 'internal-api-agreement.ts')
@@ -473,12 +473,16 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         generateInternalApiAgreementTypecheck(endpointTypes),
         'utf8',
       )
+      // Deliberately without `typecheck.ts`: `scripts/typecheck-fixture.mjs`
+      // compiles it against the same generated types, and both run in
+      // `pnpm check`, so including it here was the same tsc pass twice. What is
+      // only provable with a real Nitro build stays - the generated
+      // `InternalApi` this agreement file compares against.
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
         join(buildDir, 'types/nitro-routes.d.ts'),
         join(buildDir, 'types/endpoints.d.ts'),
         internalApiAgreementPath,
-        join(fixtureRoot, 'typecheck.ts'),
       ])
 
       await writeJson(tsconfigPath, {

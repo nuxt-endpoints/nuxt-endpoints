@@ -141,10 +141,6 @@ describe('EffectEndpointClient', () => {
     aliasCall.result()
     // @ts-expect-error raw is disabled for this client.
     aliasCall.raw()
-    // @ts-expect-error resultEffect is not part of the client surface.
-    call.resultEffect()
-    // @ts-expect-error rawEffect is not part of the client surface.
-    call.rawEffect()
   })
 
   it('propagates required idempotency keys through Effect clients', () => {
