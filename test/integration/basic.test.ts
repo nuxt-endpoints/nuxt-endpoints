@@ -169,20 +169,25 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       ])
     })
 
-    it('answers 406 when it can produce nothing the request accepts', async () => {
+    it('routes an unacceptable Accept through the application onValidationError', async () => {
       const response = await fetch('/api/export', {
         headers: { accept: 'application/xml' },
       })
 
-      expect(response.status).toBe(406)
-      await expect(response.json()).resolves.toMatchObject({
-        statusCode: 406,
-        statusMessage: 'Not Acceptable',
-        data: {
-          received: 'application/xml',
-          supportedMediaTypes: ['text/csv', 'application/json'],
-        },
+      // This fixture's server/endpoints/runtime.ts replaces every contract
+      // failure with its own 422, and a negotiation refusal is one - so what
+      // this asserts is that the 406 reaches the same extension point as a
+      // schema or media-type failure rather than bypassing it. The default
+      // 406 body is covered in test/media-response.test.ts.
+      expect(response.status).toBe(422)
+      await expect(response.json()).resolves.toEqual({
+        error: 'contract',
+        kind: 'accept',
+        source: 'headers',
       })
+      // The refusal varies on Accept even after the application reshaped it:
+      // it is the response a cache must never reuse for a different Accept.
+      expect(response.headers.get('vary')).toBe('Accept')
     })
 
     it('varies on Accept for every representation the endpoint serves', async () => {
