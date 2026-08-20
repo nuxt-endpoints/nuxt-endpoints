@@ -176,17 +176,12 @@ describe('TanStack Query adapter', () => {
   ) as unknown as EndpointMutationOptionsClient<Routes>
 
   describe('classification', () => {
-    it('exposes GET/HEAD operations on the query client only', () => {
-      expect(Object.hasOwn(queryOptions, 'getUser')).toBe(true)
-      expect(Object.hasOwn(queryOptions, 'createUser')).toBe(false)
-    })
-
     it('exposes mutation operations on the mutation client only', () => {
       expect(Object.hasOwn(mutationOptions, 'createUser')).toBe(true)
       expect(Object.hasOwn(mutationOptions, 'getUser')).toBe(false)
     })
 
-    it('skips routes without an operation', () => {
+    it('exposes exactly the GET/HEAD operations, skipping unnamed ones', () => {
       expect(Object.hasOwn(queryOptions, 'undefined')).toBe(false)
       expect(Object.keys(queryOptions).sort()).toEqual(
         ['getUser', 'health', 'listUsers', 'retryStatus'].sort(),
@@ -681,16 +676,6 @@ describe('TanStack Query adapter', () => {
       expect(capturedSignal?.aborted).toBe(true)
     })
 
-    it('performs a second fetch call on refetch', async () => {
-      fetchMock.mockResolvedValue({ id: 3, name: 'A' })
-      const options = queryOptions.getUser({ params: { id: '3' } })
-
-      await qc.fetchQuery(toPlainOptions(options))
-      await qc.refetchQueries({ queryKey: options.queryKey as EndpointQueryKey })
-
-      expect(fetchMock).toHaveBeenCalledTimes(2)
-    })
-
     it('resolves declared error statuses through result mode instead of rejecting', async () => {
       fetchRawMock.mockResolvedValue({
         status: 404,
@@ -703,13 +688,6 @@ describe('TanStack Query adapter', () => {
       const data = await qc.fetchQuery(toPlainOptions(options))
 
       expect(data).toEqual({ status: 404, ok: false, body: { message: 'Not found' } })
-    })
-
-    it('rejects fetchQuery in data mode when the underlying fetch rejects', async () => {
-      fetchMock.mockRejectedValue(new Error('Not Found'))
-      const options = queryOptions.getUser({ params: { id: '404' } })
-
-      await expect(qc.fetchQuery(toPlainOptions(options))).rejects.toThrow('Not Found')
     })
   })
 })

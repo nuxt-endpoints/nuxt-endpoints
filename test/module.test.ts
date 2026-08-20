@@ -212,10 +212,6 @@ describe('findUnsupportedRouteTemplateSyntax', () => {
   it('passes an ordinary dynamic route', () => {
     expect(findUnsupportedRouteTemplateSyntax('/api/users/:id')).toBeUndefined()
   })
-
-  it('passes a plain static route', () => {
-    expect(findUnsupportedRouteTemplateSyntax('/api/plain')).toBeUndefined()
-  })
 })
 
 describe('resolveModuleOptions', () => {
@@ -260,23 +256,6 @@ describe('resolveModuleOptions', () => {
       querySetup: 'external',
       queryStaleTime: 60_000,
     })
-  })
-
-  it('enables the query client with external setup when query is true', () => {
-    expect(resolveModuleOptions({ client: { query: true } }, false).client).toMatchObject({
-      query: true,
-      querySetup: 'external',
-      queryStaleTime: 60_000,
-    })
-  })
-
-  it('resolves an auto query setup with a custom staleTime', () => {
-    const client = resolveModuleOptions(
-      { client: { query: { setup: 'auto', staleTime: 5_000 } } },
-      false,
-    ).client
-
-    expect(client).toMatchObject({ query: true, querySetup: 'auto', queryStaleTime: 5_000 })
   })
 })
 

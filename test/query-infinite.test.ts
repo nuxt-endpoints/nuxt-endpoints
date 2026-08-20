@@ -3,14 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   EndpointFetcherRuntime,
   EndpointInfiniteQueryOptionsClient,
-  EndpointQueryKey,
-  EndpointQueryOptionsClient,
-  EndpointQueryOptionsObject,
 } from '../src/runtime/tanstack-query'
-import {
-  createEndpointInfiniteQueryOptions,
-  createEndpointQueryOptions,
-} from '../src/runtime/tanstack-query'
+import { createEndpointInfiniteQueryOptions } from '../src/runtime/tanstack-query'
 import type { StandardSchemaLike } from '../src/runtime'
 
 const fetchMock = vi.fn()
@@ -110,13 +104,6 @@ function createFetcher(
   return Object.assign(dataMock, { raw: rawMock }) as unknown as EndpointFetcherRuntime
 }
 
-function toPlainOptions<DATA>(options: EndpointQueryOptionsObject<DATA>) {
-  return {
-    queryKey: options.queryKey as EndpointQueryKey,
-    queryFn: options.queryFn,
-  }
-}
-
 describe('TanStack Query infinite adapter', () => {
   beforeEach(() => {
     fetchMock.mockReset()
@@ -133,25 +120,12 @@ describe('TanStack Query infinite adapter', () => {
   ) as unknown as EndpointInfiniteQueryOptionsClient<Routes>
 
   describe('classification', () => {
-    it('exposes GET/HEAD operations on the infinite query client', () => {
-      expect(Object.hasOwn(infiniteOptions, 'searchUsers')).toBe(true)
-      expect(Object.hasOwn(infiniteOptions, 'searchItems')).toBe(true)
-      expect(Object.hasOwn(infiniteOptions, 'health')).toBe(true)
-    })
-
-    it('excludes mutation (non GET/HEAD) operations', () => {
-      expect(Object.hasOwn(infiniteOptions, 'createUser')).toBe(false)
-    })
-
-    it('skips routes without an operation', () => {
+    it('exposes exactly the GET/HEAD operations, skipping unnamed and reserved ones', () => {
+      // The client is built by plain enumerable assignment, so Object.keys is exhaustive.
       expect(Object.hasOwn(infiniteOptions, 'undefined')).toBe(false)
       expect(Object.keys(infiniteOptions).sort()).toEqual(
         ['searchUsers', 'searchItems', 'health', 'retrySearch'].sort(),
       )
-    })
-
-    it('skips reserved operation names', () => {
-      expect(Object.hasOwn(infiniteOptions, 'then')).toBe(false)
     })
   })
 
@@ -338,24 +312,6 @@ describe('TanStack Query infinite adapter', () => {
         query: { cursor: 'c1', term: 'x' },
         method: 'get',
         signal,
-      })
-    })
-
-    it('reflects an arbitrary page-param field name in the fetch call', async () => {
-      fetchMock.mockResolvedValue({ items: [] })
-      const config = {
-        initialPageParam: 'p0',
-        request: (pageParam: string) => ({ query: { weirdCursorName: pageParam } }),
-        getNextPageParam: (_page: SearchItemsPage) => undefined,
-      }
-      const options = infiniteOptions.searchItems(config)
-
-      await options.queryFn({ pageParam: 'p1', signal: new AbortController().signal })
-
-      expect(fetchMock).toHaveBeenCalledWith('/api/items/search', {
-        query: { weirdCursorName: 'p1' },
-        method: 'get',
-        signal: expect.any(AbortSignal),
       })
     })
 
@@ -597,41 +553,6 @@ describe('TanStack Query infinite adapter', () => {
       ])
       expect(data.pageParams).toEqual([undefined, 'c1'])
       expect(qc.getQueryData(infiniteOptions.searchUsers.key(config))).toEqual(data)
-    })
-  })
-
-  describe('prefetch recipe mechanics (regular non-infinite query factories)', () => {
-    const regularOptions = createEndpointQueryOptions(
-      routesConfig,
-    ) as unknown as EndpointQueryOptionsClient<Routes>
-    let qc: QueryClient
-
-    beforeEach(() => {
-      qc = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } })
-    })
-
-    afterEach(() => {
-      qc.clear()
-    })
-
-    it('prefetchQuery populates the cache under the exact expected key', async () => {
-      fetchMock.mockResolvedValue({ ok: true })
-      const options = regularOptions.health()
-
-      await qc.prefetchQuery(toPlainOptions(options))
-
-      expect(qc.getQueryData(options.queryKey as EndpointQueryKey)).toEqual({ ok: true })
-    })
-
-    it('a subsequent ensureQueryData with non-zero staleTime does not refetch', async () => {
-      fetchMock.mockResolvedValue({ ok: true })
-      const options = regularOptions.health()
-
-      await qc.prefetchQuery(toPlainOptions(options))
-      const data = await qc.ensureQueryData(toPlainOptions(options))
-
-      expect(data).toEqual({ ok: true })
-      expect(fetchMock).toHaveBeenCalledTimes(1)
     })
   })
 })

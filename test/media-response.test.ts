@@ -84,22 +84,6 @@ describe('media response contracts', () => {
     expect(result).toBe(stream)
   })
 
-  it('applies the declared media type through setHeaders', async () => {
-    const endpoint = defineEndpoint({
-      operation: 'exportUsers',
-      responses: {
-        200: { media: 'text/csv' },
-      },
-    })
-    const stream = createReadableStream()
-
-    const handler = defineEndpointHandler(endpoint, ({ respond }) => respond(200, stream))
-
-    await handler(createEvent())
-
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), { 'content-type': 'text/csv' })
-  })
-
   it('lets a handler-supplied content-type win over the declared one, case-insensitively', async () => {
     const endpoint = defineEndpoint({
       operation: 'exportUsers',

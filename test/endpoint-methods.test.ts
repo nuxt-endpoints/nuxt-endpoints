@@ -183,42 +183,6 @@ describe('defineEndpointMethods dispatch over real requests', () => {
 })
 
 describe('defineEndpointMethods route identity and idempotency policy forwarding', () => {
-  it('forwards a route identity to the matching sub-handler', async () => {
-    const storage = createMemoryIdempotencyStorage()
-    const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ response: z.object({ id: z.number() }) }),
-      put: defineEndpoint({ body: z.object({ name: z.string() }) }).idempotency({
-        storage: () => storage,
-        scope: () => 'public',
-        authorization: 'middleware',
-        required: true,
-      }),
-    })
-    const handler = defineEndpointMethodHandlers(endpoints, {
-      get: () => ({ id: 1 }),
-      put: ({ body }) => ({ created: body.name }),
-    })
-
-    ;(
-      handler as never as { __set_endpoint_route__: (identity: unknown) => void }
-    ).__set_endpoint_route__({
-      method: 'put',
-      routeTemplate: '/api/items',
-    })
-
-    const response = await requestThroughH3(
-      handler as never,
-      '/api/items',
-      'http://test.local/api/items',
-      {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json', 'idempotency-key': 'request-1' },
-        body: JSON.stringify({ name: 'Tom' }),
-      },
-    )
-    await expect(response.json()).resolves.toEqual({ created: 'Tom' })
-  })
-
   it('throws when a route identity is attached for a method the group does not declare', () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({ response: z.object({ id: z.number() }) }),

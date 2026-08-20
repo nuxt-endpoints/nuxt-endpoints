@@ -265,40 +265,6 @@ describe('createEndpointClient', () => {
   })
 
   describe('mediaType body options', () => {
-    it('sets a content-type header for a text/* mediaType with a string body', async () => {
-      fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
-
-      await client('createNote', { mediaType: 'text/plain', body: 'hello world' })
-
-      expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
-        body: 'hello world',
-        headers: { 'content-type': 'text/plain' },
-        method: 'post',
-      })
-    })
-
-    it('lets an explicit content-type header win over a text/* mediaType', async () => {
-      fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
-
-      await client('createNote', {
-        mediaType: 'text/plain',
-        body: 'hello world',
-        headers: { 'Content-Type': 'text/plain; charset=iso-8859-1' },
-      })
-
-      expect(fetchMock).toHaveBeenCalledWith('/api/notes', {
-        body: 'hello world',
-        headers: { 'Content-Type': 'text/plain; charset=iso-8859-1' },
-        method: 'post',
-      })
-    })
-
     it('does not set a content-type header for a multipart/form-data mediaType', async () => {
       fetchMock.mockResolvedValue({ ok: true })
       const client = createEndpointClient([

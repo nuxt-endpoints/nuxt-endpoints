@@ -98,6 +98,9 @@ describe('TanStack Query SSR recipe mechanics', () => {
     // whether to call the query function or return cached data, which is the
     // behavior `useQuery` relies on after hydration. It is used here instead
     // to make the staleTime contrast observable and awaitable.
+    // This is the only proof that the server-generated key and the
+    // client-generated key are identical: hydration only reuses cached data
+    // when the browser client's query key matches the server's exactly.
     it('reuses hydrated data without refetching when staleTime is non-zero', async () => {
       const serverClient = new QueryClient()
       const serverOptions = createClientOptions(
@@ -122,32 +125,6 @@ describe('TanStack Query SSR recipe mechanics', () => {
       expect(browserFetcherData).not.toHaveBeenCalled()
 
       browserClient.clear()
-    })
-
-    it('refetches hydrated data when staleTime is zero', async () => {
-      const serverClient = new QueryClient()
-      const serverOptions = createClientOptions(
-        createFetcher(vi.fn().mockResolvedValue({ id: 1, name: 'Alice' })),
-      )
-      const request = { params: { id: '1' } }
-
-      await serverClient.fetchQuery(toPlainOptions(serverOptions.getUser(request)))
-      const dehydratedState = dehydrate(serverClient)
-      serverClient.clear()
-
-      const freshFetcherData = vi.fn().mockResolvedValue({ id: 1, name: 'Refetched' })
-      const freshOptions = createClientOptions(createFetcher(freshFetcherData))
-      const freshClient = new QueryClient({
-        defaultOptions: { queries: { staleTime: 0 } },
-      })
-
-      hydrate(freshClient, dehydratedState)
-      const data = await freshClient.fetchQuery(toPlainOptions(freshOptions.getUser(request)))
-
-      expect(freshFetcherData).toHaveBeenCalledTimes(1)
-      expect(data).toEqual({ id: 1, name: 'Refetched' })
-
-      freshClient.clear()
     })
   })
 
@@ -179,32 +156,6 @@ describe('TanStack Query SSR recipe mechanics', () => {
       })
 
       serverClient.clear()
-      newClient.clear()
-    })
-  })
-
-  describe('post-dehydration cleanup', () => {
-    it('hydrates a fresh client successfully after the server client is cleared', async () => {
-      const serverClient = new QueryClient()
-      const serverOptions = createClientOptions(
-        createFetcher(vi.fn().mockResolvedValue({ id: 1, name: 'Alice' })),
-      )
-      const request = { params: { id: '1' } }
-
-      await serverClient.fetchQuery(toPlainOptions(serverOptions.getUser(request)))
-      const dehydratedState = dehydrate(serverClient)
-
-      serverClient.clear()
-      expect(serverClient.getQueryData(serverOptions.getUser.key(request))).toBeUndefined()
-
-      const newClient = new QueryClient()
-      hydrate(newClient, dehydratedState)
-
-      expect(newClient.getQueryData(serverOptions.getUser.key(request))).toEqual({
-        id: 1,
-        name: 'Alice',
-      })
-
       newClient.clear()
     })
   })

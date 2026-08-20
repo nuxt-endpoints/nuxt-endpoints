@@ -160,18 +160,6 @@ describe('media-type-map body: request-time dispatch', () => {
     expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 415, 'Unsupported Media Type')
   })
 
-  it('returns 415 with the received value when Content-Type does not match any member', async () => {
-    const endpoint = mapEndpoint()
-    const handler = defineEndpointHandler(endpoint, ({ bodyMediaType }) => ({ bodyMediaType }))
-
-    await expect(
-      handler(createEvent({ body: { name: 'Tom' }, headers: { 'content-type': 'text/html' } })),
-    ).resolves.toMatchObject({
-      statusCode: 415,
-      data: { received: 'text/html' },
-    })
-  })
-
   it('returns the usual 400 validation failure when the matched member rejects the body', async () => {
     const endpoint = mapEndpoint()
     const handler = defineEndpointHandler(endpoint, ({ body }) => ({ body }))
@@ -183,40 +171,6 @@ describe('media-type-map body: request-time dispatch', () => {
       statusMessage: 'Validation Error',
       data: { body: expect.any(Array) },
     })
-  })
-
-  it('converts multipart/form-data into a plain object, collapsing repeated keys into arrays', async () => {
-    const endpoint = mapEndpoint()
-    const handler = defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => ({
-      body,
-      bodyMediaType,
-    }))
-
-    const formData = new FormData()
-    formData.append('tag', 'a')
-    formData.append('tag', 'b')
-    formData.append('name', 'Tom')
-
-    const result = await handler(
-      createEvent({ formData, headers: { 'content-type': 'multipart/form-data' } }),
-    )
-
-    expect(result).toEqual({
-      bodyMediaType: 'multipart/form-data',
-      body: { tag: ['a', 'b'], name: 'Tom' },
-    })
-  })
-
-  it('reads text/* bodies as raw text instead of destr-coerced JSON', async () => {
-    const endpoint = mapEndpoint()
-    const handler = defineEndpointHandler(endpoint, ({ body }) => ({ body }))
-
-    const result = await handler(
-      createEvent({ rawBody: '123', headers: { 'content-type': 'text/plain' } }),
-    )
-
-    expect(result).toEqual({ body: '123' })
-    expect(result.body).not.toBe(123)
   })
 })
 

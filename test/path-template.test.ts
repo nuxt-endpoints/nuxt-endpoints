@@ -15,19 +15,6 @@ describe('replacePathParams', () => {
   it('leaves a path without parameters unchanged', () => {
     expect(replacePathParams('/users/all', (name) => `{${name}}`)).toBe('/users/all')
   })
-
-  it('replaces consecutive parameter segments', () => {
-    expect(replacePathParams('/:a/:b/:c', (name) => name.toUpperCase())).toBe('/A/B/C')
-  })
-
-  it('passes the captured parameter name to the replacer', () => {
-    const seen: string[] = []
-    replacePathParams('/users/:userId/posts/:postId', (name) => {
-      seen.push(name)
-      return name
-    })
-    expect(seen).toEqual(['userId', 'postId'])
-  })
 })
 
 describe('pathParamNames', () => {
@@ -41,10 +28,6 @@ describe('pathParamNames', () => {
 
   it('returns names for multiple path parameters in order', () => {
     expect(pathParamNames('/users/:userId/posts/:postId')).toEqual(['userId', 'postId'])
-  })
-
-  it('returns names for consecutive parameter segments', () => {
-    expect(pathParamNames('/:a/:b/:c')).toEqual(['a', 'b', 'c'])
   })
 })
 

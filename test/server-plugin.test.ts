@@ -205,7 +205,6 @@ describe('idempotency policy module validation at Nitro startup', () => {
     vi.resetModules()
     vi.doMock('#nuxt-endpoints/options', () => ({ default: disabledOpenApiOptions }))
     vi.doMock('#nuxt-endpoints/server-handlers', () => ({ handlers: [] }))
-    vi.doMock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
     vi.doMock('#nuxt-endpoints/runtime', () => ({
       default: { idempotency: { storage: () => createMemoryIdempotencyStorage() } },
     }))

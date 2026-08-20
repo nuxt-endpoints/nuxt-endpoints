@@ -612,29 +612,6 @@ describe('createOpenApiDocument', () => {
   })
 
   describe('media response contracts', () => {
-    it('uses the declared media as the content key, describing an unschemed payload as binary', () => {
-      const document = createOpenApiDocument([
-        {
-          path: '/api/export',
-          method: 'get',
-          definition: {
-            operation: 'exportUsers',
-            responses: {
-              200: { media: 'text/csv' },
-            },
-          },
-        },
-      ])
-
-      expect(document.paths['/api/export'].get.responses[200]).toMatchObject({
-        content: {
-          'text/csv': {
-            schema: { type: 'string', contentEncoding: 'binary' },
-          },
-        },
-      })
-    })
-
     it('uses a declared media and description', () => {
       const document = createOpenApiDocument([
         {

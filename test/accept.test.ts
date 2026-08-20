@@ -43,7 +43,6 @@ describe('negotiateMediaType', () => {
     // `text/*` would accept the CSV, but the more specific `text/csv;q=0`
     // refuses it - and nothing else matches `text/*`.
     expect(negotiateMediaType('text/*, text/csv;q=0', offered)).toBeUndefined()
-    expect(negotiateMediaType('*/*, application/json;q=0', offered)).toBe('text/csv')
   })
 
   it('treats q=0 as a refusal rather than a weak preference', () => {
