@@ -168,7 +168,12 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(users.items).toHaveLength(3)
     })
 
-    if (browserE2E) {
+    // Grouped and gated by `describe`/`describe.skip` rather than a bare `if`,
+    // so a run without NUXT_ENDPOINTS_BROWSER_E2E=1 reports these as skipped
+    // instead of making them vanish from the reporter entirely - the same
+    // reason the outer NUXT_ENDPOINTS_E2E gate has a skipped placeholder.
+    const describeBrowser = browserE2E ? describe : describe.skip
+    describeBrowser('browser flows (NUXT_ENDPOINTS_BROWSER_E2E=1)', () => {
       it('runs the status-aware HTTP contract inspector', async () => {
         const page = await createPage('/endpoints')
 
@@ -291,7 +296,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
 
         await page.close()
       })
-    }
+    })
   })
 } else {
   describe.skip('SQLite and Vue Query playground integration', () => {
