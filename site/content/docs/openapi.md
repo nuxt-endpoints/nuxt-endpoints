@@ -58,3 +58,13 @@ Both are optional. With neither, the document is exactly what the route contract
 Request schemas, response schemas, summaries, route paths, and optional operation IDs are collected from discovered endpoint definitions. When `operation` is omitted, a stable operationId is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
 
 A [streaming response](/docs/endpoints#streaming-responses) appears like any other status. Its media type is the declared `contentType`, defaulting to `application/octet-stream`, and its schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload — or one chunk of it — in more detail.
+
+## Nitro's own OpenAPI
+
+Nitro can serve an OpenAPI document of its own, behind `nitro.experimental.openAPI`, at `/_openapi.json` with Scalar and Swagger UI at `/_scalar` and `/_swagger`. It is off by default, and in production only when `nitro.openAPI.production` is set.
+
+It describes the same routes, but it cannot describe their contracts. Its per-route metadata comes from the `defineRouteMeta()` macro, whose argument is read at build time as JSON literals only — so a schema built from Zod, Valibot, or Effect Schema can never reach it, and a route without a hand-written literal is documented as a path, a method, and `200: OK`. There is no way to feed endpoint contracts into it short of duplicating every schema by hand, which is the drift this module exists to remove.
+
+So the two do not merge. Enabling both serves two documents at two routes, and the module warns about it at build time, naming both. If both are configured for the _same_ route the build fails instead: two handlers on one route leave which document is served up to registration order.
+
+Keep Nitro's enabled only if you want its bundled UI. Nothing stops you from pointing your own Scalar or Swagger UI at `/_endpoints/schema`.

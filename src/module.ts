@@ -171,6 +171,9 @@ type EndpointDetection =
 type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
   options: {
     scanDirs: string[]
+    dev?: boolean
+    experimental?: { openAPI?: boolean }
+    openAPI?: { route?: string; production?: false | 'runtime' | 'prerender' }
   }
   hooks: {
     hook: (name: 'types:extend', listener: () => void | Promise<void>) => void
@@ -311,6 +314,11 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       nitroConfig.ignore = [...(nitroConfig.ignore ?? []), endpointContractIgnorePattern]
     })
     hook('nitro:init', async (nitro) => {
+      if (resolvedOptions.openApi.enabled) {
+        assertOpenApiRoutesDoNotOverlap(nitro, resolvedOptions.openApi.path, (message) =>
+          logger.warn(message),
+        )
+      }
       const generateArtifacts = async () => {
         if (!options.runtime?.path) {
           runtimePath = await resolveConventionPath(
@@ -656,6 +664,48 @@ export function getEndpointFromCarrier(
     ...(idempotency ? { idempotency } : {}),
     ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
   }
+}
+
+// Nitro can serve an OpenAPI document of its own. It describes the same
+// routes, but it cannot describe their contracts: `defineRouteMeta()` is a
+// build-time AST macro whose argument is read as JSON literals only, so a
+// schema built from Zod, Valibot, or Effect Schema can never reach it, and an
+// operation without one carries just a path, a method, and a `200` description.
+// Two documents at two routes is legal, so it warns; two documents at one
+// route is not, because whichever handler Nitro registered last silently wins.
+//
+// Exported for focused unit testing without a Nitro instance.
+export function assertOpenApiRoutesDoNotOverlap(
+  nitro: NitroWithEndpointHandlers,
+  schemaPath: string,
+  warn: (message: string) => void,
+): void {
+  const nitroRoute = resolveNitroOpenApiRoute(nitro)
+  if (!nitroRoute) {
+    return
+  }
+  if (nitroRoute === schemaPath) {
+    throw new Error(
+      `[nuxt-endpoints] Nitro's built-in OpenAPI document is configured for ${nitroRoute}, the same route this module serves its own document on. Two handlers on one route leave which document is served up to registration order. Change endpoints.openApi.path or nitro.openAPI.route.`,
+    )
+  }
+  warn(
+    `Nitro's built-in OpenAPI is enabled, so two documents are served: ${nitroRoute} from Nitro and ${schemaPath} from endpoint contracts. Nitro's cannot see those contracts — defineRouteMeta() accepts JSON literals only, so a schema built from Zod, Valibot, or Effect Schema cannot reach it. Disable nitro.experimental.openAPI unless you want its Scalar or Swagger UI.`,
+  )
+}
+
+// Mirrors Nitro's own condition for registering the handlers (dev, or an
+// explicit production mode), so an enabled-but-unregistered document is not
+// reported as a conflict.
+function resolveNitroOpenApiRoute(nitro: NitroWithEndpointHandlers): string | undefined {
+  const options = nitro.options
+  if (!options.experimental?.openAPI) {
+    return undefined
+  }
+  if (!options.dev && !options.openAPI?.production) {
+    return undefined
+  }
+  return options.openAPI?.route || '/_openapi.json'
 }
 
 // Read from the evaluated contract rather than from source text: a stream

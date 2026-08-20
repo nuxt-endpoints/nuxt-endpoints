@@ -3,8 +3,9 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Nuxt } from '@nuxt/schema'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  assertOpenApiRoutesDoNotOverlap,
   findUnsupportedRouteTemplateSyntax,
   getEndpointFromCarrier,
   resolveConventionPath,
@@ -68,6 +69,74 @@ describe('build-time idempotency runtime gap detection', () => {
     })
 
     expect(detection).toEqual({ operation: 'getUser' })
+  })
+})
+
+describe('Nitro built-in OpenAPI overlap', () => {
+  const nitro = (options: Record<string, unknown>) =>
+    ({ options }) as unknown as Parameters<typeof assertOpenApiRoutesDoNotOverlap>[0]
+
+  it("says nothing when Nitro's OpenAPI is disabled", () => {
+    const warn = vi.fn()
+
+    assertOpenApiRoutesDoNotOverlap(nitro({ dev: true }), '/_endpoints/schema', warn)
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('says nothing when it is enabled but not registered for this build', () => {
+    const warn = vi.fn()
+
+    assertOpenApiRoutesDoNotOverlap(
+      nitro({ dev: false, experimental: { openAPI: true } }),
+      '/_endpoints/schema',
+      warn,
+    )
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('warns that two documents are served, naming both routes', () => {
+    const warn = vi.fn()
+
+    assertOpenApiRoutesDoNotOverlap(
+      nitro({ dev: true, experimental: { openAPI: true } }),
+      '/_endpoints/schema',
+      warn,
+    )
+
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn.mock.calls[0]![0]).toContain('/_openapi.json')
+    expect(warn.mock.calls[0]![0]).toContain('/_endpoints/schema')
+  })
+
+  it('honors a configured Nitro route and a production mode', () => {
+    const warn = vi.fn()
+
+    assertOpenApiRoutesDoNotOverlap(
+      nitro({
+        dev: false,
+        experimental: { openAPI: true },
+        openAPI: { route: '/docs/openapi.json', production: 'runtime' },
+      }),
+      '/_endpoints/schema',
+      warn,
+    )
+
+    expect(warn.mock.calls[0]![0]).toContain('/docs/openapi.json')
+  })
+
+  it('fails the build when both documents claim the same route', () => {
+    const warn = vi.fn()
+
+    expect(() =>
+      assertOpenApiRoutesDoNotOverlap(
+        nitro({ dev: true, experimental: { openAPI: true }, openAPI: { route: '/schema' } }),
+        '/schema',
+        warn,
+      ),
+    ).toThrow(/same route this module serves its own document on/)
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

@@ -11,6 +11,12 @@
   on `createOpenApiDocument` already but were unreachable from a Nuxt app: the
   document is built inside the server plugin, and neither a nested patch nor a
   callback can travel through JSON-serialized module options.
+- A build-time report on Nitro's own OpenAPI document. With
+  `nitro.experimental.openAPI` enabled, two documents are served at two routes;
+  the module now warns and names both, explaining that Nitro's cannot see
+  endpoint contracts because `defineRouteMeta()` reads JSON literals only. If
+  both are configured for the same route the build fails instead of leaving the
+  served document up to handler registration order.
 - Stream response declarations. A status declared as
   `{ stream: true, contentType, schema? }` keeps a streaming route inside its
   contract instead of forcing it to drop `responses` and become an untyped raw
