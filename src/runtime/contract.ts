@@ -98,8 +98,18 @@ export type MediaResponseContract = {
    * Documentation only: describes the payload, or one chunk of it, in the
    * generated OpenAPI document. Deliberately not named `body` - a `body` is
    * validated, and this never is.
+   *
+   * With several declared media types, give a map keyed by media type: one
+   * schema cannot honestly describe a CSV and a JSON object at once, so a bare
+   * schema alongside several media types is rejected rather than copied onto
+   * each of them. Types the map omits stay described as opaque bytes.
    */
-  schema?: ValidatorSchema
+  schema?: ValidatorSchema | EndpointMediaSchemaMap
+}
+
+/** Per-media-type documentation for a response with several representations. */
+export type EndpointMediaSchemaMap = {
+  readonly [mediaType: string]: ValidatorSchema
 }
 
 export type ResponseContract =

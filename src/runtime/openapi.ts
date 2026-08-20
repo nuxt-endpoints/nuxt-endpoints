@@ -1,7 +1,7 @@
 import { isBodyMediaTypeMap } from './body-media-type'
 import type { EndpointDefinition, EndpointResponsesContract, ResponseContract } from './contract'
 import { isPathParamSegment, pathParamNames, replacePathParams } from './path-template'
-import { isMediaResponseContract, mediaTypesOf } from './response'
+import { isMediaResponseContract, mediaSchemaFor, mediaTypesOf } from './response'
 import {
   createJsonSchemaContext,
   getJsonSchemaComponents,
@@ -330,7 +330,7 @@ function createResponses(
           content: Object.fromEntries(
             responseContentTypes(response).map((contentType) => [
               contentType,
-              { schema: responseSchema(response, schemaContext) },
+              { schema: responseSchema(response, contentType, schemaContext) },
             ]),
           ),
         }),
@@ -510,14 +510,16 @@ function responseDescription(response: ResponseContract): string {
 
 function responseSchema(
   response: ResponseContract,
+  contentType: string,
   schemaContext: JsonSchemaConversionContext,
 ): JsonSchema {
   // A media response declares no validated body. Its optional `schema` is
-  // documentation the author opted into; without one, the payload is
-  // described the way OpenAPI describes any opaque byte sequence.
+  // documentation the author opted into, per media type; without one, that
+  // representation is described the way OpenAPI describes opaque bytes.
   if (isMediaResponseContract(response)) {
-    return response.schema
-      ? toJsonSchema(response.schema, schemaContext, { mode: 'output' })
+    const declared = mediaSchemaFor(response, contentType)
+    return declared
+      ? toJsonSchema(declared, schemaContext, { mode: 'output' })
       : { type: 'string', contentEncoding: 'binary' }
   }
   if (typeof response === 'object' && response !== null && 'body' in response) {

@@ -4,6 +4,11 @@
 
 ### Added
 
+- `pnpm check` now type-checks the basic fixture against its own generated
+  types (`test:fixture-types`). `test:typecheck` deliberately excludes
+  `test/fixtures/**`, so the one place the library is consumed the way an
+  application consumes it went unchecked - which is how a contract shape that
+  did not type-check for a handler passed every check.
 - Application-owned OpenAPI document metadata, under an `openApi` key on
   `server/endpoints/runtime.ts`. `document` is deep-merged into the generated
   document and `extend` runs last on the merged result, which is how servers,
@@ -83,6 +88,15 @@
 - An idempotent endpoint answering with a media 2xx recorded `{}` for replay —
   `JSON.stringify` does not fail on a `ReadableStream` or a `Blob` — and
   replayed that empty object to the retry. Those bodies are now refused.
+- A media response with several declared types shared one documentation
+  schema, so `media: ['text/csv', 'application/json']` with a `schema`
+  documented the CSV representation with a JSON object schema. `schema` now
+  takes a map keyed by media type, and a bare schema alongside several types
+  fails the build instead of being copied onto each.
+- A `406` was decided after the request body had been read and validated, while
+  its mirror `415` is decided before. `Accept` does not depend on the rest of
+  the request, so it is settled first and an unanswerable request no longer
+  pays for parsing an upload.
 - Declared media types are validated at definition time, matching the request
   side: `media: 'text/csv, application/json'` and `media: ['csv', 'json']` now
   fail the build instead of becoming a nonsense `Content-Type` or an endpoint

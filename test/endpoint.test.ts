@@ -244,6 +244,43 @@ describe('DefinedEndpoint', () => {
     )
   })
 
+  it('rejects one schema shared by several media types', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+    const { z } = await import('zod')
+
+    expect(() =>
+      defineEndpoint({
+        responses: {
+          200: { media: ['text/csv', 'application/json'], schema: z.object({ id: z.string() }) },
+        },
+      }),
+    ).toThrow(/One schema cannot describe them all/)
+
+    // A single media type still takes a bare schema: there is nothing ambiguous
+    // about which representation it documents.
+    expect(() =>
+      defineEndpoint({
+        responses: { 200: { media: 'application/x-ndjson', schema: z.object({ id: z.string() }) } },
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects a schema keyed by a media type the response does not declare', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+    const { z } = await import('zod')
+
+    expect(() =>
+      defineEndpoint({
+        responses: {
+          200: {
+            media: ['text/csv', 'application/json'],
+            schema: { 'application/xml': z.object({ id: z.string() }) },
+          },
+        },
+      }),
+    ).toThrow(/does not declare in media/)
+  })
+
   it('rejects a media type declared twice for one status', async () => {
     const { defineEndpoint } = await import('../src/runtime')
 

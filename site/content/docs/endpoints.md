@@ -399,6 +399,17 @@ responses: {
 }
 ```
 
+With several declared media types, key the schema by media type — one schema cannot honestly describe a CSV and a JSON object at once, so a bare schema alongside several types fails the build rather than being copied onto each. Types the map omits stay described as opaque bytes:
+
+```ts
+responses: {
+  200: {
+    media: ['text/csv', 'application/json'],
+    schema: { 'application/json': z.object({ id: z.string(), name: z.string() }) },
+  },
+}
+```
+
 ### Several representations of one status
 
 Give `media` an array and the status has more than one representation. The runtime negotiates from the request's `Accept` header, tells the handler which one to produce, and sends that media type:
@@ -426,7 +437,7 @@ Declaration order is the endpoint's own preference. It breaks ties between equal
 
 Each media type must be a single lowercase `type/subtype`, and the build fails otherwise — `media: 'text/csv, application/json'` and `media: ['csv', 'json']` are rejected rather than becoming a nonsense `Content-Type` or an endpoint that answers 406 to everything.
 
-Selection follows RFC 9110: quality weights are honored, a more specific range overrides a wider one that would otherwise apply, and `q=0` is a refusal rather than a weak preference. When nothing the endpoint can produce is acceptable, the request is refused with `406 Not Acceptable` **before the handler runs** — there is no point executing a handler whose output could never be sent. That refusal goes through [`onValidationError`](#hooks) like any other, with `kind: 'accept'`.
+Selection follows RFC 9110: quality weights are honored, a more specific range overrides a wider one that would otherwise apply, and `q=0` is a refusal rather than a weak preference. When nothing the endpoint can produce is acceptable, the request is refused with `406 Not Acceptable` **before anything else is validated and before the body is read** — `Accept` does not depend on the rest of the request, and a request that can never be answered is not worth reading an upload for. That refusal goes through [`onValidationError`](#hooks) like any other, with `kind: 'accept'`.
 
 Every response of a negotiating endpoint carries `Vary: Accept` — including the 406, and including statuses that are not media responses. The header describes the route, not one answer: a cache that only ever saw the CSV must still know the JSON exists. A handler that declares its own `Vary` adds to it rather than replacing it, because `Vary` is a list of what the answer depended on and dropping an entry hands caches a wrong answer.
 

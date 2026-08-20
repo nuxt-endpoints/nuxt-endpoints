@@ -81,3 +81,5 @@ Some responses the runtime produces itself, without the handler being involved, 
 Each is derived from the contract alone, so the document lists exactly what that endpoint's configuration makes reachable. Declaring one of those statuses yourself does not hide the generated shape — the two are merged as a `oneOf`, so the document keeps describing both.
 
 The schemas describe the default bodies. An endpoint or application that replaces them through [`onValidationError`](/docs/endpoints#hooks) is describing its own shapes, and should declare those statuses in the contract.
+
+Two body shapes appear here, and the rule behind them is: **follow the specification where one exists, otherwise match the platform.** The idempotency statuses use `application/problem+json` because the IETF `Idempotency-Key` draft specifies Problem Details for them. The validation, 415, and 406 bodies are ours to shape, so they use `{ statusCode, statusMessage, data }` — the same shape h3 serializes a `createError` into, which is what the rest of a Nuxt application's errors already look like. One error handler covers your endpoints and your plain routes alike.

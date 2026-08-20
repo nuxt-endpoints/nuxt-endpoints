@@ -63,7 +63,7 @@
   },
   "scripts": {
     "build": "nuxt-module-build build",
-    "check": "oxfmt --check && oxlint src test --ignore-path .gitignore --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json && oxlint playground site test/fixtures --ignore-path .gitignore && vitest run && NUXT_ENDPOINTS_E2E=1 vitest run test/integration",
+    "check": "oxfmt --check && oxlint src test --ignore-path .gitignore --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json && oxlint playground site test/fixtures --ignore-path .gitignore && node scripts/typecheck-fixture.mjs && vitest run && NUXT_ENDPOINTS_E2E=1 vitest run test/integration",
     "dev": "nuxi dev playground",
     "dev:build": "nuxi build playground",
     "site:dev": "node site/scripts/generate-magic-tokens.mjs && nuxi dev site",
@@ -79,7 +79,8 @@
     "test:e2e": "NUXT_ENDPOINTS_E2E=1 vitest run test/integration",
     "test:package": "node scripts/smoke-packed-package.mjs",
     "typecheck": "oxlint src --type-check --tsconfig=tsconfig.json",
-    "test:typecheck": "oxlint src test --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json"
+    "test:typecheck": "oxlint src test --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json",
+    "test:fixture-types": "node scripts/typecheck-fixture.mjs"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",

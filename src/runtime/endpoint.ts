@@ -42,6 +42,7 @@ import {
   createResponse,
   isJsonMediaType,
   isMediaResponseContract,
+  isMediaSchemaMap,
   isStatusResponse,
   mediaTypesOf,
 } from './response'
@@ -528,7 +529,9 @@ function validateEndpointResponseDefinitions(
           `Response ${status} declares both media and body. A media response is never validated - describe it with schema instead, which documents it without claiming it is checked.`,
         )
       }
-      validateMediaTypeDeclarations(status, mediaTypesOf(contract))
+      const mediaTypes = mediaTypesOf(contract)
+      validateMediaTypeDeclarations(status, mediaTypes)
+      validateMediaSchemaDeclaration(status, mediaTypes, contract.schema)
       continue
     }
 
@@ -584,6 +587,38 @@ function validateMediaTypeDeclarations(status: string, mediaTypes: readonly stri
   }
 }
 
+/**
+ * One schema cannot honestly describe two representations, so a bare schema is
+ * only accepted for a response that declares one media type. With several, the
+ * author names which one each schema documents - and naming a type the response
+ * does not declare is a typo worth failing on rather than silently ignoring.
+ */
+function validateMediaSchemaDeclaration(
+  status: string,
+  mediaTypes: readonly string[],
+  schema: MediaResponseContract['schema'],
+): void {
+  if (schema === undefined) {
+    return
+  }
+  if (!isMediaSchemaMap(schema)) {
+    if (mediaTypes.length > 1) {
+      throw new TypeError(
+        `Response ${status} declares one schema for ${mediaTypes.length} media types. One schema cannot describe them all - key it by media type instead, for example { '${mediaTypes[0]}': schema }.`,
+      )
+    }
+    return
+  }
+
+  for (const mediaType of Object.keys(schema)) {
+    if (!mediaTypes.includes(mediaType)) {
+      throw new TypeError(
+        `Response ${status} declares a schema for media type "${mediaType}", which it does not declare in media.`,
+      )
+    }
+  }
+}
+
 function getValidatedContentType(contract: ResponseContract): unknown {
   return typeof contract === 'object' && contract !== null && 'contentType' in contract
     ? contract.contentType
@@ -626,6 +661,33 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
   offeredMediaTypes: readonly string[] = [],
   negotiates = false,
 ): Promise<BuildContextResult<DEFINITION>> {
+  // Negotiated first, and refused first. `Accept` does not depend on anything
+  // else in the request, and a request that accepts nothing this endpoint can
+  // produce is not worth reading a body for - the mirror 415 is decided before
+  // the body is read for the same reason.
+  let responseMediaType: string | undefined
+  if (negotiates) {
+    const accept = getRuntimeRequestHeaders(event).accept ?? null
+    responseMediaType = negotiateMediaType(accept, offeredMediaTypes)
+    if (responseMediaType === undefined) {
+      return {
+        success: false,
+        failure: {
+          kind: 'accept',
+          source: 'headers',
+          received: accept,
+          supportedMediaTypes: offeredMediaTypes,
+          event,
+        },
+      }
+    }
+  } else {
+    // A single declared representation still reaches the handler here, so the
+    // field means the same thing whether or not the endpoint negotiates: what
+    // this response is being sent as.
+    responseMediaType = offeredMediaTypes[0]
+  }
+
   const params = await parsePart(definition.params, event.context.params || {})
   if (!params.success) return validationFailure(event, 'params', params.issues)
 
@@ -657,32 +719,6 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
     bodyMediaType = resolution.mediaType
   }
   if (!body.success) return validationFailure(event, 'body', body.issues)
-
-  // Negotiated before the handler runs, and refused there too: a request that
-  // accepts nothing this endpoint can produce is answered without executing a
-  // handler whose output could never be sent.
-  let responseMediaType: string | undefined
-  if (negotiates) {
-    const accept = getRuntimeRequestHeaders(event).accept ?? null
-    responseMediaType = negotiateMediaType(accept, offeredMediaTypes)
-    if (responseMediaType === undefined) {
-      return {
-        success: false,
-        failure: {
-          kind: 'accept',
-          source: 'headers',
-          received: accept,
-          supportedMediaTypes: offeredMediaTypes,
-          event,
-        },
-      }
-    }
-  } else {
-    // A single declared representation still reaches the handler here, so the
-    // field means the same thing whether or not the endpoint negotiates: what
-    // this response is being sent as.
-    responseMediaType = offeredMediaTypes[0]
-  }
 
   return {
     success: true,

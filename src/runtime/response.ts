@@ -1,4 +1,5 @@
-import type { MediaResponseContract } from './contract'
+import type { EndpointMediaSchemaMap, MediaResponseContract } from './contract'
+import type { ValidatorSchema } from './validator'
 
 export type StatusCode = number
 
@@ -23,6 +24,40 @@ export function isMediaResponseContract(contract: unknown): contract is MediaRes
  */
 export function mediaTypesOf(contract: MediaResponseContract): readonly string[] {
   return typeof contract.media === 'string' ? [contract.media] : contract.media
+}
+
+/**
+ * The documentation schema declared for one of a media response's types, or
+ * `undefined` when it declares none for it. A bare schema belongs to the one
+ * media type the response declares; a map is looked up by media type.
+ */
+export function mediaSchemaFor(
+  contract: MediaResponseContract,
+  mediaType: string,
+): ValidatorSchema | undefined {
+  const schema = contract.schema
+  if (schema === undefined) {
+    return undefined
+  }
+  if (isMediaSchemaMap(schema)) {
+    return schema[mediaType]
+  }
+  return schema
+}
+
+/**
+ * Discriminates a documentation schema from a media-type-keyed map of them,
+ * the same way `IsEndpointBodyMediaTypeMap` does on the request side: a
+ * validator schema always carries a structural marker, and a media-type key
+ * never collides with one.
+ */
+export function isMediaSchemaMap(
+  schema: ValidatorSchema | EndpointMediaSchemaMap,
+): schema is EndpointMediaSchemaMap {
+  if (typeof schema !== 'object' || schema === null) {
+    return false
+  }
+  return Object.keys(schema).every((key) => key.includes('/'))
 }
 
 /**

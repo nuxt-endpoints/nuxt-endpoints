@@ -706,7 +706,7 @@ describe('createOpenApiDocument', () => {
       expect(content['application/json'].schema).toEqual(content['text/csv'].schema)
     })
 
-    it('documents every declared media type with the declared schema', () => {
+    it('documents each declared media type with its own schema', () => {
       const document = createOpenApiDocument([
         {
           path: '/api/export',
@@ -716,7 +716,10 @@ describe('createOpenApiDocument', () => {
             responses: {
               200: {
                 media: ['text/csv', 'application/json'],
-                schema: z.object({ id: z.string(), name: z.string() }),
+                // One schema cannot describe a CSV and a JSON object at once,
+                // so each representation names its own - and the one that
+                // names none stays opaque bytes.
+                schema: { 'application/json': z.object({ id: z.string(), name: z.string() }) },
               },
             },
           },
@@ -724,18 +727,16 @@ describe('createOpenApiDocument', () => {
       ])
 
       const content = document.paths['/api/export'].get.responses[200].content
-      const schema = {
+      expect(Object.keys(content)).toEqual(['text/csv', 'application/json'])
+      expect(content['text/csv'].schema).toEqual({ type: 'string', contentEncoding: 'binary' })
+      expect(content['application/json'].schema).toEqual({
         type: 'object',
         required: ['id', 'name'],
         properties: {
           id: { type: 'string' },
           name: { type: 'string' },
         },
-      }
-
-      expect(Object.keys(content)).toEqual(['text/csv', 'application/json'])
-      expect(content['text/csv'].schema).toEqual(schema)
-      expect(content['application/json'].schema).toEqual(schema)
+      })
     })
 
     it('uses a validated contentType as the content key instead of application/json', () => {
