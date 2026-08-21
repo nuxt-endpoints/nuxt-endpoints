@@ -332,6 +332,22 @@ describe('tuple and literal response contracts', () => {
     defineEndpointHandler(endpoint, () => ({ items: ['a', 'b'] }))
   })
 
+  it('types an unparsed media-type body member as bytes', () => {
+    const endpoint = defineEndpoint({
+      body: {
+        'application/json': z.object({ name: z.string() }),
+        'application/pdf': true,
+      },
+    })
+
+    defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => {
+      // The union covers both members: the schema's output and the bytes.
+      expectTypeOf(body).toEqualTypeOf<{ name: string } | Uint8Array>()
+      expectTypeOf(bodyMediaType).toEqualTypeOf<'application/json' | 'application/pdf'>()
+      return { ok: true }
+    })
+  })
+
   it('accepts every body shape the HTTP layer forwards for a stream status', () => {
     const endpoint = defineEndpoint({
       responses: {

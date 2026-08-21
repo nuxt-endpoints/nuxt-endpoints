@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- A media-type request-body member can be declared `true` instead of a schema,
+  which accepts that media type and hands the handler the body unparsed as a
+  `Uint8Array`. `true` accepts any well-formed `type/subtype`, so XML, PDF, and
+  arbitrary bytes are now declarable request bodies.
+
+  This closes an asymmetry: a response could already be declared by media type
+  with the payload left alone, while a request body could only name one of the
+  four families the runtime parses. A schema member still requires a parseable
+  family — a schema can only check a value that exists — and saying so is now
+  what the error message does, pointing at `true` as the way out.
+
 ### Fixed
 
 - The idempotency fingerprint ignored the negotiated response media type, so an

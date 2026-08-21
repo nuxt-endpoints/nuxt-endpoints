@@ -30,7 +30,12 @@ vi.mock('h3', () => {
     getQuery: (event: H3Event) => event.context.query || {},
     readBody: async (event: H3Event) => event.context.body || {},
     readFormData: async (event: H3Event) => event.context.formData as FormData,
-    readRawBody: async (event: H3Event) => event.context.rawBody as string,
+    // Mirrors h3: `readRawBody(event, false)` yields bytes, any other
+    // encoding yields a decoded string.
+    readRawBody: async (event: H3Event, encoding?: false | string) =>
+      encoding === false
+        ? Buffer.from((event.context.rawBody as string) ?? '')
+        : (event.context.rawBody as string),
     setHeaders,
     setResponseStatus,
     toWebRequest: () => new Request('http://localhost/test'),
@@ -125,6 +130,31 @@ describe('media-type-map body: request-time dispatch', () => {
     expect(result).toEqual({ bodyMediaType: 'application/json', body: { name: 'Tom' } })
   })
 
+  it('hands an unparsed member to the handler as bytes, unvalidated', async () => {
+    const endpoint = defineEndpoint({
+      body: {
+        'application/json': UserJson,
+        'application/pdf': true,
+      },
+    })
+    const handler = defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => ({
+      bodyMediaType,
+      bytes: [...(body as Uint8Array)],
+    }))
+
+    await expect(
+      handler(
+        createEvent({
+          rawBody: '%PDF-1.7',
+          headers: { 'content-type': 'application/pdf' },
+        }),
+      ),
+    ).resolves.toEqual({
+      bodyMediaType: 'application/pdf',
+      bytes: [...new TextEncoder().encode('%PDF-1.7')],
+    })
+  })
+
   it('normalizes a Content-Type with parameters (e.g. charset) before matching', async () => {
     const endpoint = mapEndpoint()
     const handler = defineEndpointHandler(endpoint, ({ bodyMediaType }) => ({ bodyMediaType }))
@@ -191,9 +221,22 @@ describe('media-type-map body: definition-time validation', () => {
     )
   })
 
-  it('rejects an unsupported media type with a message listing the supported ones', () => {
+  it('rejects a schema on a media type the runtime cannot parse, naming the way out', () => {
     expect(() => defineEndpoint({ body: { 'application/xml': UserJson } })).toThrow(
-      /application\/xml.*not supported.*application\/json/s,
+      /application\/xml.*cannot be validated by a schema.*`true`.*application\/json/s,
+    )
+  })
+
+  it('accepts any well-formed media type when the member is declared unparsed', () => {
+    expect(() => defineEndpoint({ body: { 'application/xml': true } })).not.toThrow()
+    expect(() => defineEndpoint({ body: { 'application/pdf': true } })).not.toThrow()
+    // The shape check still applies. A key with no `/` at all does not even
+    // read as a media-type map, and is rejected by that discrimination first.
+    expect(() => defineEndpoint({ body: { 'application/': true } })).toThrow(
+      /not a single type\/subtype media type/,
+    )
+    expect(() => defineEndpoint({ body: { xml: true } })).toThrow(
+      /must be either a validator schema or an object mapping media types/,
     )
   })
 

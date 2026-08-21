@@ -13,6 +13,11 @@ const multipartMediaType = 'multipart/form-data'
 
 export const supportedBodyMediaTypesMessage = `${jsonMediaType}, ${urlEncodedMediaType}, ${multipartMediaType}, or a specific text/* type (e.g. text/plain, text/csv)`
 
+/**
+ * Whether the runtime can turn a body of this media type into a value a schema
+ * could check. Only a schema member is held to this: an unparsed member (`true`)
+ * is handed over as bytes, so any well-formed media type will do.
+ */
 export function isSupportedBodyMediaType(mediaType: string): boolean {
   return (
     mediaType === jsonMediaType ||
@@ -55,13 +60,18 @@ export function isBodyMediaTypeMap(
 
   if (isPlainMapCandidate(body)) {
     const entries = Object.entries(body)
-    if (entries.every(([mediaType, schema]) => mediaType.includes('/') && isObjectLike(schema))) {
+    if (
+      entries.every(
+        ([mediaType, member]) =>
+          mediaType.includes('/') && (member === true || isObjectLike(member)),
+      )
+    ) {
       return true
     }
   }
 
   throw new TypeError(
-    'Endpoint body contract must be either a validator schema or an object mapping media types (e.g. "application/json") to validator schemas.',
+    'Endpoint body contract must be either a validator schema or an object mapping media types (e.g. "application/json") to a validator schema or `true`.',
   )
 }
 
@@ -76,7 +86,7 @@ export function validateBodyMediaTypeMapDefinition(map: EndpointBodyMediaTypeMap
     throw new TypeError('Endpoint body media-type map must declare at least one media type.')
   }
 
-  for (const [mediaType, schema] of entries) {
+  for (const [mediaType, member] of entries) {
     if (mediaType !== mediaType.trim()) {
       throw new TypeError(
         `Endpoint body media type "${mediaType}" must not have leading or trailing whitespace.`,
@@ -85,14 +95,26 @@ export function validateBodyMediaTypeMapDefinition(map: EndpointBodyMediaTypeMap
     if (mediaType !== mediaType.toLowerCase()) {
       throw new TypeError(`Endpoint body media type "${mediaType}" must be lowercase.`)
     }
-    if (!isSupportedBodyMediaType(mediaType)) {
+    if (!/^[\w.+-]+\/[\w.+-]+$/.test(mediaType)) {
       throw new TypeError(
-        `Endpoint body media type "${mediaType}" is not supported. Supported media types: ${supportedBodyMediaTypesMessage}.`,
+        `Endpoint body media type "${mediaType}" is not a single type/subtype media type.`,
       )
     }
-    if (!isValidatorSchemaMarker(schema)) {
+
+    // `true` is the unparsed door and accepts any media type. A schema member
+    // has to name one the runtime can parse, because otherwise there is nothing
+    // for that schema to check.
+    if (member === true) {
+      continue
+    }
+    if (!isValidatorSchemaMarker(member)) {
       throw new TypeError(
-        `Endpoint body media-type map member "${mediaType}" must be a validator schema.`,
+        `Endpoint body media-type map member "${mediaType}" must be a validator schema, or \`true\` to accept the media type and receive the body unparsed.`,
+      )
+    }
+    if (!isSupportedBodyMediaType(mediaType)) {
+      throw new TypeError(
+        `Endpoint body media type "${mediaType}" cannot be validated by a schema, because the runtime does not parse it. Declare it as \`true\` to receive the body unparsed, or use one of: ${supportedBodyMediaTypesMessage}.`,
       )
     }
   }

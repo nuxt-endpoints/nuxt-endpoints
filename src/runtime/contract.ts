@@ -13,11 +13,18 @@ export type HttpMethod =
   | 'connect'
   | 'trace'
 
-// Media-type keyed request-body contract. Keys must be lowercase and are
-// restricted to the media-type families the runtime can actually parse
-// (see `isSupportedBodyMediaType` in body-media-type.ts).
+/**
+ * Media-type keyed request-body contract. Keys must be lowercase.
+ *
+ * A member is either a validator schema, which requires a media type the
+ * runtime can parse into a value to check (see `isSupportedBodyMediaType` in
+ * body-media-type.ts), or `true` for "accept this media type and hand the
+ * handler the bytes" - the request-side counterpart of declaring a response by
+ * media type, and the door for anything the runtime has no business parsing.
+ * `true` accepts any well-formed media type.
+ */
 export type EndpointBodyMediaTypeMap = {
-  readonly [mediaType: string]: ValidatorSchema
+  readonly [mediaType: string]: ValidatorSchema | true
 }
 
 export type EndpointRequestContract = {
@@ -453,9 +460,17 @@ type InferOutputOrUndefined<SCHEMA> = SCHEMA extends ValidatorSchema
 // media-type map infers to the union of all its members' outputs.
 type InferBodyOutputOrUndefined<BODY> = BODY extends ValidatorSchema
   ? InferOutput<BODY>
-  : BODY extends Record<string, infer MEMBER extends ValidatorSchema>
-    ? InferOutput<MEMBER>
+  : BODY extends Record<string, infer MEMBER>
+    ? InferMediaTypeMemberOutput<MEMBER>
     : undefined
+
+// An unparsed member (`true`) reaches the handler as bytes; a schema member
+// reaches it as that schema's output.
+type InferMediaTypeMemberOutput<MEMBER> = MEMBER extends true
+  ? Uint8Array
+  : MEMBER extends ValidatorSchema
+    ? InferOutput<MEMBER>
+    : never
 
 // `keyof BODY` (or an indexed access like `BODY[keyof BODY]`) on a generic
 // `BODY` parameter produces a deferred type that breaks `DefinedEndpoint`'s
@@ -464,7 +479,7 @@ type InferBodyOutputOrUndefined<BODY> = BODY extends ValidatorSchema
 // above, this infers the media-type keys instead of indexing into `BODY`.
 type InferBodyMediaType<BODY> = BODY extends ValidatorSchema
   ? undefined
-  : BODY extends Record<infer MEDIA_TYPE extends string, ValidatorSchema>
+  : BODY extends Record<infer MEDIA_TYPE extends string, ValidatorSchema | true>
     ? MEDIA_TYPE
     : undefined
 
@@ -513,9 +528,18 @@ type EndpointBodyMediaTypeClientOptions<MAP extends EndpointBodyMediaTypeMap> = 
   }
     ? MEDIA_TYPE extends 'application/json'
       ? { mediaType?: MEDIA_TYPE; body: InferInput<JSON_SCHEMA> }
-      : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeWireValue<MEDIA_TYPE> }
-    : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeWireValue<MEDIA_TYPE> }
+      : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeMemberWireValue<MAP, MEDIA_TYPE> }
+    : { mediaType: MEDIA_TYPE; body: EndpointBodyMediaTypeMemberWireValue<MAP, MEDIA_TYPE> }
 }[keyof MAP & string]
+
+// An unparsed member takes bytes on the wire, whatever its media type says;
+// a schema member takes the wire value that media type implies.
+type EndpointBodyMediaTypeMemberWireValue<
+  MAP extends EndpointBodyMediaTypeMap,
+  MEDIA_TYPE extends keyof MAP & string,
+> = MAP[MEDIA_TYPE] extends true
+  ? Uint8Array | ArrayBuffer | Blob
+  : EndpointBodyMediaTypeWireValue<MEDIA_TYPE>
 
 export type NormalizeResponses<DEFINITION extends EndpointDefinition> = DEFINITION extends {
   responses: infer RESPONSES extends EndpointResponsesContract

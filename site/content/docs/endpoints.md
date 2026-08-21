@@ -160,17 +160,39 @@ Supported member families and how each is parsed before validation:
 - `text/plain` and other specific `text/*` types — the raw request text as a
   string, with no coercion.
 
-Any other media type, an empty map, or uppercase keys fail at
-`defineEndpoint()` time — which means during build discovery, not on a live
-request. A media-type map makes the body mandatory: requests without a
-matching `Content-Type` are rejected with `415` before the handler runs.
+A schema needs one of those families, because a schema can only check a value
+the runtime knows how to parse. For anything else — XML, a PDF, arbitrary bytes
+— declare the member `true` instead and receive the body unparsed, as a
+`Uint8Array`:
+
+```ts
+body: {
+  'application/json': z.object({ name: z.string() }),
+  'application/pdf': true,
+}
+```
+
+This is the request-side counterpart of declaring a
+[response by media type](#non-json-responses): the media type is part of the
+contract and reaches OpenAPI, and the payload is yours. `true` accepts any
+well-formed `type/subtype`, and nothing about the body is validated. It is read
+into memory rather than streamed — for a genuinely large upload, drop the
+contract and read the event directly, as [Low-level HTTP](/docs/low-level-http)
+describes.
+
+An empty map, uppercase keys, a malformed media type, or a schema on a family
+the runtime cannot parse all fail at `defineEndpoint()` time — which means
+during build discovery, not on a live request. A media-type map makes the body
+mandatory: requests without a matching `Content-Type` are rejected with `415`
+before the handler runs.
 
 On the client, the generated `$endpoint` gains a `mediaType` request option for
 map contracts. When the map has an `application/json` member, `mediaType` is
 optional and calls read exactly like a single-schema body. Selecting any other
 member types `body` as its wire value — `FormData` for multipart,
-`URLSearchParams` for URL-encoded forms, `string` for `text/*` — because the
-client does not invent an object-to-wire serialization it cannot make honest:
+`URLSearchParams` for URL-encoded forms, `string` for `text/*`, and bytes for an
+unparsed member — because the client does not invent an object-to-wire
+serialization it cannot make honest:
 
 ```ts
 const formData = new FormData()

@@ -27,6 +27,7 @@ import {
   getRuntimeQuery,
   getRuntimeRequestHeaders,
   getRuntimeWebRequest,
+  readRuntimeBinaryBody,
   readRuntimeBody,
   readRuntimeFormData,
   readRuntimeTextBody,
@@ -723,7 +724,12 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
     if (!resolution.success) {
       return { success: false, failure: resolution.failure }
     }
-    body = await parsePart(definition.body[resolution.mediaType], resolution.raw)
+    const member = definition.body[resolution.mediaType]
+    // An unparsed member has nothing to check: the bytes are the value.
+    body =
+      member === true
+        ? { success: true, value: resolution.raw }
+        : await parsePart(member, resolution.raw)
     bodyMediaType = resolution.mediaType
   }
   if (!body.success) return validationFailure(event, 'body', body.issues)
@@ -774,11 +780,21 @@ async function resolveBodyMediaTypeMember(
   return {
     success: true,
     mediaType: contentType,
-    raw: await readBodyForMediaType(event, contentType),
+    raw: await readBodyForMediaType(event, contentType, map[contentType] === true),
   }
 }
 
-async function readBodyForMediaType(event: RuntimeEvent, mediaType: string): Promise<unknown> {
+async function readBodyForMediaType(
+  event: RuntimeEvent,
+  mediaType: string,
+  unparsed: boolean,
+): Promise<unknown> {
+  // Bytes, not a stream: the value lands in `context.body`, which the
+  // idempotency fingerprint projects and `JSON.stringify` would flatten a
+  // stream to `{}`. Streaming a request body is the raw-event escape hatch.
+  if (unparsed) {
+    return readRuntimeBinaryBody(event)
+  }
   if (mediaType === 'multipart/form-data') {
     return formDataToPlainObject(await readRuntimeFormData(event))
   }

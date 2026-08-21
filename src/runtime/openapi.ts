@@ -297,9 +297,16 @@ function createRequestBody(
     return {
       required: true,
       content: Object.fromEntries(
-        Object.entries(definition.body).map(([mediaType, schema]) => [
+        Object.entries(definition.body).map(([mediaType, member]) => [
           mediaType,
-          { schema: toJsonSchema(schema, schemaContext, { mode: 'input' }) },
+          {
+            // An unparsed member declares a media type and nothing about its
+            // payload, so it is documented the way OpenAPI documents bytes.
+            schema:
+              member === true
+                ? { type: 'string', contentEncoding: 'binary' }
+                : toJsonSchema(member, schemaContext, { mode: 'input' }),
+          },
         ]),
       ),
     }

@@ -76,6 +76,17 @@ export async function readRuntimeTextBody(event: RuntimeEvent): Promise<string> 
   return (await readRawBody(event, 'utf8')) ?? ''
 }
 
+/**
+ * Reads a request body as raw bytes, for a media-type map member declared
+ * `true`. Buffered rather than streamed: the value becomes `context.body`,
+ * which downstream code (the idempotency fingerprint, for one) projects as
+ * data.
+ */
+export async function readRuntimeBinaryBody(event: RuntimeEvent): Promise<Uint8Array> {
+  const raw = await readRawBody(event, false)
+  return raw ? new Uint8Array(raw) : new Uint8Array()
+}
+
 export function setRuntimeResponseStatus(
   event: RuntimeEvent,
   status: number,
