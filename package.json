@@ -80,7 +80,8 @@
     "test:package": "node scripts/smoke-packed-package.mjs",
     "typecheck": "oxlint src --type-check --tsconfig=tsconfig.json",
     "test:typecheck": "oxlint src test --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json",
-    "test:fixture-types": "node scripts/typecheck-fixture.mjs"
+    "test:fixture-types": "node scripts/typecheck-fixture.mjs",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
