@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The idempotency fingerprint ignored the negotiated response media type, so an
+  endpoint offering several representations replayed the first one to a retry
+  that reused the key and asked for another. The negotiated type is now part of
+  request identity when the endpoint negotiates, making that retry a `422` — the
+  other representation would need the handler to run again, which is what the
+  key exists to prevent. Endpoints with one declared representation are
+  unaffected, since there the type is constant.
+- `RuntimeIdempotencyContext` gained `responseMediaType`, so a custom
+  `fingerprint` can reason about it at all. It could not before.
+
 ## 0.4.0 - 2026-08-20
 
 ### Added

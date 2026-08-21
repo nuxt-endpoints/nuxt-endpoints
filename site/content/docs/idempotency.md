@@ -87,7 +87,7 @@ Contract-side, endpoint-only:
 - `headerName` (optional, default `Idempotency-Key`): overrides the header name. Matching is case-insensitive.
 - `required` (optional, default `false`): whether the header is mandatory. Reflected in the generated client type.
 - `replayStatuses` (optional): extra declared statuses to record for replay. Successful `2xx` responses are recorded by default.
-- `fingerprint` (optional): projects the request into the stored fingerprint. The default projection is validated `params`, `query`, and `body`, with no headers or event state. Provide this when behavior depends on a header or other request state, such as currency or API version — or on the [negotiated media type](/docs/endpoints#several-representations-of-one-status), since a retry asking for a different representation otherwise replays the first one.
+- `fingerprint` (optional): projects the request into the stored fingerprint. The default projection covers what the handler can observe, which is what decides whether two requests are the same request: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because the values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request. Provide this when behavior depends on something the projection does not include, such as a header carrying currency or API version.
 
 Runtime, policy-defaulted and endpoint-overridable:
 

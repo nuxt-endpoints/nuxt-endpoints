@@ -130,6 +130,13 @@ export type RuntimeIdempotencyContext = {
   query: unknown
   headers: unknown
   body: unknown
+  /**
+   * The media type negotiated for this response, when the endpoint declares
+   * any. Present because the handler can observe it and branch on it, so a
+   * fingerprint that ignored it would replay one representation to a request
+   * that asked for another.
+   */
+  responseMediaType: unknown
 }
 
 type RequestValidationIssue = {
@@ -282,6 +289,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           options: idempotencyOptions,
           getRouteIdentity: () => routeIdentity,
           getPolicy: () => idempotencyPolicy,
+          negotiatesResponseMediaType: this.negotiates,
         })
       : undefined
 

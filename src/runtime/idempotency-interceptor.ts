@@ -79,8 +79,15 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
   options: NormalizedEndpointIdempotencyOptions
   getRouteIdentity: () => EndpointRouteIdentity | undefined
   getPolicy: () => EndpointIdempotencyPolicy | undefined
+  /**
+   * Whether this endpoint picks its response media type from `Accept`. Only
+   * then does the negotiated type belong in the default fingerprint: with one
+   * declared representation it is constant, so including it would change every
+   * stored fingerprint without ever distinguishing two requests.
+   */
+  negotiatesResponseMediaType: boolean
 }): EndpointHandlerWrapper<DEFINITION> {
-  const { options: idempotency, getRouteIdentity, getPolicy } = input
+  const { options: idempotency, getRouteIdentity, getPolicy, negotiatesResponseMediaType } = input
 
   return async (context, next) => {
     const key = readIdempotencyKey(context.event, idempotency.headerName)
@@ -135,9 +142,18 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
       })
     }
 
+    // The default projection covers what the handler can observe, which is
+    // what makes two requests the same request: a retry differing only in JSON
+    // key order or in a value the schema coerces is one request, and a retry
+    // asking for a different representation is not.
     const projection = idempotency.fingerprint
       ? await idempotency.fingerprint(runtimeContext)
-      : { params: context.params, query: context.query, body: context.body }
+      : {
+          params: context.params,
+          query: context.query,
+          body: context.body,
+          ...(negotiatesResponseMediaType ? { responseMediaType: context.responseMediaType } : {}),
+        }
     const fingerprint = await createIdempotencyFingerprint(projection)
     const storageKey = await createIdempotencyStorageKey({
       method: routeIdentity.method,

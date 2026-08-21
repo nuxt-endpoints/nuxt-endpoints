@@ -239,6 +239,97 @@ describe('endpoint idempotency runtime', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects reuse when the same key asks for a different representation', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const execute = vi.fn(({ responseMediaType, respond }) =>
+      respond(200, responseMediaType === 'text/csv' ? 'id\n1\n' : '{"id":1}'),
+    )
+    const endpoint = defineEndpoint({
+      body: jsonRecord,
+      responses: { 200: { media: ['text/csv', 'application/json'] } },
+    }).idempotency({
+      storage: () => storage,
+      scope: () => 'public',
+      authorization: 'middleware',
+      required: true,
+    })
+    const handler = defineEndpointHandler(endpoint, execute)
+    attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+    const request = (accept: string) =>
+      createEvent({
+        body: { amount: 100 },
+        headers: { 'idempotency-key': 'request-1', accept },
+      })
+
+    await expect(handler(request('text/csv'))).resolves.toBe('id\n1\n')
+    // The handler branches on the negotiated type, so a retry asking for the
+    // other representation is a different request - not one to replay the CSV to.
+    await expect(handler(request('application/json'))).resolves.toMatchObject({
+      status: 422,
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    })
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
+  it('replays when the same key asks for the same representation', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const execute = vi.fn(({ respond }) => respond(200, 'id\n1\n'))
+    const endpoint = defineEndpoint({
+      body: jsonRecord,
+      responses: { 200: { media: ['text/csv', 'application/json'] } },
+    }).idempotency({
+      storage: () => storage,
+      scope: () => 'public',
+      authorization: 'middleware',
+      required: true,
+    })
+    const handler = defineEndpointHandler(endpoint, execute)
+    attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+    const request = () =>
+      createEvent({
+        body: { amount: 100 },
+        headers: { 'idempotency-key': 'request-1', accept: 'text/csv' },
+      })
+
+    await expect(handler(request())).resolves.toBe('id\n1\n')
+    await expect(handler(request())).resolves.toBe('id\n1\n')
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the fingerprint unchanged for an endpoint that declares one representation', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const execute = vi.fn(({ respond }) => respond(200, 'id\n1\n'))
+    const endpoint = defineEndpoint({
+      body: jsonRecord,
+      responses: { 200: { media: 'text/csv' } },
+    }).idempotency({
+      storage: () => storage,
+      scope: () => 'public',
+      authorization: 'middleware',
+      required: true,
+    })
+    const handler = defineEndpointHandler(endpoint, execute)
+    attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+
+    // Nothing negotiates here, so `Accept` is not part of identity and a retry
+    // that sends a different one still replays.
+    await handler(
+      createEvent({
+        body: { amount: 100 },
+        headers: { 'idempotency-key': 'request-1', accept: 'text/csv' },
+      }),
+    )
+    await expect(
+      handler(
+        createEvent({
+          body: { amount: 100 },
+          headers: { 'idempotency-key': 'request-1', accept: '*/*' },
+        }),
+      ),
+    ).resolves.toBe('id\n1\n')
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
   it('includes application-selected validated headers in a custom fingerprint', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => ({ id: 1 }))

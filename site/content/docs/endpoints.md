@@ -449,7 +449,7 @@ const json = await $endpoint('exportUsers', { accept: 'application/json' })
 
 It is optional — omitting it takes the endpoint's preference — and it is part of the TanStack Query cache key, so two calls that differ only in `accept` are two cached values.
 
-An endpoint that negotiates and also uses [`Idempotency-Key`](/docs/idempotency) needs `Accept` in its fingerprint, or a retry that asks for a different representation replays the first one. Pass `fingerprint` to include it.
+An endpoint that negotiates and also uses [`Idempotency-Key`](/docs/idempotency) counts the negotiated media type as part of request identity: a retry that reuses the key but asks for a different representation is answered with `422`, not with the representation it did not ask for. Producing the other one would mean re-running a handler whose side effect already happened, which is what the key exists to prevent — use a separate key.
 
 `responseMediaType` is present whenever the endpoint declares any media type, not only when it negotiates: with a single declared type it is that type. The field always means the same thing — what this response is being sent as.
 
