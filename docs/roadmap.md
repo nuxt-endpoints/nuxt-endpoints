@@ -36,7 +36,7 @@ without hiding the broader roadmap.
 | Idempotency central runtime policy                                    | Implemented                      | `server/endpoints/runtime.ts` supplies storage/scope/authorization defaults under its `idempotency` key; endpoints keep contract metadata and overrides                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Primitive-layer boundary and adapter                                  | Designed, not implemented        | Keep `EndpointRouteEntry` canonical and project foreign contracts onto it; widen the contract vocabulary and extract the validation/handler seam first                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Primitive-layer boundary and adapter                                  | Designed, not implemented        | Keep `EndpointRouteEntry` canonical and project foreign contracts onto it. This module's layer nests inside core's rather than beside it, so lazy bodies, validated-value placement, and one-call-vs-two do not collide — nothing needs aligning ahead of time                                                                                                                                                                                                                                                                                                                                      |
 | Endpoints on configuration-registered routes                          | Implemented                      | Discovery reads `nitro.options.handlers` alongside `scannedHandlers`, so `nitro.handlers` and `addServerHandler` routes are ordinary endpoints. The only requirement is a real source-file path with a JS/TS extension; inline and virtual handlers are skipped, not guessed at                                                                                                                                                                                                                                                                                                                     |
 | Nitro built-in OpenAPI coexistence                                    | Implemented                      | Measured `nitropack@2.13.4`: `defineRouteMeta()` is an AST macro read as JSON literals, so validator-derived schemas cannot reach Nitro's document and merging the two is impossible. Two routes warn at build time; one shared route fails the build. Serving UI for this module's own document is a separate candidate                                                                                                                                                                                                                                                                            |
 | OpenAPI document metadata layering                                    | Implemented                      | `openApi.document` (deep-merged) and `openApi.extend` (runs last) on `server/endpoints/runtime.ts`; they were unreachable from a Nuxt app before, since the document is built in the server plugin and module options cannot carry a callback                                                                                                                                                                                                                                                                                                                                                       |
@@ -362,24 +362,54 @@ adapter rather than being partially mapped. Silently keeping only the JSON
 branch of a media-type body would reproduce exactly the degradation this
 module rejects elsewhere.
 
-### The missing seam
+### The seam is ours, not an upstream request
 
-An external primitive layer can only host this module's server-side
-application layer if it exposes an interception point between request
-validation and handler invocation, carrying the validated values and
-controlling whether the handler runs at all.
+An earlier version of this section argued that an external primitive layer must
+expose an interception point between validation and handler invocation, and
+that the absence of one in `h3-route-tools` and in the RFC was a gap to raise
+upstream. That was wrong, and the reason is worth keeping.
 
-Idempotency requires precisely that position: fingerprints must be computed
-from validated, coerced values, and a replay must return a recorded response
-without executing the handler. Ordinary Nitro middleware cannot substitute,
-because it runs before validation and cannot suppress the handler.
+**Our layer nests inside core's, not beside it.** In the adapter shape, what
+core's `defineValidatedHandler` wraps is _this module's_ function, not the
+application's handler. So the sequence stays:
 
-Neither `h3-route-tools` nor the RFC currently exposes such a seam; validation
-and handler invocation are fused, with an error hook as the only extension
-point. This module already has the correct shape internally — a validated
-context value plus a deferred `execute` thunk — but it is inlined in
-`DefinedEndpoint.handler()` rather than named. Extracting it is therefore both
-an internal improvement and the evidence behind a concrete upstream request.
+```
+core validates (body lazily)
+  -> calls our function
+       -> we await the body once and build our own context
+       -> our wrapper chain (wrapHandler, idempotency)
+            -> the application's handler, receiving values
+```
+
+Everything the seam was wanted for survives that, because we are still the one
+calling the application's handler. What we would delegate to core is the
+_execution_ of validation; the shape we present is unchanged. Concretely, none
+of the differences between the two designs collide:
+
+|                             | core                                                            | this module                                                   | collides                                   |
+| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
+| request body                | lazy, validated inside `.json()`                                | awaited once in our layer, handed over as a value             | no                                         |
+| validated values            | written back into the request today; `event.context.*` proposed | read from wherever core puts them, projected into our context | no                                         |
+| contract and handler        | one call                                                        | two calls                                                     | no — the stamp is attached where they meet |
+| position before the handler | none                                                            | inside our layer                                              | no                                         |
+
+Two consequences follow.
+
+**Nothing needs aligning.** Reading the body eagerly and running idempotency
+before the application's handler are choices about the layer we own, not bets on
+what core does. Moving idempotency into a handler-called
+`ctx.idempotency(callback)` would be a coherent alternative — it keeps the
+replay guarantee, since the callback simply is not invoked — but it buys
+portability we already have, and costs the declarative form that drives the
+client's typed `idempotencyKey`, the OpenAPI entries, and the build-time checks.
+
+**Lazy request bodies are right for core and wrong here.** Core must support
+streaming bodies whether or not validation is declared, so it reads nothing
+until asked. This module's contract states the intent up front: a declared
+`body` will be read, and Nitro middleware — which runs before our handler
+entirely — is where a request gets rejected before that happens. Making
+`context.body` lazy would mean `await` at every call site, for a benefit this
+position does not receive.
 
 ### Sequence
 
@@ -393,9 +423,12 @@ an internal improvement and the evidence behind a concrete upstream request.
 3. **Define the contract adapter** — the type-level projection plus its runtime
    counterpart, one implementation per upstream, all targeting
    `EndpointRouteEntry`.
-4. **Take the seam requirement upstream** — with steps 2 and 3 done, the
-   request to `h3js/h3#1437` is backed by a working consumer rather than a
-   hypothesis.
+4. **~~Take the seam requirement upstream~~** — dropped. The seam is ours to
+   place (see above), so there is nothing to request. What is worth sending
+   upstream is the one thing that costs core nothing and that the RFC itself
+   asks about: whether a validated handler should expose its resolved contract
+   as an introspectable property. Every generated surface here reads exactly
+   that.
 
 Steps 1 and 2 are independently valuable and do not depend on upstream
 timing. Step 3 should wait until an upstream contract shape is stable.
