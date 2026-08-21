@@ -321,3 +321,44 @@ describe('development memory idempotency storage', () => {
     })
   })
 })
+
+describe('fingerprint determinability at definition time', () => {
+  it('rejects an idempotent endpoint with no body contract and no fingerprint', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    // Without a body contract the default projection cannot see a body the
+    // handler reads itself, and the two payloads would share a fingerprint.
+    expect(() => defineEndpoint({ operation: 'publish' }).idempotency({ required: true })).toThrow(
+      /needs an explicit fingerprint/,
+    )
+  })
+
+  it('accepts one once the author states what identifies the request', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+    const { z } = await import('zod')
+
+    expect(() =>
+      defineEndpoint({ operation: 'publish', params: z.object({ id: z.string() }) }).idempotency({
+        required: true,
+        fingerprint: ({ params }) => ({ params }),
+      }),
+    ).not.toThrow()
+
+    // An operation that genuinely takes no input says so.
+    expect(() =>
+      defineEndpoint({ operation: 'ping' }).idempotency({
+        required: true,
+        fingerprint: () => ({}),
+      }),
+    ).not.toThrow()
+  })
+
+  it('needs nothing extra when a body contract is declared', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+    const { z } = await import('zod')
+
+    expect(() =>
+      defineEndpoint({ body: z.object({ amount: z.number() }) }).idempotency({ required: true }),
+    ).not.toThrow()
+  })
+})

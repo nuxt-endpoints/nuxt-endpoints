@@ -87,13 +87,24 @@ Contract-side, endpoint-only:
 - `headerName` (optional, default `Idempotency-Key`): overrides the header name. Matching is case-insensitive.
 - `required` (optional, default `false`): whether the header is mandatory. Reflected in the generated client type.
 - `replayStatuses` (optional): extra declared statuses to record for replay. Successful `2xx` responses are recorded by default.
-- `fingerprint` (optional): projects the request into the stored fingerprint. The default projection covers what the handler can observe, which is what decides whether two requests are the same request: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because the values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request. Provide this when behavior depends on something the projection does not include, such as a header carrying currency or API version.
+- `fingerprint` (**required when the endpoint declares no `body`**, optional otherwise): projects the request into the stored fingerprint. The default projection covers what the handler can observe, which is what decides whether two requests are the same request: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because the values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request. Provide this when behavior depends on something the projection does not include, such as a header carrying currency or API version.
 
 Runtime, policy-defaulted and endpoint-overridable:
 
 - `storage`, `scope`, `authorization`: as described under Central policy. One of the two layers must provide each of them.
 - `leaseTtlMs` (default `60000`): in-flight lease duration. Size it for the maximum expected handler duration.
 - `replayTtlMs` (default `86400000`): how long a completed response remains replayable.
+
+An endpoint with no `body` contract must supply `fingerprint` explicitly, because the default projection has no validated body to cover and cannot tell two cases apart: an operation that genuinely takes no input, where the key alone identifies it, and a handler that reads an undeclared body itself, where the default would give two different payloads the same fingerprint and replay the first response to the second. Rather than guess, the endpoint states what identifies the request:
+
+```ts
+defineEndpoint({ operation: 'publishItem', params: z.object({ id: z.string() }) }).idempotency({
+  required: true,
+  fingerprint: ({ params }) => ({ params }),
+})
+```
+
+The route template and method are already part of the storage key, but a path _parameter_ is not — so `params` is what distinguishes one resource from another under the same key. For an operation that truly takes no input, `fingerprint: () => ({})` says so.
 
 If an idempotent endpoint ends up without `storage`, `scope`, or `authorization` after merging, the build fails when no policy file exists, and server startup fails when the merged configuration is still incomplete — an idempotent endpoint never silently runs unprotected.
 

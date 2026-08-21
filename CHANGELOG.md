@@ -17,6 +17,15 @@
 
 ### Fixed
 
+- **Breaking:** an idempotent endpoint that declares no `body` contract now
+  requires an explicit `fingerprint`. The default projection has no validated
+  body to cover there, and it cannot distinguish an operation that genuinely
+  takes no input from a handler reading an undeclared body itself — in the
+  second case two different payloads shared a fingerprint, so a retry was
+  answered with the first response instead of `422`. That silently completed a
+  write with the wrong answer, so the endpoint now states what identifies the
+  request: `fingerprint: ({ params }) => ({ params })`, or
+  `fingerprint: () => ({})` for an operation that really takes no input.
 - The idempotency fingerprint ignored the negotiated response media type, so an
   endpoint offering several representations replayed the first one to a retry
   that reused the key and asked for another. The negotiated type is now part of

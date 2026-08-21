@@ -26,6 +26,7 @@ describe('idempotency route metadata startup', () => {
     const storage = createMemoryIdempotencyStorage()
     const handler = defineEndpoint({})
       .idempotency({
+        fingerprint: () => ({}),
         storage: () => storage,
         scope: () => 'public',
         authorization: 'middleware',
@@ -45,6 +46,7 @@ describe('idempotency route metadata startup', () => {
     const storage = createMemoryIdempotencyStorage()
     const handler = defineEndpoint({})
       .idempotency({
+        fingerprint: () => ({}),
         storage: () => storage,
         scope: () => 'public',
         authorization: 'middleware',
@@ -106,7 +108,12 @@ describe('idempotency runtime option resolution at startup', () => {
   it('injects the central policy (or its absence) into every idempotent handler', async () => {
     const storage = createMemoryIdempotencyStorage()
     const handler = defineEndpoint({})
-      .idempotency({ storage: () => storage, scope: () => 'public', authorization: 'middleware' })
+      .idempotency({
+        fingerprint: () => ({}),
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      })
       .handler(() => ({ ok: true }))
     const setPolicy = vi.spyOn(handler, '__set_endpoint_runtime__')
 
@@ -125,7 +132,10 @@ describe('idempotency runtime option resolution at startup', () => {
       },
     }
     const handler = defineEndpoint({})
-      .idempotency({ required: true })
+      .idempotency({
+        fingerprint: () => ({}),
+        required: true,
+      })
       .handler(() => ({ ok: true }))
     const setPolicy = vi.spyOn(handler, '__set_endpoint_runtime__')
 
@@ -138,7 +148,10 @@ describe('idempotency runtime option resolution at startup', () => {
 
   it('fails startup listing the runtime options missing without any central policy', async () => {
     const handler = defineEndpoint({})
-      .idempotency({ scope: () => 'public' })
+      .idempotency({
+        fingerprint: () => ({}),
+        scope: () => 'public',
+      })
       .handler(() => ({ ok: true }))
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)])).rejects.toThrow(
@@ -150,7 +163,9 @@ describe('idempotency runtime option resolution at startup', () => {
     const storage = createMemoryIdempotencyStorage()
     const partialRuntime = { idempotency: { storage: () => storage } } as unknown as EndpointRuntime
     const handler = defineEndpoint({})
-      .idempotency({})
+      .idempotency({
+        fingerprint: () => ({}),
+      })
       .handler(() => ({ ok: true }))
 
     await expect(
@@ -254,6 +269,7 @@ describe('method-group startup handling', () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({ operation: 'getMulti' }),
       post: defineEndpoint({ operation: 'postMulti' }).idempotency({
+        fingerprint: () => ({}),
         storage: () => storage,
         scope: () => 'public',
         authorization: 'middleware',
@@ -275,7 +291,10 @@ describe('method-group startup handling', () => {
   it('fails startup when an idempotent group member is missing runtime options', async () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({ operation: 'getMulti' }),
-      post: defineEndpoint({ operation: 'postMulti' }).idempotency({ scope: () => 'public' }),
+      post: defineEndpoint({ operation: 'postMulti' }).idempotency({
+        fingerprint: () => ({}),
+        scope: () => 'public',
+      }),
     })
     const dispatcher = defineEndpointMethodHandlers(endpoints, {
       get: () => ({ ok: true }),

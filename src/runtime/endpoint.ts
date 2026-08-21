@@ -243,6 +243,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     options?: EndpointIdempotencyOptions<DEFINITION>,
   ): DefinedEndpoint<DEFINITION & { idempotency: EndpointIdempotencyMetadata }> {
     const normalized = normalizeIdempotencyOptions(options ?? {})
+    assertIdempotencyFingerprintIsDeterminable(this.definition, options)
     const marker = createIdempotencyRuntimeMarker((key) => options?.[key] !== undefined)
     const definition = {
       ...this.definition,
@@ -963,6 +964,31 @@ function createIdempotencyRuntimeMarker(
   return Object.fromEntries(
     idempotencyRuntimeOptionKeys.map((key) => [key, predicate(key)]),
   ) as EndpointIdempotencyRuntimeMarker
+}
+
+/**
+ * The default fingerprint projects validated `params`, `query`, and `body`. With
+ * no `body` contract there is no validated body to project, and whether the
+ * handler reads one itself is not something we can see - so the two cases we
+ * would need to tell apart are indistinguishable from here:
+ *
+ * - a genuinely payload-free operation, where the key alone identifies it, and
+ * - a handler reading an undeclared body, where the default fingerprint would
+ *   match two different payloads and replay the first response to the second.
+ *
+ * The second silently completes a write with the wrong answer, so rather than
+ * guess, the author states what identifies the request.
+ */
+function assertIdempotencyFingerprintIsDeterminable(
+  definition: EndpointDefinition,
+  options: { fingerprint?: unknown } | undefined,
+): void {
+  if (definition.body !== undefined || options?.fingerprint !== undefined) {
+    return
+  }
+  throw new TypeError(
+    'An idempotent endpoint that declares no body contract needs an explicit fingerprint, because the default one cannot see a body the handler reads itself. Add `fingerprint: ({ params }) => ({ params })`, or `fingerprint: () => ({})` if the operation genuinely takes no input.',
+  )
 }
 
 function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
