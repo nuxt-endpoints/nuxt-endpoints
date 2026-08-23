@@ -190,6 +190,12 @@
   --ew-scroll-bg:
     linear-gradient(180deg, rgba(18, 26, 32, 0.7), rgba(9, 13, 18, 0.56)),
     color-mix(in srgb, var(--hero-code-glass-bg) 72%, transparent);
+
+  /* Brand colours whose light-mode values are too dark to read here. The rest
+     of the --stack-* set clears 6:1 against --bg unchanged, so only these two
+     are lifted; both keep their brand hue. */
+  --stack-zod: #5b9cf8;
+  --stack-effect: #9a8dff;
 }
 
 * {
@@ -286,6 +292,19 @@ pre code {
   font-size: 0.84rem;
   line-height: 1.55;
   white-space: inherit;
+}
+
+/* Code lines are never wrapped, so on a phone the only lever on how much of a
+   line is visible before it scrolls is the type size. */
+@media (max-width: 640px) {
+  pre {
+    padding: 0.8rem;
+  }
+
+  pre code {
+    font-size: 0.76rem;
+    line-height: 1.5;
+  }
 }
 
 /* Shiki syntax-highlight output is rendered (v-html / ContentRenderer) and is

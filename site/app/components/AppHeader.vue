@@ -1,8 +1,26 @@
 <script setup lang="ts">
+import { docsNavSections } from '../utils/docs'
+
 type Theme = 'light' | 'dark'
 
 const storageKey = 'nuxt-endpoints-theme'
 const theme = useState<Theme>('site-theme', () => 'light')
+
+const route = useRoute()
+
+// One control owns navigation on a phone. The docs sidebar joins it on docs
+// routes instead of getting a second control of its own, so the drawer holds
+// everything you can navigate to and nothing you can merely do.
+const menuOpen = ref(false)
+const inDocs = computed(() => route.path === '/docs' || route.path.startsWith('/docs/'))
+const menuLabel = computed(() => (menuOpen.value ? 'Close menu' : 'Open menu'))
+
+watch(
+  () => route.path,
+  () => {
+    menuOpen.value = false
+  },
+)
 
 const themeIcon = computed(() => (theme.value === 'dark' ? 'lucide:sun' : 'lucide:moon'))
 const themeToggleLabel = computed(() =>
@@ -80,6 +98,42 @@ function applyTheme(value: Theme) {
         >
           <Icon name="lucide:github" size="1.15rem" aria-hidden="true" />
         </a>
+        <button
+          class="button -menu"
+          type="button"
+          aria-controls="site-menu"
+          :aria-expanded="menuOpen"
+          :aria-label="menuLabel"
+          :title="menuLabel"
+          @click="menuOpen = !menuOpen"
+        >
+          <Icon :name="menuOpen ? 'lucide:x' : 'lucide:menu'" size="1.15rem" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div id="site-menu" class="menu" :data-open="menuOpen">
+        <nav class="links" aria-label="Site navigation">
+          <NuxtLink class="pv-nuxt-link" to="/docs">Docs</NuxtLink>
+          <NuxtLink class="pv-nuxt-link" to="/playground">Type Playground</NuxtLink>
+        </nav>
+
+        <section
+          v-for="section in inDocs ? docsNavSections : []"
+          :key="section.label"
+          class="group"
+        >
+          <p class="text -caps">{{ section.label }}</p>
+          <nav class="links" :aria-label="section.label">
+            <NuxtLink
+              v-for="item in section.items"
+              :key="item.to"
+              class="pv-nuxt-link"
+              :to="item.to"
+            >
+              {{ item.label }}
+            </NuxtLink>
+          </nav>
+        </section>
       </div>
     </div>
   </header>
@@ -206,28 +260,95 @@ function applyTheme(value: Theme) {
         cursor: pointer;
         font: inherit;
       }
+
+      /* Navigation collapses; the theme and repository controls do not, because
+         they are one-tap actions rather than places to go. */
+      > .button.-menu {
+        display: none;
+      }
+    }
+
+    > .menu {
+      display: none;
     }
   }
 
+  /* Two rows once the single row stops fitting: the brand and the controls stay
+     together on the first, the links move to the second. The controls are the
+     theme toggle and the repository link, so they follow the brand rather than
+     the links — losing them was worse than losing a row. */
   @media (max-width: 960px) {
     > .unit {
       flex-wrap: wrap;
-      align-items: flex-start;
-      padding: var(--space-150) 0;
+      align-items: center;
+      /* `gap` is also the row gap once this wraps, and it would stack on top of
+         the drawer's own spacing. The one-row min-height stops applying too, or
+         row one keeps its full height above the drawer. */
+      row-gap: 0;
+      min-height: 0;
+      padding: var(--space-100) 0;
 
       > .nav {
-        order: 3;
+        display: none;
+      }
+
+      > .actions {
+        margin-left: auto;
+
+        > .button.-menu {
+          display: inline-flex;
+        }
+      }
+
+      > .menu[data-open='true'] {
+        display: grid;
+        gap: var(--space-250);
         width: 100%;
-        margin-left: 0;
-        overflow-x: auto;
-        padding-bottom: var(--space-025);
+        margin-top: var(--space-100);
+        border-top: var(--stroke-default) solid var(--header-border);
+        padding: var(--space-200) 0 var(--space-100);
+
+        > .group > .text.-caps {
+          margin: 0 0 var(--space-100);
+          color: var(--muted);
+          font-size: var(--text-xs);
+          font-weight: 780;
+          text-transform: uppercase;
+        }
+
+        .links {
+          display: grid;
+          gap: var(--space-025);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+
+          > .pv-nuxt-link {
+            border-radius: var(--radius-md);
+            color: var(--muted);
+            padding: var(--space-100) var(--space-125);
+            font-size: var(--text-md);
+            font-weight: 650;
+
+            &[aria-current='page'] {
+              background: var(--surface-soft);
+              color: var(--accent-strong);
+            }
+          }
+        }
       }
     }
   }
 
-  @media (max-width: 620px) {
-    > .unit > .actions {
-      display: none;
+  /* At phone widths the alpha badge gives way: the name and the controls both
+     have to survive, and one column of links beats two cramped ones. */
+  @media (max-width: 480px) {
+    > .unit {
+      > .pv-nuxt-link.-brand .nuxt-link-default > .note {
+        display: none;
+      }
+
+      > .menu[data-open='true'] .links {
+        grid-template-columns: 1fr;
+      }
     }
   }
 }

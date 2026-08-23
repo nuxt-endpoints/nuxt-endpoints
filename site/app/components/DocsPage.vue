@@ -136,13 +136,10 @@ useSeoMeta({
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
 
+    /* The header's menu owns navigation at this width and already carries these
+       sections, so a second copy of them here would be the same list twice. */
     > .aside {
-      position: static;
-      padding-right: 0;
-
-      > .group > .nav {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+      display: none;
     }
 
     > .main > .article > .header > .title {
@@ -152,10 +149,6 @@ useSeoMeta({
 
   @media (max-width: 620px) {
     width: min(var(--page-max), calc(100% - var(--page-gutter)));
-
-    > .aside > .group > .nav {
-      grid-template-columns: 1fr;
-    }
 
     > .main > .article > .header > .title {
       font-size: var(--text-3xl);
