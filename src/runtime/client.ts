@@ -571,13 +571,8 @@ export type EndpointFetcherRuntime = {
   raw: (path: string, options: Record<string, unknown>) => Promise<EndpointFetcherRawResponse>
 }
 
-export type EndpointClientExtension = {
-  createCallExtension?: (call: EndpointCallRuntime) => Record<string, unknown>
-}
-
 export type EndpointClientRuntimeOptions = {
   features?: Partial<EndpointClientFeatureOptions>
-  extensions?: EndpointClientExtension[]
   fetcher?: EndpointFetcherRuntime
 }
 
@@ -644,19 +639,6 @@ export type UseEndpointResultClientRuntimeValue = (
   options?: Record<string, unknown>,
 ) => unknown
 
-export type EndpointEffectRunnerRuntime = (
-  program: unknown,
-  signal: AbortSignal | undefined,
-) => Promise<unknown>
-
-export type EndpointEffectComposerRuntime = (program: unknown) => unknown
-
-export type UseEndpointEffectClientRuntimeValue = (
-  path: string,
-  options?: Record<string, unknown>,
-  compose?: EndpointEffectComposerRuntime,
-) => unknown
-
 type UseAsyncDataRuntime = (
   key: string,
   handler: (nuxtApp: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>,
@@ -671,14 +653,13 @@ export function createEndpointClient(
 ) {
   const features = resolveClientFeatures(options.features)
   const routes = normalizeRoutes(routesInput)
-  const extensions = options.extensions || []
   const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
 
-    return createEndpointCall(route, endpointOptions, features, extensions, fetcher)
+    return createEndpointCall(route, endpointOptions, features, fetcher)
   }) as EndpointClientRuntimeValue
-  attachEndpointOperationAliases(client, routes, features, extensions, fetcher)
+  attachEndpointOperationAliases(client, routes, features, fetcher)
 
   return client
 }
@@ -690,19 +671,10 @@ export function createUseEndpoint(
 ) {
   const features = resolveClientFeatures(options.features)
   const routes = normalizeRoutes(routesInput)
-  const extensions = options.extensions || []
   const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
-    return createUseEndpointCall(
-      route,
-      endpointOptions,
-      useAsyncData,
-      features,
-      extensions,
-      fetcher,
-      'data',
-    )
+    return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'data')
   }) as UseEndpointClientRuntimeValue
 
   return client
@@ -715,47 +687,11 @@ export function createUseEndpointResult(
 ) {
   const features = resolveClientFeatures(options.features)
   const routes = normalizeRoutes(routesInput)
-  const extensions = options.extensions || []
   const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
-    return createUseEndpointCall(
-      route,
-      endpointOptions,
-      useAsyncData,
-      features,
-      extensions,
-      fetcher,
-      'result',
-    )
+    return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'result')
   }) as UseEndpointResultClientRuntimeValue
-
-  return client
-}
-
-export function createUseEndpointEffectClient(
-  routesInput: EndpointClientRouteConfigInput,
-  useAsyncData: UseAsyncDataRuntime,
-  runEffect: EndpointEffectRunnerRuntime,
-  options: EndpointClientRuntimeOptions = {},
-) {
-  const features = resolveClientFeatures(options.features)
-  const routes = normalizeRoutes(routesInput)
-  const extensions = options.extensions || []
-  const fetcher = options.fetcher
-  const client = ((request: string, callOptions = {}, compose) => {
-    const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
-    return createUseEndpointEffectCall(
-      route,
-      endpointOptions,
-      compose,
-      useAsyncData,
-      runEffect,
-      features,
-      extensions,
-      fetcher,
-    )
-  }) as UseEndpointEffectClientRuntimeValue
 
   return client
 }
@@ -784,7 +720,6 @@ function attachEndpointOperationAliases(
   client: EndpointClientRuntimeValue,
   routes: EndpointClientRouteConfig[],
   features: EndpointClientFeatureOptions,
-  extensions: EndpointClientExtension[],
   fetcher: EndpointFetcherRuntime | undefined,
 ) {
   for (const route of routes) {
@@ -797,13 +732,7 @@ function attachEndpointOperationAliases(
       enumerable: true,
       value(callOptions: Record<string, unknown> = {}) {
         const resolved = resolveEndpointRoute(routes, route.operation as string, callOptions)
-        return createEndpointCall(
-          resolved.route,
-          resolved.endpointOptions,
-          features,
-          extensions,
-          fetcher,
-        )
+        return createEndpointCall(resolved.route, resolved.endpointOptions, features, fetcher)
       },
     })
   }
@@ -1144,7 +1073,6 @@ function createEndpointCall(
   route: EndpointClientRouteConfig,
   options: Record<string, unknown>,
   features: EndpointClientFeatureOptions,
-  extensions: EndpointClientExtension[],
   fetcher?: EndpointFetcherRuntime,
 ): EndpointCallRuntimeValue {
   let dataPromise: Promise<unknown> | undefined
@@ -1202,10 +1130,6 @@ function createEndpointCall(
     call.raw = raw
   }
 
-  for (const extension of extensions) {
-    Object.assign(call, extension.createCallExtension?.(callRuntime))
-  }
-
   return call
 }
 
@@ -1214,7 +1138,6 @@ function createUseEndpointCall(
   options: Record<string, unknown>,
   useAsyncData: UseAsyncDataRuntime,
   features: EndpointClientFeatureOptions,
-  extensions: EndpointClientExtension[],
   fetcher: EndpointFetcherRuntime | undefined,
   requestMode: UseEndpointKeyKind,
 ) {
@@ -1223,7 +1146,7 @@ function createUseEndpointCall(
     options,
     requestMode,
   )
-  const call = createEndpointCall(route, endpointOptions, features, extensions, fetcher)
+  const call = createEndpointCall(route, endpointOptions, features, fetcher)
   const runtime = call[endpointCallRuntimeSymbol]
 
   return useAsyncData(
@@ -1234,40 +1157,6 @@ function createUseEndpointCall(
       }
 
       return runtime.request.data(options?.signal)
-    },
-    asyncDataOptions,
-  )
-}
-
-function createUseEndpointEffectCall(
-  route: EndpointClientRouteConfig,
-  options: Record<string, unknown>,
-  compose: EndpointEffectComposerRuntime | undefined,
-  useAsyncData: UseAsyncDataRuntime,
-  runEffect: EndpointEffectRunnerRuntime,
-  features: EndpointClientFeatureOptions,
-  extensions: EndpointClientExtension[],
-  fetcher: EndpointFetcherRuntime | undefined,
-) {
-  const { endpointOptions, asyncDataOptions, key } = splitUseEndpointOptions(
-    route,
-    options,
-    'effect',
-  )
-  const call = createEndpointCall(route, endpointOptions, features, extensions, fetcher)
-  const effectCall = call as EndpointCallRuntimeValue & {
-    effect?: () => unknown
-  }
-
-  if (!effectCall.effect) {
-    throw new Error('useEndpointEffect requires endpoints.client.effect to be enabled.')
-  }
-
-  return useAsyncData(
-    key,
-    (_nuxtApp, options) => {
-      const program = effectCall.effect?.()
-      return runEffect(compose ? compose(program) : program, options?.signal)
     },
     asyncDataOptions,
   )
@@ -1338,7 +1227,7 @@ function createUseEndpointKey(
   return `${prefix}:${route.method}:${route.path}${suffix}`
 }
 
-type UseEndpointKeyKind = 'data' | 'result' | 'effect'
+type UseEndpointKeyKind = 'data' | 'result'
 
 function toEndpointResultData(result: EndpointResultRuntime): EndpointResultDataRuntime {
   return {

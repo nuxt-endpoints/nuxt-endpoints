@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** the Effect HTTP client is removed. `.effect()` on generated
+  calls, `useEndpointEffect`, the `endpoints.client.effect` module option, and
+  the `nuxt-endpoints/effect` types (`EffectEndpointClient`,
+  `EndpointClientError`, and the rest) are gone. The client's extension
+  mechanism — `extensions` and `createCallExtension` on
+  `EndpointClientRuntimeOptions` — existed only to attach `.effect()` to a
+  call and is removed with it, since nothing else used it. `.result()` already
+  returns the same typed `{ status, ok, body, headers }` value `.effect()`
+  did, so most call sites only need to drop the `.effect()`/`Effect.runPromise`
+  wrapping; a call that used Effect's retry or interruption needs its own
+  replacement for that behavior. Effect Schema is unaffected: it remains a
+  fully supported validator for `params`, `body`, and `responses`, and OpenAPI
+  generation still uses Effect's JSON Schema converter for it.
+
 ## 0.5.0 - 2026-08-21
 
 ### Added

@@ -41,7 +41,7 @@ const multiPutHandler: EndpointRouteHandler = {
 }
 
 const defaultClientOptions: EndpointClientCodegenOptions = {
-  client: { result: true, raw: true, effect: false },
+  client: { result: true, raw: true },
 }
 
 describe('buildEndpointRouteEntryUnion', () => {
@@ -119,7 +119,7 @@ describe('generateEndpointTypes', () => {
 
   it('produces real result/raw response types when both client features are enabled', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).toContain(
@@ -132,7 +132,7 @@ describe('generateEndpointTypes', () => {
 
   it('degrades result/raw response types to never when both client features are disabled', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: false, raw: false, effect: false },
+      client: { result: false, raw: false },
     })
 
     expect(content).toContain(
@@ -143,28 +143,11 @@ describe('generateEndpointTypes', () => {
     )
   })
 
-  it('uses the plain EndpointClient type and skips the effect import when effect is disabled', () => {
+  it('uses the plain EndpointClient type', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).toContain('export type $EndpointClient = EndpointClient<')
-    expect(content).not.toContain('EffectEndpointClient')
-    expect(content).not.toContain("from './runtime/effect'")
-    expect(content).toContain('export type $UseEndpointEffect = never')
-  })
-
-  it('switches to the effect client type and imports effect types when effect is enabled', () => {
-    const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: true, raw: true, effect: true },
-    })
-
-    expect(content).toContain(
-      "import type { EffectEndpointClient, EffectEndpointOperationCall, EffectEndpointPathCall, UseEndpointEffectClient, UseEndpointEffectClientMethod } from './runtime/effect'",
-    )
-    expect(content).toContain('export type $EndpointClient = EffectEndpointClient<')
-    expect(content).toContain(
-      'export type $UseEndpointEffect = UseEndpointEffectClient<EndpointRouteEntry, EndpointClientFeatures>',
-    )
   })
 })

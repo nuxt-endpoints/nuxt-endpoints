@@ -439,7 +439,6 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointClient).toContain('export const __useEndpointAsyncData = createUseAsyncData()')
       expect(endpointClient).toContain('export const useEndpoint')
       expect(endpointClient).toContain('export const useEndpointResult')
-      expect(endpointClient).not.toContain('export const useEndpointEffect')
       expect(endpointTypes).not.toContain('plain')
       expect(endpointTypes).toContain('EndpointClient<EndpointRouteEntry, EndpointClientFeatures>')
       expect(endpointTypes).toContain('result: true')

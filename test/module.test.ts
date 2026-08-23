@@ -251,7 +251,6 @@ describe('resolveModuleOptions', () => {
     expect(resolveModuleOptions({}, false).client).toEqual({
       result: true,
       raw: true,
-      effect: false,
       query: false,
       querySetup: 'external',
       queryStaleTime: 60_000,

@@ -94,13 +94,12 @@ export default defineNuxtConfig({
     client: {
       result: true,
       raw: true,
-      effect: false,
     },
   },
 })
 ```
 
-`openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.result`, `client.raw`, and `client.effect` control which optional methods are generated on `$endpoint` calls.
+`openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.result` and `client.raw` control which optional methods are generated on `$endpoint` calls.
 
 To generate typed query, mutation, and infinite-query options for Vue Query, install
 the optional peer and enable `client.query`:

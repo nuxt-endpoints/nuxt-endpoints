@@ -85,7 +85,6 @@ export type EndpointsOpenApiModuleOptions = {
 export type EndpointsClientModuleOptions = {
   result?: boolean
   raw?: boolean
-  effect?: boolean
   query?: boolean | EndpointsQueryClientModuleOptions
 }
 
@@ -104,7 +103,6 @@ type ResolvedEndpointsModuleOptions = {
   client: {
     result: boolean
     raw: boolean
-    effect: boolean
     query: boolean
     querySetup: 'external' | 'auto'
     queryStaleTime: number
@@ -375,7 +373,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       { from: runtimeFile, name: '$endpoint' },
       { from: runtimeFile, name: 'useEndpoint' },
       ...(resolvedOptions.client.result ? [{ from: runtimeFile, name: 'useEndpointResult' }] : []),
-      ...(resolvedOptions.client.effect ? [{ from: runtimeFile, name: 'useEndpointEffect' }] : []),
       { from: typeFile, type: true, name: '$EndpointResponse' },
       { from: typeFile, type: true, name: '$EndpointResult' },
       { from: typeFile, type: true, name: '$EndpointRawResponse' },
@@ -387,8 +384,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       { from: typeFile, type: true, name: '$UseEndpointPathCall' },
       { from: typeFile, type: true, name: '$UseEndpointResult' },
       { from: typeFile, type: true, name: '$UseEndpointResultPathCall' },
-      { from: typeFile, type: true, name: '$UseEndpointEffect' },
-      { from: typeFile, type: true, name: '$UseEndpointEffectPathCall' },
       { from: typeFile, type: true, name: 'EndpointOperation' },
       { from: typeFile, type: true, name: 'EndpointPath' },
       { from: typeFile, type: true, name: 'EndpointMethod' },
@@ -832,7 +827,6 @@ export function resolveModuleOptions(
     client: {
       result: true,
       raw: true,
-      effect: false,
       query: false,
       querySetup: 'external',
       queryStaleTime: 60_000,

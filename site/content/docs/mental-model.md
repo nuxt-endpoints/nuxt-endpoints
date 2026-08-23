@@ -15,11 +15,11 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options, a default success-body call, typed result helpers, raw Web Response helpers, and optional Effect calls. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
+Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options, a default success-body call, typed result helpers, and raw Web Response helpers. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
 
 ## 4. Response handling is explicit
 
-Use the default call when app code only needs the success body. Use `.result()` for typed status and body handling, `.raw()` only when code needs a low-level Web `Response`, and `.effect()` when typed status results should compose with Effect retry and interruption.
+Use the default call when app code only needs the success body. Use `.result()` for typed status and body handling, and `.raw()` only when code needs a low-level Web `Response`.
 
 ## 5. OpenAPI is generated from the same source
 

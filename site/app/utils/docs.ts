@@ -21,7 +21,7 @@ export const docsNavSections = [
     items: [
       { label: 'Define Endpoints', to: '/docs/endpoints' },
       { label: 'Generated Client', to: '/docs/client' },
-      { label: 'Responses & Effect', to: '/docs/responses-and-effect' },
+      { label: 'Responses', to: '/docs/responses' },
       { label: 'Vue Query', to: '/docs/tanstack-query' },
       { label: 'OpenAPI', to: '/docs/openapi' },
       { label: 'Schema Libraries', to: '/docs/schema-libraries' },

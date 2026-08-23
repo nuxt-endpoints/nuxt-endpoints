@@ -48,10 +48,6 @@
       "types": "./dist/runtime/index.d.ts",
       "import": "./dist/runtime/index.js"
     },
-    "./effect": {
-      "types": "./dist/runtime/effect.d.ts",
-      "import": "./dist/runtime/effect.js"
-    },
     "./query": {
       "types": "./dist/runtime/tanstack-query.d.ts",
       "import": "./dist/runtime/tanstack-query.js"

@@ -335,17 +335,6 @@ describe('EndpointClient', () => {
     }
   })
 
-  it('does not expose Effect calls by default', () => {
-    const call = client('/api/users/:id', { method: 'get', params: { id: '1' } })
-
-    // @ts-expect-error effect is only available when the generated client enables it.
-    call.effect()
-    // @ts-expect-error resultEffect is not part of the client surface.
-    call.resultEffect()
-    // @ts-expect-error rawEffect is not part of the client surface.
-    call.rawEffect()
-  })
-
   it('hides optional result and raw calls when disabled', () => {
     const call = minimalClient('/api/users/:id', { method: 'get', params: { id: '1' } })
     const operationCall = minimalClient('getUser', { params: { id: '1' } })

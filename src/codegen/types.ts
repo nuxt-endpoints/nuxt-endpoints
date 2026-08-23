@@ -38,6 +38,5 @@ export type EndpointClientCodegenOptions = {
   client: {
     result: boolean
     raw: boolean
-    effect: boolean
   }
 }

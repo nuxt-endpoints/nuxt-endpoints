@@ -8,7 +8,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Define Nuxt endpoint contracts once and reuse them for runtime validation, typed clients, Vue Query, status-aware typed results, Effect, and OpenAPI.',
+        'Define Nuxt endpoint contracts once and reuse them for runtime validation, typed clients, Vue Query, status-aware typed results, and OpenAPI.',
     },
   ],
 })
@@ -175,7 +175,7 @@ export default defineEndpointHandler(endpoint, ({ params }) => {
     key: 'errors',
     title: 'Errors are',
     titleAccent: 'typed too.',
-    lead: 'Declared non-2xx responses stop being unknown. Branch on the status code and the body type follows — as promises, or as Effect programs.',
+    lead: 'Declared non-2xx responses stop being unknown. Branch on the status code and the body type follows.',
     points: [
       {
         icon: 'lucide:list-checks',
@@ -186,11 +186,11 @@ export default defineEndpointHandler(endpoint, ({ params }) => {
         text: '.result() narrows the response body by status',
       },
       {
-        icon: 'lucide:repeat',
-        text: 'Optional .effect() calls: retry and interruption with statuses still typed',
+        icon: 'lucide:file-json',
+        text: '.raw() returns the native Web Response for streaming or low-level access',
       },
     ],
-    cta: { label: 'Responses & Effect', to: '/docs/responses-and-effect' },
+    cta: { label: 'Responses', to: '/docs/responses' },
     blocks: [
       {
         title: 'status-typed result',

@@ -29,7 +29,7 @@ const exportUsersHandler: EndpointRouteHandler = {
 describe('generateEndpointClient', () => {
   it('embeds an empty route config for an empty handler list', () => {
     const content = generateEndpointClient(resolve, [], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).toContain('const routes = [] as const')
@@ -37,7 +37,7 @@ describe('generateEndpointClient', () => {
 
   it('reflects operation and idempotency metadata into the runtime route config', () => {
     const content = generateEndpointClient(resolve, [createOrderHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).toContain('"path": "/api/orders"')
@@ -50,7 +50,7 @@ describe('generateEndpointClient', () => {
 
   it('omits the operation and idempotency fields for handlers without them', () => {
     const content = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).not.toContain('"operation"')
@@ -59,7 +59,7 @@ describe('generateEndpointClient', () => {
 
   it('emits mediaResponse: true in the route config for a handler that declares one', () => {
     const content = generateEndpointClient(resolve, [exportUsersHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).toContain('"mediaResponse": true')
@@ -67,7 +67,7 @@ describe('generateEndpointClient', () => {
 
   it('omits the mediaResponse field for handlers without one', () => {
     const content = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
 
     expect(content).not.toContain('"mediaResponse"')
@@ -75,10 +75,10 @@ describe('generateEndpointClient', () => {
 
   it('exports useEndpointResult and imports its factory only when result is enabled', () => {
     const enabled = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
     const disabled = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: false, raw: true, effect: false },
+      client: { result: false, raw: true },
     })
 
     expect(enabled).toContain('createUseEndpointResult')
@@ -89,35 +89,13 @@ describe('generateEndpointClient', () => {
 
   it('embeds the raw feature flag in the client features object', () => {
     const rawEnabled = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: false },
+      client: { result: true, raw: true },
     })
     const rawDisabled = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: false, effect: false },
+      client: { result: true, raw: false },
     })
 
     expect(rawEnabled).toContain('{"result":true,"raw":true}')
     expect(rawDisabled).toContain('{"result":true,"raw":false}')
-  })
-
-  it('wires the effect extension into the client and exports useEndpointEffect when effect is enabled', () => {
-    const content = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: true },
-    })
-
-    expect(content).toContain(
-      "import { createEndpointEffectExtension, createUseEndpointEffect } from './runtime/effect'",
-    )
-    expect(content).toContain('extensions: [createEndpointEffectExtension()]')
-    expect(content).toContain('export const useEndpointEffect =')
-  })
-
-  it('omits every effect wiring when effect is disabled', () => {
-    const content = generateEndpointClient(resolve, [healthHandler], {
-      client: { result: true, raw: true, effect: false },
-    })
-
-    expect(content).not.toContain('createEndpointEffectExtension')
-    expect(content).not.toContain('useEndpointEffect')
-    expect(content).not.toContain('extensions:')
   })
 })

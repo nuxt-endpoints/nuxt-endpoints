@@ -174,42 +174,6 @@ if (result.status === 200) console.log(result.body.name)`,
     runtimeEffect: 'Runtime response validation still follows the declared status schemas.',
   },
   {
-    shortTitle: 'Effect',
-    title: 'Compose the same call with Effect.',
-    description: [
-      { text: 'The status-aware response can become a ' },
-      { text: 'lazy Effect program', tone: 'client' },
-      { text: ', so retry and error mapping stay typed.' },
-    ],
-    serverCode: `export const endpoint = defineEndpoint({
-  operation: 'getUser',
-  params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
-  },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
-})`,
-    clientCode: `const user = await $endpoint.getUser({ params: { id: '123' } }).effect().pipe(
-  Effect.retry({ times: 2 }),
-  Effect.flatMap((result) =>
-    result.status === 404 ? Effect.fail(result.body) : Effect.succeed(result.body),
-  ),
-  Effect.runPromise,
-)`,
-    highlightLines: {
-      serverCode: [],
-      clientCode: [1, 2, 3, 4, 5, 6, 7],
-    },
-    serverEffect: 'No new server shape is required for Effect.',
-    clientEffect: 'Effect uses the same typed result surface as `.result()`.',
-    runtimeEffect: 'The request is lazy and re-runs for each Effect execution or retry.',
-  },
-  {
     shortTitle: 'Async Data',
     title: 'Use typed results with Nuxt async data.',
     description: [
@@ -239,44 +203,6 @@ export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
     },
     serverEffect: 'No new server shape is required for Nuxt async data.',
     clientEffect: '`useEndpointResult` keeps status-aware body types inside async data state.',
-    runtimeEffect: 'Refreshes and deduped executions reuse the generated endpoint request.',
-  },
-  {
-    shortTitle: 'Effect State',
-    title: 'Also use Effect with Nuxt async data.',
-    description: [
-      {
-        text: 'Effect programs can power Nuxt async-data state, so retry and mapping logic stay in the ',
-      },
-      { text: 'typed Effect pipeline', tone: 'client' },
-      { text: '.' },
-    ],
-    serverCode: `export const endpoint = defineEndpoint({
-  operation: 'getUser',
-  params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
-  },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
-})`,
-    clientCode: `const { data: user, pending, error, refresh } = await useEndpointEffect(
-  'getUser', { params: { id: '123' } },
-  (program) => program.pipe(
-    Effect.retry({ times: 2 }),
-    Effect.map((result) => (result.status === 404 ? null : result.body)),
-  ),
-)`,
-    highlightLines: {
-      serverCode: [],
-      clientCode: [1, 2, 3, 4, 5, 6, 7],
-    },
-    serverEffect: 'No new server shape is required for Effect async data.',
-    clientEffect: '`useEndpointEffect` runs the Effect and returns normal async data state.',
     runtimeEffect: 'Refreshes and deduped executions reuse the generated endpoint request.',
   },
   {
