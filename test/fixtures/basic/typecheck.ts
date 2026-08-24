@@ -228,7 +228,50 @@ const invalidUserResponse: $EndpointResponse<'getUser'> = {
   name: 'Tom',
 }
 
+// PROTOTYPE: the single-define (merged) form must reach the generated client
+// surface exactly like the two-call form does.
+const mergedResponse: $EndpointResponse<'getMerged'> = {
+  id: 1,
+  name: 'Merged',
+}
+
+const mergedPathResponse: $EndpointPathResponse<'/api/merged', 'get'> = {
+  id: 1,
+  name: 'Merged',
+}
+
+const invalidMergedResponse: $EndpointResponse<'getMerged'> = {
+  // @ts-expect-error the merged form's 200 body still comes from its schema.
+  id: 'wrong',
+  name: 'Merged',
+}
+
+// No declared responses: the client body comes from the widened handler return.
+const mergedInferredResponse: $EndpointResponse<'getMergedInferred'> = {
+  name: 'Tom',
+  count: 1,
+}
+
+async function checkMergedClient() {
+  const merged = await client('getMerged', { query: { id: 1 } })
+  merged.id.toFixed()
+  merged.name.toUpperCase()
+
+  const mergedResult = await client('getMerged', { query: { id: 1 } }).result()
+  if (mergedResult.status === 404) {
+    mergedResult.body.message.toUpperCase()
+  }
+
+  // @ts-expect-error the merged form's query contract is still required.
+  await client('getMerged', {})
+}
+
 void checkClient
+void checkMergedClient
+void mergedResponse
+void mergedPathResponse
+void invalidMergedResponse
+void mergedInferredResponse
 void userResponse
 void userPathResponse
 void exportPathResponse

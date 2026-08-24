@@ -91,6 +91,40 @@ describe('DefinedEndpoint', () => {
     expect(result).toEqual({ id: 123, name: 'Tom' })
   })
 
+  it('runs a single-define endpoint, handler and contract in one call', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    const handler = defineEndpoint({
+      operation: 'getMergedUser',
+      params: numberParams,
+      response: userResponse,
+      handler: ({ params }) => ({ id: params.id, name: 'Tom' }),
+    })
+
+    const result = await handler(createEvent({ params: { id: '123' } }))
+
+    expect(result).toEqual({ id: 123, name: 'Tom' })
+  })
+
+  it('still returns a reusable contract when the single define omits a handler', async () => {
+    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+
+    const endpoint = defineEndpoint({
+      operation: 'getSplitUser',
+      params: numberParams,
+      response: userResponse,
+    })
+
+    const handler = defineEndpointHandler(endpoint, ({ params }) => ({
+      id: params.id,
+      name: 'Tom',
+    }))
+
+    const result = await handler(createEvent({ params: { id: '7' } }))
+
+    expect(result).toEqual({ id: 7, name: 'Tom' })
+  })
+
   it('passes the H3 event, web request, and middleware context into the handler', async () => {
     const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
 

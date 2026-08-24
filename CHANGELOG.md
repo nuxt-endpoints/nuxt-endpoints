@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `defineEndpoint` now accepts the handler as part of the definition, so a route
+  is one call instead of two:
+
+  ```ts
+  export default defineEndpoint({
+    operation: 'getUser',
+    params: z.object({ id: z.coerce.number() }),
+    responses: { 200: User, 404: NotFound },
+    handler: ({ params, respond }) => findUser(params.id) ?? respond(404, { message: 'Not found' }),
+  })
+  ```
+
+  The two-call form keeps working unchanged; omitting `handler` still returns a
+  contract to pass to `defineEndpointHandler`, which is what a route wants when
+  the handler is defined elsewhere.
+
+  The split existed because of an inference limit, not a preference. Receiving
+  the definition as one whole-object type parameter and then using that same
+  parameter to type the handler's argument in the same object literal makes
+  TypeScript fall back to the parameter's constraint — `params` and `query`
+  arrived as the constraint type rather than the schema's output. Passing the
+  contract as a separate argument sidesteps it by making the contract a resolved
+  value. Declaring one type parameter per slot and reassembling the definition
+  from them sidesteps it too, and that is what this release does: each parameter
+  is inferred from its own property, so the handler property never participates
+  in inferring the contract. The contract type machinery is unchanged; only the
+  entry signature moved.
+
+### Fixed
+
+- Build-time discovery classified `export default defineEndpoint({ … })` as a
+  plain Nitro route, because the identifier is preceded by `default`, and the
+  preceding-identifier check exists to skip this library's own
+  `export function defineEndpoint` declaration. A merged route was dropped from
+  codegen with no error reported.
+
 ## 0.6.0 - 2026-08-24
 
 ### Changed

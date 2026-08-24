@@ -5,6 +5,7 @@ import type {
   EndpointContext,
   EndpointDefinition,
   EndpointIdempotencyMetadata,
+  EndpointResponsesContract,
   EndpointSuccessBody,
   HandlerReturn,
   HasEndpointResponses,
@@ -492,11 +493,280 @@ type InferredStatusHandlerSuccessBody<VALUE> =
       : never
     : never
 
-export function defineEndpoint<const DEFINITION extends EndpointDefinition>(
+/**
+ * PROTOTYPE: assembled definition type for the single-define (merged) form.
+ *
+ * Every `EndpointDefinition` member is reproduced as one generic slot so each
+ * one has its own inference site in a single object literal - a shared
+ * `DEFINITION` generic cannot work here, because the handler's parameter type
+ * would have to be computed from a `DEFINITION` that contains the handler.
+ *
+ * Slots are declared required-but-possibly-`undefined` rather than optional, so
+ * TypeScript can prove the assembled type satisfies `EndpointDefinition`
+ * without resolving a conditional-key mapped type. Every downstream mapper
+ * already funnels an absent slot and an `undefined` slot to the same place
+ * (`InferOutputOrUndefined`, `InferInputOrNever`, `NormalizeResponses`'s
+ * `infer ... extends` guards), so the two spellings are equivalent to them.
+ */
+export type MergedEndpointDefinition<
+  OP extends string | undefined,
+  PARAMS extends ValidatorSchema | undefined,
+  QUERY extends ValidatorSchema | undefined,
+  HEADERS extends ValidatorSchema | undefined,
+  BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined,
+  RESPONSE extends ResponseContract | undefined,
+  RESPONSES extends EndpointResponsesContract | undefined,
+  SUMMARY extends string | undefined,
+  DESCRIPTION extends string | undefined,
+  TAGS extends string[] | undefined,
+> = {
+  operation: OP
+  params: PARAMS
+  query: QUERY
+  headers: HEADERS
+  body: BODY
+  response: RESPONSE
+  responses: RESPONSES
+  summary: SUMMARY
+  description: DESCRIPTION
+  tags: TAGS
+}
+
+// PROTOTYPE: single-define (merged) form, declared FIRST so that overload
+// resolution picks it - and with it its `const ACTUAL_RETURN` capture - for
+// every well-formed merged call. Ordering matters twice over, and in opposite
+// directions, which is why this signature is repeated below:
+//
+//   - resolution uses the FIRST applicable overload, so the merged signature
+//     must lead or the handler return widens (`{ ok: true }` becomes
+//     `{ ok: boolean }` and a `z.literal(true)` response stops matching);
+//   - a failed call is elaborated against the LAST overload, so the merged
+//     signature must also trail or every mistake collapses into "No overload
+//     matches this call. Type '(...) => ... ' is not assignable to type
+//     'undefined'", attributed to whichever property TypeScript reached first.
+export function defineEndpoint<
+  const OP extends string | undefined = undefined,
+  const PARAMS extends ValidatorSchema | undefined = undefined,
+  const QUERY extends ValidatorSchema | undefined = undefined,
+  const HEADERS extends ValidatorSchema | undefined = undefined,
+  const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
+  const RESPONSE extends ResponseContract | undefined = undefined,
+  const RESPONSES extends EndpointResponsesContract | undefined = undefined,
+  const SUMMARY extends string | undefined = undefined,
+  const DESCRIPTION extends string | undefined = undefined,
+  TAGS extends string[] | undefined = undefined,
+  const ACTUAL_RETURN extends DeepReadonly<
+    HandlerReturn<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    >
+  > = DeepReadonly<
+    HandlerReturn<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    >
+  >,
+>(
+  definition: {
+    operation?: OP
+    params?: PARAMS
+    query?: QUERY
+    headers?: HEADERS
+    body?: BODY
+    response?: RESPONSE
+    responses?: RESPONSES
+    summary?: SUMMARY
+    description?: DESCRIPTION
+    tags?: TAGS
+    handler: CapturedEndpointHandler<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >,
+      ACTUAL_RETURN
+    >
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  MergedEndpointDefinition<
+    OP,
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSE,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS
+  >,
+  HasEndpointResponses<
+    MergedEndpointDefinition<
+      OP,
+      PARAMS,
+      QUERY,
+      HEADERS,
+      BODY,
+      RESPONSE,
+      RESPONSES,
+      SUMMARY,
+      DESCRIPTION,
+      TAGS
+    >
+  > extends true
+    ? ACTUAL_RETURN
+    : WidenCapturedReturn<ACTUAL_RETURN>
+>
+// The pre-existing two-call form. PROTOTYPE NOTE: `& { handler?: never }` on
+// the type parameter's constraint is load-bearing. Without it, a merged call
+// whose handler return does not match its contract quietly falls through to
+// this overload and resolves to a plain `DefinedEndpoint` - no error at all at
+// the call site. It has to sit on the *constraint* rather than on the parameter
+// type: `DEFINITION & { handler?: never }` as a parameter type stops DEFINITION
+// being a naked type parameter, inference to it is skipped, and every property
+// is then reported as "not assignable to type 'never'".
+export function defineEndpoint<const DEFINITION extends EndpointDefinition & { handler?: never }>(
   definition: DEFINITION &
     ([DEFINITION] extends [{ idempotency: unknown }] ? { idempotency?: never } : unknown),
   options?: EndpointRuntimeOptions,
-): DefinedEndpoint<DEFINITION> {
+): DefinedEndpoint<DEFINITION>
+// PROTOTYPE: the merged signature again, verbatim. See the ordering note on
+// the first copy - this trailing duplicate exists only so TypeScript
+// elaborates a failed merged call against the merged signature instead of
+// against the contract-only one.
+export function defineEndpoint<
+  const OP extends string | undefined = undefined,
+  const PARAMS extends ValidatorSchema | undefined = undefined,
+  const QUERY extends ValidatorSchema | undefined = undefined,
+  const HEADERS extends ValidatorSchema | undefined = undefined,
+  const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
+  const RESPONSE extends ResponseContract | undefined = undefined,
+  const RESPONSES extends EndpointResponsesContract | undefined = undefined,
+  const SUMMARY extends string | undefined = undefined,
+  const DESCRIPTION extends string | undefined = undefined,
+  TAGS extends string[] | undefined = undefined,
+  const ACTUAL_RETURN extends DeepReadonly<
+    HandlerReturn<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    >
+  > = DeepReadonly<
+    HandlerReturn<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    >
+  >,
+>(
+  definition: {
+    operation?: OP
+    params?: PARAMS
+    query?: QUERY
+    headers?: HEADERS
+    body?: BODY
+    response?: RESPONSE
+    responses?: RESPONSES
+    summary?: SUMMARY
+    description?: DESCRIPTION
+    tags?: TAGS
+    handler: CapturedEndpointHandler<
+      MergedEndpointDefinition<
+        OP,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSE,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >,
+      ACTUAL_RETURN
+    >
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  MergedEndpointDefinition<
+    OP,
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSE,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS
+  >,
+  HasEndpointResponses<
+    MergedEndpointDefinition<
+      OP,
+      PARAMS,
+      QUERY,
+      HEADERS,
+      BODY,
+      RESPONSE,
+      RESPONSES,
+      SUMMARY,
+      DESCRIPTION,
+      TAGS
+    >
+  > extends true
+    ? ACTUAL_RETURN
+    : WidenCapturedReturn<ACTUAL_RETURN>
+>
+export function defineEndpoint(
+  definition: EndpointDefinition & { handler?: (context: never) => unknown },
+  options?: EndpointRuntimeOptions,
+): unknown {
   // A media-type-map `body` is validated here so a malformed map fails at
   // definition time — including the jiti evaluation Nuxt performs at build
   // time — rather than surfacing as a confusing runtime error on first
@@ -506,9 +776,14 @@ export function defineEndpoint<const DEFINITION extends EndpointDefinition>(
   // narrowing `definition.body` inline) so control-flow narrowing on a
   // generic parameter's property can't leak into `DEFINITION` inference for
   // the `return` below.
-  validateEndpointBodyDefinition(definition.body)
-  validateEndpointResponseDefinitions(definition.response, definition.responses)
-  return new DefinedEndpoint(definition, options)
+  const { handler, ...contract } = definition
+  validateEndpointBodyDefinition(contract.body)
+  validateEndpointResponseDefinitions(contract.response, contract.responses)
+  const endpoint = new DefinedEndpoint(contract, options)
+  // PROTOTYPE: the merged form hands back the event handler, which carries the
+  // same `__endpoint_contract__` marker discovery already reads off a route
+  // module's default export.
+  return handler === undefined ? endpoint : endpoint.handler(handler as never)
 }
 
 function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void {

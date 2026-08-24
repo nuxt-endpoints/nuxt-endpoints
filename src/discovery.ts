@@ -120,7 +120,17 @@ export function hasEndpointDefinition(fileContent: string): boolean {
     }
 
     const previous = previousCodeCharacter(fileContent, identifierStart - 1)
-    if (previous === '.' || isIdentifierPart(previous)) {
+    // PROTOTYPE: a preceding identifier still disqualifies the match (it is
+    // how this library's own `export function defineEndpoint(...)` declaration
+    // is excluded), with one exception - `export default defineEndpoint({...})`,
+    // which is the single-define form's route shape. Without this exception the
+    // merged form is silently classified `{ kind: 'none' }` and every merged
+    // route is dropped from codegen with no error at all.
+    if (
+      previous === '.' ||
+      (isIdentifierPart(previous) &&
+        previousCodeWord(fileContent, identifierStart - 1) !== 'default')
+    ) {
       continue
     }
 
@@ -334,6 +344,23 @@ export function previousCodeCharacter(source: string, start: number): string | u
     index -= 1
   }
   return source[index]
+}
+
+// The whole identifier token immediately before `start`, skipping whitespace.
+// `undefined` when the preceding code character is not part of an identifier.
+export function previousCodeWord(source: string, start: number): string | undefined {
+  let index = start
+  while (index >= 0 && /\s/.test(source[index])) {
+    index -= 1
+  }
+  if (!isIdentifierPart(source[index])) {
+    return undefined
+  }
+  const end = index
+  while (index >= 0 && isIdentifierPart(source[index])) {
+    index -= 1
+  }
+  return source.slice(index + 1, end + 1)
 }
 
 export function isIdentifierStart(character: string | undefined): boolean {

@@ -16,6 +16,30 @@ describe('analyzeEndpointContractSource', () => {
     ).toEqual({ kind: 'none' })
   })
 
+  it('reports co-located for the single-define form', () => {
+    expect(
+      analyzeEndpointContractSource(`
+        export default defineEndpoint({
+          operation: 'getUser',
+          handler: () => ({ ok: true }),
+        })
+      `),
+    ).toEqual({ kind: 'co-located' })
+  })
+
+  // The `default` exception added for the form above must not re-admit this
+  // library's own declaration, which is what the preceding-identifier check
+  // exists to exclude in the first place.
+  it('still ignores a `defineEndpoint` function declaration', () => {
+    expect(
+      analyzeEndpointContractSource(`
+        export function defineEndpoint(definition) {
+          return definition
+        }
+      `),
+    ).toEqual({ kind: 'none' })
+  })
+
   it('reports co-located when the endpoint is defined alongside its handler', () => {
     expect(
       analyzeEndpointContractSource(`
