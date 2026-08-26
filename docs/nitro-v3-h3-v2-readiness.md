@@ -2,13 +2,17 @@
 
 Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
 
-Last verified: 2026-08-18, against `h3@2.0.1-rc.26` and `nitro@3.0.260610-beta`.
+H3 rows last verified: 2026-08-24, against `h3@2.0.1-rc.22` — the newest H3 v2
+release resolvable in this repository's lockfile, where it arrives transitively.
+Nitro rows were recorded against `nitro@3.0.260610-beta` and have not been
+re-measured since.
 
-The adapter maps below were previously unverified projections. They are now
-measured: every row was checked against those installed packages, and the
-runtime rows for H3 were additionally observed by dispatching requests through
-a real `H3` app. Both upstream packages are prerelease, so re-verify when they
-reach stable.
+The adapter maps below were previously unverified projections. The H3 rows are
+now measured: every name was resolved against the installed package, and the
+runtime rows were additionally observed by dispatching requests through a real
+`H3` app. Both upstream packages are prerelease, so re-verify when they reach
+stable — and note that the verified version is not the latest RC, so a row can
+have moved since.
 
 ## Current support boundary
 
@@ -50,24 +54,24 @@ export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
 
 ## Completed preparation
 
-| Area                       | Current boundary                                                                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| H3 runtime calls           | [`src/runtime/h3-adapter.ts`](../src/runtime/h3-adapter.ts) is the only production runtime file that imports H3 directly.                                                      |
-| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                          |
-| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                              |
-| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                        |
-| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                          |
-| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                       |
-| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                              |
-| Client JSON wire types     | [`src/runtime/wire.ts`](../src/runtime/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`. |
-| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                            |
+| Area                       | Current boundary                                                                                                                                                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H3 runtime calls           | [`src/runtime/h3-adapter.ts`](../src/runtime/h3-adapter.ts) is the only production runtime file that imports H3 directly. Two places assume H3 shapes without importing it: `src/runtime/endpoint.ts` reads `event.context` (unchanged in v2), and `src/module.ts` encodes H3's trailing-slash route registration in `comparableRoutePath`. |
+| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                                                                                                                                                                                       |
+| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                                                                                                                                                                                           |
+| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                                                                                                                                                                                     |
+| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                                                                                                                                                                                       |
+| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                                                                                                                                                                                    |
+| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                                                                                                                                                                                           |
+| Client JSON wire types     | [`src/runtime/wire.ts`](../src/runtime/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`.                                                                                                                                                              |
+| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                                                                                                                                                                                         |
 
 The current Nitro 2/H3 1 implementation is covered by unit, type, build, and
 Nuxt end-to-end tests.
 
 ## H3 v1 to v2 adapter map
 
-Measured against `h3@2.0.1-rc.26`. Only one call in the adapter has no v2
+Measured against `h3@2.0.1-rc.22`. Only one call in the adapter has no v2
 equivalent; every other v1 name still resolves and behaves identically, so the
 migration is far smaller than a name-by-name rewrite would suggest.
 
@@ -79,6 +83,10 @@ migration is far smaller than a name-by-name rewrite would suggest.
 | Request headers     | `getHeaders(event)`                | Works unchanged, deprecated. Returns a plain record                             | `Object.fromEntries(event.req.headers.entries())`                                          |
 | Query               | `getQuery(event)`                  | Works unchanged, not deprecated. **Keep it** — see below                        | `getQuery(event)`                                                                          |
 | Parsed body         | `readBody(event)`                  | Works unchanged, not deprecated. JSON by default, `undefined` for an empty body | `readBody(event)`                                                                          |
+| Multipart body      | `readFormData(event)`              | Works unchanged, deprecated                                                     | `event.req.formData()`                                                                     |
+| Raw body, text      | `readRawBody(event, 'utf8')`       | Works unchanged, deprecated                                                     | `event.req.text()`                                                                         |
+| Raw body, bytes     | `readRawBody(event, false)`        | Works unchanged, deprecated                                                     | `event.req.arrayBuffer()`                                                                  |
+| Request method      | `event.method`                     | Works unchanged, deprecated                                                     | `event.req.method`                                                                         |
 | Response status     | `setResponseStatus(event, status)` | Works unchanged, deprecated. Identical signature                                | `event.res.status = code` (assignment, not a call)                                         |
 | Response headers    | `setHeaders(event, headers)`       | Works unchanged, deprecated                                                     | `event.res.headers.set(name, value)`, one at a time; a record cannot be assigned wholesale |
 | HTTP error          | `createError`                      | Works, deprecated, **but the wire body changes** — see below                    | `new HTTPError({ status, statusText, data })`                                              |
