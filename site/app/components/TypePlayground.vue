@@ -39,13 +39,12 @@ type PlaygroundRelatedInformation = {
 }
 type TypeScriptModule = typeof import('typescript')
 
-const defaultServerCode = `export const endpoint = defineEndpoint({
+const defaultServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  response: z.object({ id: z.number(), name: z.string() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  return { id: params.id, name: 'Ada' }
+  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
+  handler: ({ params }) => {
+    return { id: params.id, name: 'Ada' }
+  },
 })`
 
 const defaultClientCode = `const user = await $endpoint('/api/users/:id', {
@@ -55,13 +54,12 @@ const defaultClientCode = `const user = await $endpoint('/api/users/:id', {
 
 console.log(\`id: \${user.id}, name: \${user.name}\`)`
 
-const inferServerCode = `export const endpoint = defineEndpoint({
+const inferServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  // no response schema: the client's type is inferred from this return
-  return { id: params.id, name: 'Ada', role: 'admin' }
+  handler: ({ params }) => {
+    // no response schema: the client's type is inferred from this return
+    return { id: params.id, name: 'Ada', role: 'admin' }
+  },
 })`
 
 const inferClientCode = `const user = await $endpoint('/api/users/:id', {
@@ -71,15 +69,14 @@ const inferClientCode = `const user = await $endpoint('/api/users/:id', {
 
 console.log(\`\${user.name} (\${user.role})\`)`
 
-const schemaServerCode = `export const endpoint = defineEndpoint({
+const schemaServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  response: z.object({ id: z.number(), name: z.string(), role: z.string() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  // error: the schema declares \`role\`, so this return no longer satisfies it
-  return { id: params.id, name: 'Ada' }
-  // fix: return { id: params.id, name: 'Ada', role: 'admin' }
+  responses: { 200: z.object({ id: z.number(), name: z.string(), role: z.string() }) },
+  handler: ({ params }) => {
+    // error: the schema declares \`role\`, so this return no longer satisfies it
+    return { id: params.id, name: 'Ada' }
+    // fix: return { id: params.id, name: 'Ada', role: 'admin' }
+  },
 })`
 
 const presets: PlaygroundPreset[] = [
@@ -558,28 +555,25 @@ type InferInput<T> = T extends Schema<infer Input, unknown> ? Input : never
 type InferOutput<T> = T extends Schema<unknown, infer Output> ? Output : never
 type ObjectInput<Shape> = { [Key in keyof Shape]: InferInput<Shape[Key]> }
 type ObjectOutput<Shape> = { [Key in keyof Shape]: InferOutput<Shape[Key]> }
-type EndpointDefinition = {
-  operation?: string
-  params?: Schema<unknown, unknown>
-  response?: Schema<unknown, unknown>
-}
-type EndpointParams<T extends EndpointDefinition> = T extends { params: infer Params }
-  ? InferOutput<Params>
-  : {}
-type EndpointRequest<T extends EndpointDefinition> = T extends { params: infer Params }
-  ? { params: InferInput<Params> }
-  : {}
-type EndpointResponse<T extends EndpointDefinition> = T extends { response: infer Response }
-  ? InferOutput<Response>
+type ParamsOutput<Params> = Params extends Schema<unknown, infer Output> ? Output : {}
+type ParamsInput<Params> = Params extends Schema<infer Input, unknown> ? { params: Input } : {}
+type ResponsesOutput<Responses> = Responses extends { 200: Schema<unknown, infer Output> }
+  ? Output
   : unknown
 type AwaitedLike<T> = T extends PromiseLike<infer Value> ? AwaitedLike<Value> : T
-type EndpointHandlerResult<Return> = { readonly __handlerReturn: Return }
-type HandlerReturnOf<Handler> = Handler extends EndpointHandlerResult<infer Return>
-  ? Return
+type Endpoint<Params, Responses, Return> = {
+  readonly __params: Params
+  readonly __responses: Responses
+  readonly __handlerReturn: Return
+}
+type EndpointRequest<E> = E extends Endpoint<infer Params, unknown, unknown>
+  ? ParamsInput<Params>
+  : {}
+type ClientBody<E> = E extends Endpoint<unknown, infer Responses, infer Return>
+  ? Responses extends { 200: Schema<unknown, infer Output> }
+    ? Output
+    : Return
   : unknown
-type ClientBody<T extends EndpointDefinition, Handler> = T extends { response: infer Response }
-  ? InferOutput<Response>
-  : HandlerReturnOf<Handler>
 declare const z: {
   string(): Schema<string>
   number(): Schema<number>
@@ -590,20 +584,32 @@ declare const z: {
     shape: Shape,
   ): Schema<ObjectInput<Shape>, ObjectOutput<Shape>>
 }
-declare function defineEndpoint<const T extends EndpointDefinition>(definition: T): T
+declare function defineEndpoint<
+  Params extends Schema<unknown, unknown> | undefined = undefined,
+  Responses extends { 200: Schema<unknown, unknown> } | undefined = undefined,
+  Return extends
+    | ResponsesOutput<Responses>
+    | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
+>(definition: {
+  operation?: string
+  params?: Params
+  responses?: Responses
+  handler?: (event: { params: ParamsOutput<Params> }) => Return
+}): Endpoint<Params, Responses, AwaitedLike<Return>>
 declare function defineEndpointHandler<
-  T extends EndpointDefinition,
-  Return extends EndpointResponse<T> | Promise<EndpointResponse<T>>,
+  Params,
+  Responses,
+  Return extends
+    | ResponsesOutput<Responses>
+    | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
 >(
-  endpoint: T,
-  handler: (event: { params: EndpointParams<T> }) => Return,
-): EndpointHandlerResult<AwaitedLike<Return>>
+  endpoint: Endpoint<Params, Responses, unknown>,
+  handler: (event: { params: ParamsOutput<Params> }) => Return,
+): Endpoint<Params, Responses, AwaitedLike<Return>>
 declare function $endpoint(
   path: '/api/users/:id',
-  options: EndpointRequest<typeof import('./server').endpoint> & { method: 'get' },
-): Promise<
-  ClientBody<typeof import('./server').endpoint, typeof import('./server').default>
->
+  options: EndpointRequest<typeof import('./server').default> & { method: 'get' },
+): Promise<ClientBody<typeof import('./server').default>>
 `
 </script>
 
