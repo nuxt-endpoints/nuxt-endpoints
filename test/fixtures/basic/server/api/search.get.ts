@@ -5,9 +5,11 @@ export const endpoint = defineEndpoint({
   query: z.object({
     q: z.string(),
   }),
-  response: z.object({
-    items: z.array(z.string()),
-  }),
+  responses: {
+    200: z.object({
+      items: z.array(z.string()),
+    }),
+  },
 })
 
 export default defineEndpointHandler(endpoint, ({ query }) => {

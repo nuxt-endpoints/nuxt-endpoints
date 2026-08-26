@@ -17,7 +17,7 @@ type Routes =
       definition: {
         operation: 'getUser'
         params: Schema<{ id: string }, { id: number }>
-        response: Schema<{ id: number; name: string }>
+        responses: { 200: Schema<{ id: number; name: string }> }
       }
     }
   | {
@@ -40,7 +40,7 @@ type Routes =
       operation: 'health'
       definition: {
         operation: 'health'
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -54,7 +54,7 @@ type Routes =
           headerName: 'Idempotency-Key'
           required: true
         }
-        response: Schema<{ id: string }>
+        responses: { 200: Schema<{ id: string }> }
       }
     }
   | {
@@ -68,7 +68,7 @@ type Routes =
           headerName: 'X-Request-Key'
           required: false
         }
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -76,7 +76,7 @@ type Routes =
       method: 'get'
       definition: {
         query: Schema<{ q: string }>
-        response: Schema<{ items: string[] }>
+        responses: { 200: Schema<{ items: string[] }> }
       }
     }
   | {
@@ -112,7 +112,7 @@ type Routes =
           'application/json': Schema<{ name: string }>
           'multipart/form-data': Schema<{ name: string }>
         }
-        response: Schema<{ name: string; bodyMediaType: string }>
+        responses: { 200: Schema<{ name: string; bodyMediaType: string }> }
       }
     }
   | {
@@ -125,7 +125,7 @@ type Routes =
           'multipart/form-data': Schema<{ name: string }>
           'text/plain': Schema<{ name: string }>
         }
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -154,7 +154,7 @@ type MinimalClient = EndpointClient<
     definition: {
       operation: 'getUser'
       params: Schema<{ id: string }, { id: number }>
-      response: Schema<{ id: number; name: string }>
+      responses: { 200: Schema<{ id: number; name: string }> }
     }
   },
   {
@@ -170,7 +170,7 @@ type ReservedAliasClient = EndpointClient<{
   definition: {
     operation: 'get'
     params: Schema<{ id: string }, { id: number }>
-    response: Schema<{ id: number }>
+    responses: { 200: Schema<{ id: number }> }
   }
 }>
 

@@ -333,6 +333,20 @@ describe('fingerprint determinability at definition time', () => {
     )
   })
 
+  it('rejects the same single-define endpoint at definition time', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    // The merged form routes its `idempotency` slot through `.idempotency()`,
+    // so the assertion fires before the handler is ever attached.
+    expect(() =>
+      defineEndpoint({
+        operation: 'publishMerged',
+        idempotency: { required: true },
+        handler: () => ({ published: true }),
+      }),
+    ).toThrow(/needs an explicit fingerprint/)
+  })
+
   it('accepts one once the author states what identifies the request', async () => {
     const { defineEndpoint } = await import('../src/runtime')
     const { z } = await import('zod')

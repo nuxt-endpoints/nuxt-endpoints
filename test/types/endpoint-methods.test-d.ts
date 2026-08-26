@@ -14,7 +14,7 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 
 describe('defineEndpointMethods structural constraint', () => {
   it('accepts a concrete DefinedEndpoint as an EndpointMethodMember', () => {
-    const endpoint = defineEndpoint({ response: schema<{ id: number }>() })
+    const endpoint = defineEndpoint({ responses: { 200: schema<{ id: number }>() } })
     assertType<EndpointMethodMember>(endpoint)
   })
 })
@@ -24,12 +24,12 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({
         params: schema<{ id: string }, { id: number }>(),
-        response: schema<{ id: number; name: string }>(),
+        responses: { 200: schema<{ id: number; name: string }>() },
       }),
       put: defineEndpoint({
         params: schema<{ id: string }, { id: number }>(),
         body: schema<{ name: string }>(),
-        response: schema<{ id: number; name: string }>(),
+        responses: { 200: schema<{ id: number; name: string }>() },
       }),
     })
 
@@ -81,7 +81,7 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
 
   it('requires a handler for every declared method', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ response: schema<{ id: number }>() }),
+      get: defineEndpoint({ responses: { 200: schema<{ id: number }>() } }),
       put: defineEndpoint({ body: schema<{ name: string }>() }),
     })
 

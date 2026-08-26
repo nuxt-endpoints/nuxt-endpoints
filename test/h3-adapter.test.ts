@@ -59,7 +59,7 @@ describe('endpoint query contracts over real requests', () => {
         tag: z.array(z.string()),
         limit: z.coerce.number(),
       }),
-      response: z.object({ tags: z.array(z.string()), limit: z.number() }),
+      responses: { 200: z.object({ tags: z.array(z.string()), limit: z.number() }) },
     })
     const handler = defineEndpointHandler(endpoint, ({ query }) => ({
       tags: query.tag,

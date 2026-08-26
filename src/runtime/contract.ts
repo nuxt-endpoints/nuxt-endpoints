@@ -173,7 +173,6 @@ export type EndpointIdempotencyMetadata<
 
 export type EndpointDefinition = EndpointRequestContract & {
   operation?: string
-  response?: ResponseContract
   responses?: EndpointResponsesContract
   summary?: string
   description?: string
@@ -545,9 +544,7 @@ export type NormalizeResponses<DEFINITION extends EndpointDefinition> = DEFINITI
   responses: infer RESPONSES extends EndpointResponsesContract
 }
   ? RESPONSES
-  : DEFINITION extends { response: infer RESPONSE extends ResponseContract }
-    ? { 200: RESPONSE }
-    : {}
+  : {}
 
 type DirectSuccessReturn<DEFINITION extends EndpointDefinition> = ResponseBodyForStatus<
   NormalizeResponses<DEFINITION>,

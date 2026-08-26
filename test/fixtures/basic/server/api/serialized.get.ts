@@ -8,7 +8,7 @@ const SerializedResponse = z.object({
 export const endpoint = defineEndpoint(
   {
     operation: 'getSerialized',
-    response: SerializedResponse,
+    responses: { 200: SerializedResponse },
   },
   {
     validation: {

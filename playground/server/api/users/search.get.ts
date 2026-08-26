@@ -14,7 +14,7 @@ const User = v.object({
 
 // Valibot example: query strings are transformed to numbers before the
 // handler runs, and the OpenAPI schema reflects the input (string) side.
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'searchUsers',
   summary: 'Search users by name',
   query: v.object({
@@ -30,17 +30,18 @@ export const endpoint = defineEndpoint({
       ),
     ),
   }),
-  response: v.object({
-    items: v.array(User),
-    total: v.number(),
-  }),
-})
+  responses: {
+    200: v.object({
+      items: v.array(User),
+      total: v.number(),
+    }),
+  },
+  handler: ({ query }) => {
+    const matches = users.filter((user) => user.name.toLowerCase().includes(query.q.toLowerCase()))
 
-export default defineEndpointHandler(endpoint, ({ query }) => {
-  const matches = users.filter((user) => user.name.toLowerCase().includes(query.q.toLowerCase()))
-
-  return {
-    items: matches.slice(0, query.limit ?? 10),
-    total: matches.length,
-  }
+    return {
+      items: matches.slice(0, query.limit ?? 10),
+      total: matches.length,
+    }
+  },
 })

@@ -27,7 +27,7 @@ describe('Valibot support', () => {
       operation: 'getUser',
       params: Params,
       query: Query,
-      response: UserResponse,
+      responses: { 200: UserResponse },
     })
 
     defineEndpointHandler(endpoint, ({ params, query }) => {
@@ -41,7 +41,7 @@ describe('Valibot support', () => {
   it('rejects invalid Valibot response returns', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
-      response: UserResponse,
+      responses: { 200: UserResponse },
     })
 
     // @ts-expect-error id must be a number.

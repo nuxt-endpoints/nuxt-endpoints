@@ -114,7 +114,7 @@ type ResolvedEndpointsModuleOptions = {
 // surfaces here as a compile error instead of silently going unread.
 type EndpointCarrierDefinition = Pick<
   EndpointDefinition,
-  'operation' | 'idempotency' | 'headers' | 'response' | 'responses'
+  'operation' | 'idempotency' | 'headers' | 'responses'
 >
 
 // `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
@@ -723,9 +723,7 @@ function comparableRoutePath(path: string): string {
 // response is plain serializable metadata, so discovery already has the real
 // value here and does not have to guess at it.
 function hasMediaResponse(definition: EndpointCarrierDefinition): boolean {
-  const responses =
-    definition.responses ?? (definition.response ? { 200: definition.response } : {})
-  return Object.values(responses).some(isMediaResponseContract)
+  return Object.values(definition.responses ?? {}).some(isMediaResponseContract)
 }
 
 // `false` marks an endpoint with hand-written (unsupported) idempotency

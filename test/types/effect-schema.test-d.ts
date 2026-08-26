@@ -22,7 +22,7 @@ describe('Effect Schema support', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
       params: Params,
-      response: UserResponse,
+      responses: { 200: UserResponse },
     })
 
     defineEndpointHandler(endpoint, ({ params }) => {
@@ -35,7 +35,7 @@ describe('Effect Schema support', () => {
   it('rejects invalid Effect Schema response returns', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
-      response: UserResponse,
+      responses: { 200: UserResponse },
     })
 
     // @ts-expect-error id must be a number.

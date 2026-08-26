@@ -374,7 +374,7 @@ if (result.status === 201) result.body.id`,
       v.maxValue(10),
     )),
   }),
-  response: SearchResult,
+  responses: { 200: SearchResult },
 })`,
     client: `const response = await $endpoint.searchUsers({
   query: { q: 'ja', limit: '99' },

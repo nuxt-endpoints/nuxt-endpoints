@@ -9,14 +9,14 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
   throw new Error('type-only schema')
 }
 
-// PROTOTYPE: parity probes for the single-define (merged) form. Every
+// Parity probes for the single-define (merged) form. Every
 // assertion here has a counterpart in endpoint.test-d.ts written against the
 // two-call form.
 describe('single-define endpoint types', () => {
   it('A: keeps operation a string literal', () => {
     const merged = defineEndpoint({
       operation: 'getMerged',
-      response: z.object({ id: z.number() }),
+      responses: { 200: z.object({ id: z.number() }) },
       handler: () => ({ id: 1 }),
     })
 
@@ -144,7 +144,7 @@ describe('single-define endpoint types', () => {
     const endpoint = defineEndpoint({
       operation: 'twoCall',
       params: schema<{ id: string }, { id: number }>(),
-      response: schema<{ id: number }>(),
+      responses: { 200: schema<{ id: number }>() },
     })
 
     expectTypeOf(endpoint.definition.operation).toEqualTypeOf<'twoCall'>()
@@ -154,13 +154,13 @@ describe('single-define endpoint types', () => {
     // form must too, or every literal/enum/tuple contract needs `as const`.
     defineEndpoint({
       operation: 'literalMerged',
-      response: z.object({ ok: z.literal(true) }),
+      responses: { 200: z.object({ ok: z.literal(true) }) },
       handler: () => ({ ok: true }),
     })
 
     defineEndpoint({
       operation: 'tupleMerged',
-      response: z.tuple([z.number(), z.string()]),
+      responses: { 200: z.tuple([z.number(), z.string()]) },
       handler: () => [1, 'a'] as const,
     })
   })
@@ -212,18 +212,74 @@ describe('single-define endpoint types', () => {
     })
   })
 
-  it('O: KNOWN GAP - .idempotency() is unreachable from the merged form', () => {
+  it('O: the idempotency slot carries options and lands as metadata', () => {
     const merged = defineEndpoint({
-      operation: 'noIdempotencyMerged',
+      operation: 'idempotentMerged',
+      body: z.object({ amount: z.number() }),
+      idempotency: {
+        authorization: 'middleware',
+        // The callbacks see the assembled contract, so the coerced body output
+        // is available to them exactly as it is in the two-call form.
+        scope: ({ body }) => {
+          expectTypeOf(body).toEqualTypeOf<{ amount: number }>()
+          return 'public'
+        },
+      },
+      handler: () => ({ ok: true }),
+    })
+
+    expectTypeOf<
+      (typeof merged)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: false }>()
+
+    // An empty slot still enables idempotency, exactly as `.idempotency()` with
+    // no arguments does - it must not collapse the way an absent slot does.
+    const bare = defineEndpoint({
+      operation: 'bareIdempotentMerged',
+      body: z.object({ amount: z.number() }),
+      idempotency: {},
+      handler: () => ({ ok: true }),
+    })
+
+    expectTypeOf<
+      (typeof bare)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: false }>()
+
+    // ...and without the slot the assembled definition carries `undefined`, so
+    // nothing downstream sees idempotency metadata.
+    const none = defineEndpoint({
+      operation: 'notIdempotentMerged',
       body: z.object({ amount: z.number() }),
       handler: () => ({ ok: true }),
     })
 
-    // The merged form hands back the event handler, so the builder method that
-    // adds idempotency metadata is gone. An idempotent endpoint must still be
-    // written in the two-call form.
-    // @ts-expect-error .idempotency() only exists on a DefinedEndpoint.
-    merged.idempotency({ authorization: 'middleware' })
+    expectTypeOf<
+      (typeof none)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<undefined>()
+  })
+
+  it('O2: a custom headerName and required: true are reflected in the type', () => {
+    const merged = defineEndpoint({
+      operation: 'requiredIdempotentMerged',
+      body: z.object({ amount: z.number() }),
+      idempotency: { authorization: 'middleware', headerName: 'X-Request-Key', required: true },
+      handler: () => ({ ok: true }),
+    })
+
+    expectTypeOf<
+      (typeof merged)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'X-Request-Key'; required: true }>()
+
+    // `required: true` is what makes the client's key mandatory, so the client
+    // option types must follow from the merged definition too.
+    type Options = EndpointClientOptions<(typeof merged)['__endpoint_contract__']['definition']>
+    expectTypeOf<Options>().toMatchTypeOf<{
+      body: { amount: number }
+      idempotencyKey: string
+    }>()
+    expectTypeOf<
+      {} extends Pick<Options, 'idempotencyKey'> ? 'optional' : 'required'
+    >().toEqualTypeOf<'required'>()
   })
 
   it('P: a typo in a slot name is rejected (the two-call form accepts it)', () => {

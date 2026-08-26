@@ -11,18 +11,17 @@ const User = z.object({
   age: z.number().optional(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'createUser',
   body: UserInput,
   responses: {
     201: User,
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ body, respond }) => {
-  return respond(201, {
-    id: 101,
-    name: body.name,
-    age: body.age,
-  })
+  handler: ({ body, respond }) => {
+    return respond(201, {
+      id: 101,
+      name: body.name,
+      age: body.age,
+    })
+  },
 })

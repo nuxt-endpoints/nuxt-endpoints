@@ -99,7 +99,7 @@ describe('defineEndpoint handler types', () => {
   it('does not require operation names for endpoint contracts', () => {
     const endpoint = defineEndpoint({
       params: schema<{ id: string }, { id: number }>(),
-      response: schema<{ id: number; name: string }>(),
+      responses: { 200: schema<{ id: number; name: string }>() },
     })
 
     defineEndpointHandler(endpoint, ({ params }) => {
@@ -114,7 +114,7 @@ describe('defineEndpoint handler types', () => {
       operation: 'getUser',
       params: schema<{ id: string }, { id: number }>(),
       query: schema<{ include?: string }>(),
-      response: schema<{ id: number; name: string }>(),
+      responses: { 200: schema<{ id: number; name: string }>() },
     })
 
     defineEndpointHandler(endpoint, ({ params, query }) => {
@@ -128,7 +128,7 @@ describe('defineEndpoint handler types', () => {
   it('exposes the H3 event and normalized web request in the handler context', () => {
     const endpoint = defineEndpoint({
       operation: 'getCurrentUser',
-      response: schema<{ id: number }>(),
+      responses: { 200: schema<{ id: number }>() },
     })
 
     defineEndpointHandler(endpoint, ({ event, request }) => {
@@ -142,7 +142,7 @@ describe('defineEndpoint handler types', () => {
   it('accepts plain returns as the 200 response', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
-      response: schema<{ id: number; name: string }>(),
+      responses: { 200: schema<{ id: number; name: string }>() },
     })
 
     defineEndpointHandler(endpoint, () => {
@@ -153,7 +153,7 @@ describe('defineEndpoint handler types', () => {
   it('rejects plain returns that do not match the 200 response', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
-      response: schema<{ id: number; name: string }>(),
+      responses: { 200: schema<{ id: number; name: string }>() },
     })
 
     // @ts-expect-error id must be a number.
@@ -275,7 +275,7 @@ describe('defineEndpoint handler types', () => {
 describe('tuple and literal response contracts', () => {
   it('accepts a tuple-typed response value', () => {
     const endpoint = defineEndpoint({
-      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+      responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     const pair: [string, number] = ['a', 1]
 
@@ -287,7 +287,7 @@ describe('tuple and literal response contracts', () => {
 
   it('keeps rejecting a tuple whose positions do not match', () => {
     const endpoint = defineEndpoint({
-      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+      responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
 
     // @ts-expect-error the second position must be a number.
@@ -295,22 +295,22 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('accepts inline literals and tuples without as const', () => {
-    const literal = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+    const literal = defineEndpoint({ responses: { 200: z.object({ ok: z.literal(true) }) } })
     defineEndpointHandler(literal, () => ({ ok: true }))
 
     const tuple = defineEndpoint({
-      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+      responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     defineEndpointHandler(tuple, () => ({ pair: ['a', 1] }))
   })
 
   it('still rejects inline values that do not match the contract', () => {
-    const literal = defineEndpoint({ response: z.object({ ok: z.literal(true) }) })
+    const literal = defineEndpoint({ responses: { 200: z.object({ ok: z.literal(true) }) } })
     // @ts-expect-error false does not satisfy the declared literal.
     defineEndpointHandler(literal, () => ({ ok: false }))
 
     const tuple = defineEndpoint({
-      response: z.object({ pair: z.tuple([z.string(), z.number()]) }),
+      responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     // @ts-expect-error the second position must be a number.
     defineEndpointHandler(tuple, () => ({ pair: ['a', 'b'] }))
@@ -327,7 +327,9 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('still accepts ordinary arrays', () => {
-    const endpoint = defineEndpoint({ response: z.object({ items: z.array(z.string()) }) })
+    const endpoint = defineEndpoint({
+      responses: { 200: z.object({ items: z.array(z.string()) }) },
+    })
 
     defineEndpointHandler(endpoint, () => ({ items: ['a', 'b'] }))
   })

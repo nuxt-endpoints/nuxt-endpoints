@@ -10,7 +10,7 @@ type Client = EndpointClient<{
   definition: {
     operation: 'getUser'
     params: z.ZodObject<{ id: z.ZodString }>
-    response: z.ZodObject<{ id: z.ZodNumber; name: z.ZodString }>
+    responses: { 200: z.ZodObject<{ id: z.ZodNumber; name: z.ZodString }> }
   }
 }>
 
@@ -20,9 +20,11 @@ describe('Zod support', () => {
   it('accepts Zod response returns without operation names', () => {
     const endpoint = defineEndpoint({
       query: z.object({ q: z.string() }),
-      response: z.object({
-        items: z.array(z.string()),
-      }),
+      responses: {
+        200: z.object({
+          items: z.array(z.string()),
+        }),
+      },
     })
 
     defineEndpointHandler(endpoint, ({ query }) => {
@@ -35,10 +37,12 @@ describe('Zod support', () => {
       operation: 'getUser',
       params: z.object({ id: z.coerce.number() }),
       query: z.object({ include: z.string().optional() }),
-      response: z.object({
-        id: z.number(),
-        name: z.string(),
-      }),
+      responses: {
+        200: z.object({
+          id: z.number(),
+          name: z.string(),
+        }),
+      },
     })
 
     defineEndpointHandler(endpoint, ({ params, query }) => {
@@ -52,10 +56,12 @@ describe('Zod support', () => {
   it('rejects invalid Zod response returns', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
-      response: z.object({
-        id: z.number(),
-        name: z.string(),
-      }),
+      responses: {
+        200: z.object({
+          id: z.number(),
+          name: z.string(),
+        }),
+      },
     })
 
     // @ts-expect-error id must be a number.

@@ -1,16 +1,17 @@
 import { z } from 'zod'
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'health',
-  response: z.object({
-    ok: z.literal(true),
-    service: z.string(),
-  }),
-})
-
-export default defineEndpointHandler(endpoint, () => {
-  return {
-    ok: true,
-    service: 'nuxt-endpoints playground',
-  }
+  responses: {
+    200: z.object({
+      ok: z.literal(true),
+      service: z.string(),
+    }),
+  },
+  handler: () => {
+    return {
+      ok: true,
+      service: 'nuxt-endpoints playground',
+    }
+  },
 })

@@ -120,7 +120,7 @@ export function hasEndpointDefinition(fileContent: string): boolean {
     }
 
     const previous = previousCodeCharacter(fileContent, identifierStart - 1)
-    // PROTOTYPE: a preceding identifier still disqualifies the match (it is
+    // A preceding identifier still disqualifies the match (it is
     // how this library's own `export function defineEndpoint(...)` declaration
     // is excluded), with one exception - `export default defineEndpoint({...})`,
     // which is the single-define form's route shape. Without this exception the

@@ -9,7 +9,7 @@ export const endpoints = defineEndpointMethods({
   get: defineEndpoint({
     operation: 'getMulti',
     query: z.object({ name: z.string().default('multi') }),
-    response: z.object({ name: z.string() }),
+    responses: { 200: z.object({ name: z.string() }) },
   }),
   put: defineEndpoint({
     operation: 'putMulti',

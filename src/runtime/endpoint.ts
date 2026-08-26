@@ -494,7 +494,7 @@ type InferredStatusHandlerSuccessBody<VALUE> =
     : never
 
 /**
- * PROTOTYPE: assembled definition type for the single-define (merged) form.
+ * The assembled definition type for the single-define form.
  *
  * Every `EndpointDefinition` member is reproduced as one generic slot so each
  * one has its own inference site in a single object literal - a shared
@@ -507,145 +507,213 @@ type InferredStatusHandlerSuccessBody<VALUE> =
  * already funnels an absent slot and an `undefined` slot to the same place
  * (`InferOutputOrUndefined`, `InferInputOrNever`, `NormalizeResponses`'s
  * `infer ... extends` guards), so the two spellings are equivalent to them.
+ *
+ * This half deliberately excludes `idempotency`: it is what the idempotency
+ * options are constrained against (`EndpointIdempotencyOptions<...>`'s
+ * callbacks need `params`/`query`/`body`, never the idempotency metadata), and
+ * keeping it idempotency-free is what stops that constraint being circular.
  */
-export type MergedEndpointDefinition<
-  OP extends string | undefined,
+export type AssembledEndpointContract<
+  OPERATION extends string | undefined,
   PARAMS extends ValidatorSchema | undefined,
   QUERY extends ValidatorSchema | undefined,
   HEADERS extends ValidatorSchema | undefined,
   BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined,
-  RESPONSE extends ResponseContract | undefined,
   RESPONSES extends EndpointResponsesContract | undefined,
   SUMMARY extends string | undefined,
   DESCRIPTION extends string | undefined,
   TAGS extends string[] | undefined,
 > = {
-  operation: OP
+  operation: OPERATION
   params: PARAMS
   query: QUERY
   headers: HEADERS
   body: BODY
-  response: RESPONSE
   responses: RESPONSES
   summary: SUMMARY
   description: DESCRIPTION
   tags: TAGS
 }
 
-// PROTOTYPE: single-define (merged) form, declared FIRST so that overload
+/**
+ * The metadata an `idempotency` slot contributes to the assembled definition.
+ *
+ * `undefined` when no options were given, which is what keeps the slot inert:
+ * downstream detection asks `DEFINITION extends { idempotency:
+ * EndpointIdempotencyMetadata }`, and `{ idempotency: undefined }` does not
+ * match - the same way every other slot already carries `undefined` when
+ * absent.
+ */
+export type IdempotencyMetadataFromOptions<IDEMPOTENCY> = IDEMPOTENCY extends undefined
+  ? undefined
+  : EndpointIdempotencyMetadata<
+      HeaderNameFromOptions<IDEMPOTENCY>,
+      RequiredFromOptions<IDEMPOTENCY>
+    >
+
+export type AssembledEndpointDefinition<
+  OPERATION extends string | undefined,
+  PARAMS extends ValidatorSchema | undefined,
+  QUERY extends ValidatorSchema | undefined,
+  HEADERS extends ValidatorSchema | undefined,
+  BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined,
+  RESPONSES extends EndpointResponsesContract | undefined,
+  SUMMARY extends string | undefined,
+  DESCRIPTION extends string | undefined,
+  TAGS extends string[] | undefined,
+  IDEMPOTENCY = undefined,
+> = AssembledEndpointContract<
+  OPERATION,
+  PARAMS,
+  QUERY,
+  HEADERS,
+  BODY,
+  RESPONSES,
+  SUMMARY,
+  DESCRIPTION,
+  TAGS
+> & { idempotency: IdempotencyMetadataFromOptions<IDEMPOTENCY> }
+
+// The single-define form, declared FIRST so that overload
 // resolution picks it - and with it its `const ACTUAL_RETURN` capture - for
 // every well-formed merged call. Ordering matters twice over, and in opposite
-// directions, which is why this signature is repeated below:
+// directions, which is why these signatures are repeated below:
 //
-//   - resolution uses the FIRST applicable overload, so the merged signature
+//   - resolution uses the FIRST applicable overload, so the merged signatures
 //     must lead or the handler return widens (`{ ok: true }` becomes
 //     `{ ok: boolean }` and a `z.literal(true)` response stops matching);
-//   - a failed call is elaborated against the LAST overload, so the merged
-//     signature must also trail or every mistake collapses into "No overload
-//     matches this call. Type '(...) => ... ' is not assignable to type
-//     'undefined'", attributed to whichever property TypeScript reached first.
+//   - a failed call is elaborated against the LAST applicable overload, so the
+//     merged signatures must also trail or every mistake collapses into "No
+//     overload matches this call. Type '(...) => ... ' is not assignable to
+//     type 'undefined'", attributed to whichever property TypeScript reached
+//     first.
+//
+// The merged form is TWO signatures, one carrying an `idempotency` slot and one
+// without, for the same reason `.idempotency()` itself is two overloads: an
+// optional slot cannot say whether it was written at all (`idempotency: {}`,
+// which is the merged spelling of `.idempotency()` with no arguments, and no
+// `idempotency` key at all would assemble the same definition). The options
+// also have to be typed as a concrete object rather than as a naked type
+// parameter: a naked one leaves the inline `storage`/`scope`/`fingerprint`
+// callbacks with no contextual type for their parameter, and TypeScript then
+// abandons inference to that parameter entirely and falls back to its default,
+// so every such call fails with "not assignable to type 'undefined'". The
+// literal `headerName`/`required` are captured by their own type parameters
+// instead, which is all the assembled metadata needs.
+//
+// The idempotent shape leads: a call that writes `idempotency` is rejected by
+// the plain shape's excess property check and falls through to this one.
 export function defineEndpoint<
-  const OP extends string | undefined = undefined,
+  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
   const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
-  const RESPONSE extends ResponseContract | undefined = undefined,
   const RESPONSES extends EndpointResponsesContract | undefined = undefined,
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const ACTUAL_RETURN extends DeepReadonly<
-    HandlerReturn<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
-    >
-  > = DeepReadonly<
-    HandlerReturn<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
-    >
-  >,
->(
-  definition: {
-    operation?: OP
-    params?: PARAMS
-    query?: QUERY
-    headers?: HEADERS
-    body?: BODY
-    response?: RESPONSE
-    responses?: RESPONSES
-    summary?: SUMMARY
-    description?: DESCRIPTION
-    tags?: TAGS
-    handler: CapturedEndpointHandler<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >,
-      ACTUAL_RETURN
-    >
-  },
-  options?: EndpointRuntimeOptions,
-): EndpointEventHandler<
-  MergedEndpointDefinition<
-    OP,
+  const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
+  const REQUIRED extends boolean = false,
+  DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
+    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
     BODY,
-    RESPONSE,
     RESPONSES,
     SUMMARY,
     DESCRIPTION,
-    TAGS
+    TAGS,
+    { headerName: HEADER_NAME; required: REQUIRED }
   >,
-  HasEndpointResponses<
-    MergedEndpointDefinition<
-      OP,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
+>(
+  definition: Partial<
+    AssembledEndpointContract<
+      OPERATION,
       PARAMS,
       QUERY,
       HEADERS,
       BODY,
-      RESPONSE,
       RESPONSES,
       SUMMARY,
       DESCRIPTION,
       TAGS
     >
-  > extends true
-    ? ACTUAL_RETURN
-    : WidenCapturedReturn<ACTUAL_RETURN>
+  > & {
+    idempotency: EndpointIdempotencyOptions<
+      AssembledEndpointContract<
+        OPERATION,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    > & {
+      headerName?: HEADER_NAME
+      required?: REQUIRED
+    }
+    handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
 >
-// The pre-existing two-call form. PROTOTYPE NOTE: `& { handler?: never }` on
+export function defineEndpoint<
+  const OPERATION extends string | undefined = undefined,
+  const PARAMS extends ValidatorSchema | undefined = undefined,
+  const QUERY extends ValidatorSchema | undefined = undefined,
+  const HEADERS extends ValidatorSchema | undefined = undefined,
+  const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
+  const RESPONSES extends EndpointResponsesContract | undefined = undefined,
+  const SUMMARY extends string | undefined = undefined,
+  const DESCRIPTION extends string | undefined = undefined,
+  TAGS extends string[] | undefined = undefined,
+  DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
+    OPERATION,
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS,
+    undefined
+  >,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
+>(
+  definition: Partial<
+    AssembledEndpointContract<
+      OPERATION,
+      PARAMS,
+      QUERY,
+      HEADERS,
+      BODY,
+      RESPONSES,
+      SUMMARY,
+      DESCRIPTION,
+      TAGS
+    >
+  > & {
+    handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
+>
+// The two-call form. Note that `& { handler?: never }` on
 // the type parameter's constraint is load-bearing. Without it, a merged call
 // whose handler return does not match its contract quietly falls through to
 // this overload and resolves to a plain `DefinedEndpoint` - no error at all at
@@ -658,113 +726,142 @@ export function defineEndpoint<const DEFINITION extends EndpointDefinition & { h
     ([DEFINITION] extends [{ idempotency: unknown }] ? { idempotency?: never } : unknown),
   options?: EndpointRuntimeOptions,
 ): DefinedEndpoint<DEFINITION>
-// PROTOTYPE: the merged signature again, verbatim. See the ordering note on
-// the first copy - this trailing duplicate exists only so TypeScript
-// elaborates a failed merged call against the merged signature instead of
-// against the contract-only one.
+// The merged signatures again, verbatim and in the same order. See
+// the ordering note on the first copies - these trailing duplicates exist only
+// so TypeScript elaborates a failed merged call against a merged signature
+// instead of against the contract-only one.
+//
+// Two conditions keep that working, and `test/overload-duplication.test.ts`
+// pins both, because breaking either degrades an error message rather than
+// failing a type check:
+//
+//   - a trailing copy must stay byte-identical to its leading one;
+//   - every overload must keep the same arity. The elaboration picks the last
+//     candidate that PASSED the arity check, not the last declaration, so a
+//     copy taking a different number of parameters is filtered out first and
+//     silently stops owning the error.
+//
+// The plain shape stays LAST of all,
+// which is what keeps a hand-written `idempotency` attributed to that property
+// ("does not exist in type") rather than to a member inside it; a real mistake
+// elsewhere in an idempotent merged call is still reported on its own terms.
 export function defineEndpoint<
-  const OP extends string | undefined = undefined,
+  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
   const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
-  const RESPONSE extends ResponseContract | undefined = undefined,
   const RESPONSES extends EndpointResponsesContract | undefined = undefined,
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const ACTUAL_RETURN extends DeepReadonly<
-    HandlerReturn<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
-    >
-  > = DeepReadonly<
-    HandlerReturn<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
-    >
-  >,
->(
-  definition: {
-    operation?: OP
-    params?: PARAMS
-    query?: QUERY
-    headers?: HEADERS
-    body?: BODY
-    response?: RESPONSE
-    responses?: RESPONSES
-    summary?: SUMMARY
-    description?: DESCRIPTION
-    tags?: TAGS
-    handler: CapturedEndpointHandler<
-      MergedEndpointDefinition<
-        OP,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSE,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >,
-      ACTUAL_RETURN
-    >
-  },
-  options?: EndpointRuntimeOptions,
-): EndpointEventHandler<
-  MergedEndpointDefinition<
-    OP,
+  const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
+  const REQUIRED extends boolean = false,
+  DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
+    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
     BODY,
-    RESPONSE,
     RESPONSES,
     SUMMARY,
     DESCRIPTION,
-    TAGS
+    TAGS,
+    { headerName: HEADER_NAME; required: REQUIRED }
   >,
-  HasEndpointResponses<
-    MergedEndpointDefinition<
-      OP,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
+>(
+  definition: Partial<
+    AssembledEndpointContract<
+      OPERATION,
       PARAMS,
       QUERY,
       HEADERS,
       BODY,
-      RESPONSE,
       RESPONSES,
       SUMMARY,
       DESCRIPTION,
       TAGS
     >
-  > extends true
-    ? ACTUAL_RETURN
-    : WidenCapturedReturn<ACTUAL_RETURN>
+  > & {
+    idempotency: EndpointIdempotencyOptions<
+      AssembledEndpointContract<
+        OPERATION,
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS
+      >
+    > & {
+      headerName?: HEADER_NAME
+      required?: REQUIRED
+    }
+    handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
+>
+export function defineEndpoint<
+  const OPERATION extends string | undefined = undefined,
+  const PARAMS extends ValidatorSchema | undefined = undefined,
+  const QUERY extends ValidatorSchema | undefined = undefined,
+  const HEADERS extends ValidatorSchema | undefined = undefined,
+  const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
+  const RESPONSES extends EndpointResponsesContract | undefined = undefined,
+  const SUMMARY extends string | undefined = undefined,
+  const DESCRIPTION extends string | undefined = undefined,
+  TAGS extends string[] | undefined = undefined,
+  DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
+    OPERATION,
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS,
+    undefined
+  >,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
+>(
+  definition: Partial<
+    AssembledEndpointContract<
+      OPERATION,
+      PARAMS,
+      QUERY,
+      HEADERS,
+      BODY,
+      RESPONSES,
+      SUMMARY,
+      DESCRIPTION,
+      TAGS
+    >
+  > & {
+    handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
+  },
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
 >
 export function defineEndpoint(
-  definition: EndpointDefinition & { handler?: (context: never) => unknown },
+  definition: Omit<EndpointDefinition, 'idempotency'> & {
+    handler?: (context: never) => unknown
+    // The merged form's slot carries idempotency *options*; the metadata is
+    // produced by `.idempotency()` below, never written by a caller.
+    idempotency?: EndpointIdempotencyOptions<EndpointDefinition>
+  },
   options?: EndpointRuntimeOptions,
 ): unknown {
   // A media-type-map `body` is validated here so a malformed map fails at
@@ -776,11 +873,16 @@ export function defineEndpoint(
   // narrowing `definition.body` inline) so control-flow narrowing on a
   // generic parameter's property can't leak into `DEFINITION` inference for
   // the `return` below.
-  const { handler, ...contract } = definition
+  const { handler, idempotency, ...contract } = definition
   validateEndpointBodyDefinition(contract.body)
-  validateEndpointResponseDefinitions(contract.response, contract.responses)
-  const endpoint = new DefinedEndpoint(contract, options)
-  // PROTOTYPE: the merged form hands back the event handler, which carries the
+  validateEndpointResponseDefinitions(contract)
+  const base = new DefinedEndpoint(contract, options)
+  // Routing the merged form's `idempotency` slot through the builder method is
+  // deliberate: `.idempotency()` already normalizes the options, asserts the
+  // fingerprint is determinable, and creates the runtime marker - in that order
+  // and before any handler is attached.
+  const endpoint = idempotency === undefined ? base : base.idempotency(idempotency as never)
+  // The merged form hands back the event handler, which carries the
   // same `__endpoint_contract__` marker discovery already reads off a route
   // module's default export.
   return handler === undefined ? endpoint : endpoint.handler(handler as never)
@@ -792,20 +894,19 @@ function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void 
   }
 }
 
-// The two response forms are kept apart here rather than by the type system
-// alone: TypeScript's excess-property check is per-union-member, so a literal
-// mixing keys from both satisfies `ResponseContract` and would then have half
-// of itself silently ignored. Checked at definition time, which is also build
-// time.
-function validateEndpointResponseDefinitions(
-  response: EndpointDefinition['response'],
-  responses: EndpointDefinition['responses'],
-): void {
-  const declared: [string, ResponseContract][] = responses
-    ? Object.entries(responses)
-    : response
-      ? [['200', response]]
-      : []
+// Checked at definition time, which is also build time. TypeScript already
+// rejects the removed singular `response` slot for TS authors (excess
+// property), but discovery jiti-evaluates plain JS route modules too, so the
+// removal is also enforced here with a migration hint.
+function validateEndpointResponseDefinitions(contract: EndpointDefinition): void {
+  if ('response' in contract) {
+    throw new TypeError(
+      'The `response` contract was removed; declare `responses: { 200: … }` instead.',
+    )
+  }
+  const declared: [string, ResponseContract][] = contract.responses
+    ? Object.entries(contract.responses)
+    : []
 
   for (const [status, contract] of declared) {
     if (isMediaResponseContract(contract)) {
@@ -1374,8 +1475,7 @@ function getDeclaredContentType(
  * against, and its order is the endpoint's own preference.
  */
 function offeredResponseMediaTypes(definition: EndpointDefinition): readonly string[] {
-  const responses =
-    definition.responses ?? (definition.response ? { 200: definition.response } : undefined)
+  const responses = definition.responses
   if (!responses) {
     return []
   }
@@ -1408,9 +1508,6 @@ function getResponseContract(
 ): ResponseContract | undefined {
   if (definition.responses) {
     return definition.responses[status] || definition.responses[String(status)]
-  }
-  if (status === 200) {
-    return definition.response
   }
   return undefined
 }

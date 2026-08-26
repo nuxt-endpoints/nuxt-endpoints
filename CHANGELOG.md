@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- **Breaking:** the singular `response` contract is removed.
+  `responses: { 200: … }` is the one way to declare a success body — the two
+  spellings were exactly equivalent (`response: X` was folded into
+  `{ 200: X }` everywhere), so there is no reason to keep both before 1.0.
+  Migration is mechanical: replace `response: X` with `responses: { 200: X }`.
+  Client types, handler checking, and the generated OpenAPI document are
+  unchanged for a converted route. TypeScript rejects the removed key as an
+  excess property, and a plain-JS route module that still writes one fails at
+  definition time with the same migration hint.
+
 ### Added
 
 - `defineEndpoint` now accepts the handler as part of the definition, so a route

@@ -31,7 +31,7 @@ type Routes =
       operation: 'health'
       definition: {
         operation: 'health'
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -53,14 +53,14 @@ type Routes =
       operation: 'ping'
       definition: {
         operation: 'ping'
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
       path: '/api/reports'
       method: 'get'
       definition: {
-        response: Schema<{ items: string[] }>
+        responses: { 200: Schema<{ items: string[] }> }
       }
     }
   | {
@@ -74,7 +74,7 @@ type Routes =
           headerName: 'Idempotency-Key'
           required: true
         }
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -88,7 +88,7 @@ type Routes =
           headerName: 'Idempotency-Key'
           required: false
         }
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
 

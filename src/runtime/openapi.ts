@@ -494,13 +494,7 @@ function idempotencyProblemSchema(status: 400 | 409 | 422, required: boolean): J
 }
 
 function normalizeResponses(definition: EndpointDefinition): EndpointResponsesContract {
-  if (definition.responses) {
-    return definition.responses
-  }
-  if (definition.response) {
-    return { 200: definition.response }
-  }
-  return {}
+  return definition.responses ?? {}
 }
 
 function responseDescription(response: ResponseContract): string {

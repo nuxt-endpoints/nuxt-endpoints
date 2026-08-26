@@ -359,7 +359,7 @@ describe('endpoint source detection', () => {
       hasEndpointDefinition(`
       export const endpoint = defineEndpoint({
         operation: 'getUser',
-        response: UserSchema,
+        responses: { 200: UserSchema },
       })
     `),
     ).toBe(true)

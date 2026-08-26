@@ -23,7 +23,7 @@ type Routes =
       definition: {
         operation: 'searchUsers'
         query: Schema<{ cursor?: string; term?: string }>
-        response: Schema<SearchUsersPage>
+        responses: { 200: Schema<SearchUsersPage> }
       }
     }
   | {
@@ -33,7 +33,7 @@ type Routes =
       definition: {
         operation: 'searchItems'
         query: Schema<{ weirdCursorName?: string }>
-        response: Schema<SearchItemsPage>
+        responses: { 200: Schema<SearchItemsPage> }
       }
     }
   | {
@@ -42,7 +42,7 @@ type Routes =
       operation: 'health'
       definition: {
         operation: 'health'
-        response: Schema<{ ok: true }>
+        responses: { 200: Schema<{ ok: true }> }
       }
     }
   | {
@@ -78,7 +78,7 @@ type Routes =
           headerName: 'Idempotency-Key'
           required: true
         }
-        response: Schema<SearchItemsPage>
+        responses: { 200: Schema<SearchItemsPage> }
       }
     }
 

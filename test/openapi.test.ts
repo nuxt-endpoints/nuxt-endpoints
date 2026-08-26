@@ -21,15 +21,17 @@ describe('createOpenApiDocument', () => {
             query: z.object({
               includeAge: z.coerce.boolean().optional(),
             }),
-            response: {
-              description: 'User response',
-              body: z.object({
-                id: z.number().int(),
-                name: z.string(),
-                age: z.number().optional(),
-              }),
-              headers: {
-                'x-request-id': z.string(),
+            responses: {
+              200: {
+                description: 'User response',
+                body: z.object({
+                  id: z.number().int(),
+                  name: z.string(),
+                  age: z.number().optional(),
+                }),
+                headers: {
+                  'x-request-id': z.string(),
+                },
               },
             },
           },
@@ -168,9 +170,11 @@ describe('createOpenApiDocument', () => {
           body: v.object({
             id: numberFromString,
           }),
-          response: v.object({
-            id: numberFromString,
-          }),
+          responses: {
+            200: v.object({
+              id: numberFromString,
+            }),
+          },
         },
       },
     ])
@@ -203,7 +207,7 @@ describe('createOpenApiDocument', () => {
         definition: {
           operation: 'createEffectItem',
           body: Schema.Struct({ name: Schema.String }),
-          response: Schema.Struct({ id: Schema.Number, name: Schema.String }),
+          responses: { 200: Schema.Struct({ id: Schema.Number, name: Schema.String }) },
         },
       },
     ])
@@ -239,7 +243,7 @@ describe('createOpenApiDocument', () => {
         definition: {
           operation: 'getUser',
           params: z.object({ id: z.string().uuid() }),
-          response: User,
+          responses: { 200: User },
         },
       },
     ])
@@ -268,10 +272,12 @@ describe('createOpenApiDocument', () => {
           definition: {
             operation: 'getUser',
             params: z.object({ id: z.string().uuid() }),
-            response: z.object({
-              id: z.string().uuid(),
-              name: z.string(),
-            }),
+            responses: {
+              200: z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+              }),
+            },
           },
         },
       ],
@@ -351,9 +357,11 @@ describe('createOpenApiDocument', () => {
             userId: z.string(),
             postId: z.string(),
           }),
-          response: z.object({
-            id: z.string(),
-          }),
+          responses: {
+            200: z.object({
+              id: z.string(),
+            }),
+          },
         },
       },
     ])
@@ -371,7 +379,7 @@ describe('createOpenApiDocument', () => {
           method: 'get',
           definition: {
             operation: 'listUsers',
-            response: z.array(z.object({ id: z.string() })),
+            responses: { 200: z.array(z.object({ id: z.string() })) },
           },
         },
         {
@@ -379,7 +387,7 @@ describe('createOpenApiDocument', () => {
           method: 'get',
           definition: {
             operation: 'listUsers',
-            response: z.array(z.object({ id: z.string() })),
+            responses: { 200: z.array(z.object({ id: z.string() })) },
           },
         },
       ])

@@ -16,7 +16,7 @@ const users = {
   '2': { id: 2, name: 'Jane', age: 22 },
 } as const
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'getUser',
   params: z.object({
     id: z.string(),
@@ -31,19 +31,18 @@ export const endpoint = defineEndpoint({
     200: User,
     404: ErrorResponse,
   },
-})
+  handler: ({ params, query, headers, respond }) => {
+    const user = users[params.id as keyof typeof users]
 
-export default defineEndpointHandler(endpoint, ({ params, query, headers, respond }) => {
-  const user = users[params.id as keyof typeof users]
+    if (!user) {
+      return respond(404, { message: 'User not found' })
+    }
 
-  if (!user) {
-    return respond(404, { message: 'User not found' })
-  }
-
-  return {
-    id: user.id,
-    name: user.name,
-    age: query.includeAge ? user.age : undefined,
-    clientVersion: headers['x-client-version'],
-  }
+    return {
+      id: user.id,
+      name: user.name,
+      age: query.includeAge ? user.age : undefined,
+      clientVersion: headers['x-client-version'],
+    }
+  },
 })

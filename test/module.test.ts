@@ -171,7 +171,7 @@ describe('media response detection', () => {
     const detection = getEndpointFromCarrier({
       definition: {
         operation: 'exportUsers',
-        response: { media: 'text/csv' },
+        responses: { 200: { media: 'text/csv' } },
       },
     })
 

@@ -6,7 +6,7 @@ const PlaygroundUser = z.object({
   createdAt: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'createSqliteUser',
   summary: 'Persist a user in the playground SQLite database',
   body: z.object({
@@ -15,13 +15,13 @@ export const endpoint = defineEndpoint({
   responses: {
     201: PlaygroundUser,
   },
-}).idempotency({
-  required: true,
-  storage: () => getPlaygroundIdempotencyStorage(),
-  scope: () => 'sqlite-playground',
-  authorization: 'middleware',
-})
-
-export default defineEndpointHandler(endpoint, ({ body, respond }) => {
-  return respond(201, createPlaygroundUser(body.name))
+  idempotency: {
+    required: true,
+    storage: () => getPlaygroundIdempotencyStorage(),
+    scope: () => 'sqlite-playground',
+    authorization: 'middleware',
+  },
+  handler: ({ body, respond }) => {
+    return respond(201, createPlaygroundUser(body.name))
+  },
 })

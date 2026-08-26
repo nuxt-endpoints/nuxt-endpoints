@@ -79,7 +79,7 @@ describe('DefinedEndpoint', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
       params: numberParams,
-      response: userResponse,
+      responses: { 200: userResponse },
     })
 
     const handler = defineEndpointHandler(endpoint, ({ params }) => {
@@ -97,7 +97,7 @@ describe('DefinedEndpoint', () => {
     const handler = defineEndpoint({
       operation: 'getMergedUser',
       params: numberParams,
-      response: userResponse,
+      responses: { 200: userResponse },
       handler: ({ params }) => ({ id: params.id, name: 'Tom' }),
     })
 
@@ -112,7 +112,7 @@ describe('DefinedEndpoint', () => {
     const endpoint = defineEndpoint({
       operation: 'getSplitUser',
       params: numberParams,
-      response: userResponse,
+      responses: { 200: userResponse },
     })
 
     const handler = defineEndpointHandler(endpoint, ({ params }) => ({
@@ -130,7 +130,7 @@ describe('DefinedEndpoint', () => {
 
     const endpoint = defineEndpoint({
       operation: 'getCurrentUser',
-      response: userResponse,
+      responses: { 200: userResponse },
     })
     const requestEvent = createEvent({})
     requestEvent.context.user = { id: 123, name: 'Tom' }
@@ -173,7 +173,7 @@ describe('DefinedEndpoint', () => {
     const endpoint = defineEndpoint({
       operation: 'getUser',
       params: numberParams,
-      response: userResponse,
+      responses: { 200: userResponse },
     })
 
     const handler = defineEndpointHandler(endpoint, () => {
@@ -199,7 +199,7 @@ describe('DefinedEndpoint', () => {
     const endpoint = defineEndpoint(
       {
         operation: 'getUser',
-        response: strictUserResponse,
+        responses: { 200: strictUserResponse },
       },
       { validation: { response: true } },
     )
@@ -216,6 +216,20 @@ describe('DefinedEndpoint', () => {
         issues: [{ message: 'Invalid user response' }],
       },
     })
+  })
+
+  it('rejects the removed singular `response` contract with a migration hint', async () => {
+    const { defineEndpoint } = await import('../src/runtime')
+
+    // TypeScript already rejects the key as an excess property, but discovery
+    // jiti-evaluates plain JS route modules too, so the removal is enforced at
+    // definition time as well.
+    expect(() =>
+      defineEndpoint({
+        operation: 'getUser',
+        response: userResponse,
+      } as never),
+    ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
   })
 
   it('rejects a declared response that mixes media with body', async () => {

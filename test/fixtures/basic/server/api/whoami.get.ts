@@ -4,9 +4,11 @@ import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtim
 
 export const endpoint = defineEndpoint({
   operation: 'whoami',
-  response: z.object({
-    user: z.string(),
-  }),
+  responses: {
+    200: z.object({
+      user: z.string(),
+    }),
+  },
 })
 
 export default defineEndpointHandler(endpoint, async ({ event }) => {

@@ -5,9 +5,11 @@ const operation = 'getDynamic'
 
 export const endpoint = defineEndpoint({
   operation,
-  response: z.object({
-    ok: z.literal(true),
-  }),
+  responses: {
+    200: z.object({
+      ok: z.literal(true),
+    }),
+  },
 })
 
 export default defineEndpointHandler(endpoint, () => {

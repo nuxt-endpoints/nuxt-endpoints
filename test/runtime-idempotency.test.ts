@@ -174,6 +174,42 @@ describe('endpoint idempotency runtime', () => {
     expect(setResponseStatus).toHaveBeenLastCalledWith(expect.anything(), 200)
   })
 
+  it('replays a repeated key for a single-define endpoint exactly like the two-call form', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const execute = vi.fn(() => ({ id: 1 }))
+    const handler = defineEndpoint({
+      body: jsonRecord,
+      idempotency: {
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+        required: true,
+      },
+      handler: execute,
+    })
+    attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+
+    const request = () =>
+      createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } })
+
+    await expect(handler(request())).resolves.toEqual({ id: 1 })
+    await expect(handler(request())).resolves.toEqual({ id: 1 })
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    // The slot routes through `.idempotency()`, so the metadata and the runtime
+    // marker are the same ones the two-call form produces.
+    expect(handler.__endpoint_contract__.definition.idempotency).toEqual({
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: true,
+    })
+    expect(handler.__endpoint_contract__.__idempotency_runtime_marker__).toEqual({
+      storage: true,
+      scope: true,
+      authorization: true,
+    })
+  })
+
   it('returns the same JSON snapshot on the first response and replay', async () => {
     const storage = createMemoryIdempotencyStorage()
     let serializationCount = 0
@@ -449,7 +485,7 @@ describe('endpoint idempotency runtime', () => {
       .mockReturnValueOnce({ id: -1 })
       .mockReturnValue({ id: 1 })
     const endpoint = defineEndpoint(
-      { body: jsonRecord, response: positiveIdResponse },
+      { body: jsonRecord, responses: { 200: positiveIdResponse } },
       { validation: { response: true } },
     ).idempotency({
       storage: () => storage,

@@ -6,16 +6,17 @@ const PlaygroundUser = z.object({
   createdAt: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'listSqliteUsers',
   summary: 'List users persisted in the playground SQLite database',
-  response: z.object({
-    items: z.array(PlaygroundUser),
-  }),
-})
-
-export default defineEndpointHandler(endpoint, () => {
-  return {
-    items: listPlaygroundUsers(),
-  }
+  responses: {
+    200: z.object({
+      items: z.array(PlaygroundUser),
+    }),
+  },
+  handler: () => {
+    return {
+      items: listPlaygroundUsers(),
+    }
+  },
 })
