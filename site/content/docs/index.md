@@ -17,19 +17,18 @@ One route file declares the contract and the handler:
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ params, respond }) => {
-  const user = findUser(params.id) // params.id is a number — validated and coerced
-  if (!user) return respond(404, { message: 'Not found' })
-  return user
+  handler: ({ params, respond }) => {
+    const user = findUser(params.id) // params.id is a number — validated and coerced
+    if (!user) return respond(404, { message: 'Not found' })
+    return user
+  },
 })
 ```
 

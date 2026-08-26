@@ -35,28 +35,30 @@ The convention path is looked up in every root that can contribute server routes
 
 ## Declare it on an endpoint
 
-With a central policy in place, an endpoint declares only its contract-side metadata. `.idempotency(options)` is an immutable method on a `defineEndpoint(...)` result: it returns a new endpoint and does not mutate the original.
+With a central policy in place, an endpoint declares only its contract-side metadata, as an `idempotency` slot alongside the rest of the contract:
 
 ```ts
 import { z } from 'zod'
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'grantPoints',
   body: z.object({ userId: z.string(), amount: z.number().int().positive() }),
   responses: {
     201: z.object({ balance: z.number() }),
   },
-}).idempotency({
-  required: true,
-  replayStatuses: [201],
-})
-
-export default defineEndpointHandler(endpoint, ({ body, respond }) => {
-  return respond(201, { balance: grantPoints(body.userId, body.amount) })
+  idempotency: {
+    required: true,
+    replayStatuses: [201],
+  },
+  handler: ({ body, respond }) => {
+    return respond(201, { balance: grantPoints(body.userId, body.amount) })
+  },
 })
 ```
 
-Because these arguments are serializable metadata, the declaration also stays safe inside a [separate contract file](/docs/endpoints#separate-contract-files).
+The same options are also available as `.idempotency(options)`, an immutable method on a `defineEndpoint(...)` contract declared without a `handler`: it returns a new endpoint and does not mutate the original. Both forms run the same code, so pick the one that fits the file.
+
+Because these arguments are serializable metadata, the declaration also stays safe inside a [separate contract file](/docs/endpoints#separate-contract-files), where the contract keeps the two-call form and `.idempotency()` composes onto it.
 
 An endpoint can override any runtime option for route-specific needs — authorization is the most common case:
 

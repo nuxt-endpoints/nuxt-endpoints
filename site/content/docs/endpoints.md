@@ -7,7 +7,7 @@ The endpoint definition is the contract for runtime validation, handler context 
 
 ## Basic route
 
-Export an endpoint definition and default-export a handler created with `defineEndpointHandler`. The handler receives parsed schema output.
+Default-export a `defineEndpoint()` call with a `handler` property. The handler receives parsed schema output.
 
 ```ts
 import { z } from 'zod'
@@ -17,7 +17,7 @@ const User = z.object({
   name: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   summary: 'Get a user',
   params: z.object({
     id: z.coerce.number(),
@@ -25,14 +25,13 @@ export const endpoint = defineEndpoint({
   query: z.object({
     includePosts: z.coerce.boolean().optional(),
   }),
-  response: User,
-})
-
-export default defineEndpointHandler(endpoint, ({ params, query }) => {
-  return {
-    id: params.id,
-    name: query.includePosts ? 'Tom with posts' : 'Tom',
-  }
+  responses: { 200: User },
+  handler: ({ params, query }) => {
+    return {
+      id: params.id,
+      name: query.includePosts ? 'Tom with posts' : 'Tom',
+    }
+  },
 })
 ```
 
@@ -49,10 +48,11 @@ await $endpoint('/api/users/:id', {
 Add `operation` when you also want a named call target or a hand-picked OpenAPI operationId:
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'getUser',
   params: UserParams,
-  response: User,
+  responses: { 200: User },
+  handler: ({ params }) => findUser(params.id),
 })
 
 await $endpoint('getUser', { params: { id: '123' } })
@@ -78,7 +78,7 @@ export const endpoints = defineEndpointMethods({
   get: defineEndpoint({
     operation: 'getUser',
     params: z.object({ id: z.coerce.number() }),
-    response: User,
+    responses: { 200: User },
   }),
   put: defineEndpoint({
     operation: 'updateUser',
@@ -129,7 +129,7 @@ member to validate against; a request matching no member gets a `415` listing
 the supported types.
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'createUser',
   body: {
     'application/json': z.object({ name: z.string() }),
@@ -139,14 +139,13 @@ export const endpoint = defineEndpoint({
     }),
   },
   responses: { 201: User },
-})
-
-export default defineEndpointHandler(endpoint, ({ body, bodyMediaType, respond }) => {
-  // body is the union of member outputs; bodyMediaType narrows which one matched
-  if (bodyMediaType === 'multipart/form-data') {
-    // body.avatar is a File here
-  }
-  return respond(201, createUser(body.name))
+  handler: ({ body, bodyMediaType, respond }) => {
+    // body is the union of member outputs; bodyMediaType narrows which one matched
+    if (bodyMediaType === 'multipart/form-data') {
+      // body.avatar is a File here
+    }
+    return respond(201, createUser(body.name))
+  },
 })
 ```
 
@@ -329,9 +328,12 @@ export default defineEventHandler(async (event) => {
 The same event and its middleware context are available alongside the Web request in an endpoint handler:
 
 ```ts
-export default defineEndpointHandler(endpoint, ({ event, request, params }) => {
-  const requestId = request.headers.get('x-request-id')
-  return findUser(event.context.user.accountId, params.id, requestId)
+export default defineEndpoint({
+  params: z.object({ id: z.coerce.number() }),
+  handler: ({ event, request, params }) => {
+    const requestId = request.headers.get('x-request-id')
+    return findUser(event.context.user.accountId, params.id, requestId)
+  },
 })
 ```
 
@@ -359,7 +361,7 @@ const ErrorBody = z.object({
   message: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   params: z.object({
     id: z.coerce.number(),
   }),
@@ -367,14 +369,13 @@ export const endpoint = defineEndpoint({
     200: User,
     404: ErrorBody,
   },
-})
+  handler: ({ params, respond }) => {
+    if (params.id === 404) {
+      return respond(404, { message: 'Not found' })
+    }
 
-export default defineEndpointHandler(endpoint, ({ params, respond }) => {
-  if (params.id === 404) {
-    return respond(404, { message: 'Not found' })
-  }
-
-  return { id: params.id, name: 'Tom' }
+    return { id: params.id, name: 'Tom' }
+  },
 })
 ```
 
@@ -383,17 +384,16 @@ export default defineEndpointHandler(endpoint, ({ params, respond }) => {
 A validated response body is always sent as JSON — that is what having a schema for it means. Everything else goes through one door: declare the status by its media type instead of by a schema.
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'exportUsers',
   query: z.object({ delimiter: z.string().optional() }),
   responses: {
     200: { media: 'text/csv', description: 'CSV export' },
     404: ErrorBody,
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ query, respond }) => {
-  return respond(200, toCsvStream(query.delimiter ?? ','))
+  handler: ({ query, respond }) => {
+    return respond(200, toCsvStream(query.delimiter ?? ','))
+  },
 })
 ```
 
@@ -437,17 +437,16 @@ responses: {
 Give `media` an array and the status has more than one representation. The runtime negotiates from the request's `Accept` header, tells the handler which one to produce, and sends that media type:
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'exportUsers',
   responses: {
     200: { media: ['text/csv', 'application/json'], description: 'User export' },
     404: ErrorBody,
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ responseMediaType, respond }) => {
-  // narrowed to 'text/csv' | 'application/json'
-  return respond(200, responseMediaType === 'text/csv' ? toCsv(rows) : JSON.stringify(rows))
+  handler: ({ responseMediaType, respond }) => {
+    // narrowed to 'text/csv' | 'application/json'
+    return respond(200, responseMediaType === 'text/csv' ? toCsv(rows) : JSON.stringify(rows))
+  },
 })
 ```
 
@@ -526,7 +525,7 @@ Response validation is opt-in so production handlers can decide how strict their
 ```ts
 export const endpoint = defineEndpoint(
   {
-    response: User,
+    responses: { 200: User },
   },
   {
     validation: {
@@ -557,16 +556,15 @@ export default defineNuxtConfig({
 
 ```ts
 // server/custom-routes/report.get.ts — outside every scanned directory
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'getCustomReport',
   query: z.object({ id: z.string() }),
   responses: {
     200: z.object({ id: z.string(), source: z.literal('custom-route') }),
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ query, respond }) => {
-  return respond(200, { id: query.id, source: 'custom-route' })
+  handler: ({ query, respond }) => {
+    return respond(200, { id: query.id, source: 'custom-route' })
+  },
 })
 ```
 
@@ -580,6 +578,8 @@ The route template is yours to choose and does not have to sit under `/api`. It 
 
 ## Separate contract files
 
+Reach for two calls — `defineEndpoint()` without a `handler`, paired with `defineEndpointHandler()` — when the handler needs to live somewhere other than inline in the contract: in its own file, as this section covers, or shared by several routes that each attach it to their own contract. Omitting `handler` returns a contract, and `defineEndpointHandler()` attaches a handler to it.
+
 Endpoint metadata is collected during Nuxt type generation by evaluating the module that defines the contract. With a co-located contract, that module is the route file itself — so its top-level code runs at build time too. Routes whose top-level code is heavy (opens connections, reads required environment) can move the contract to a sibling `.endpoint-contract` file instead, keeping it right next to the handler:
 
 ```ts
@@ -590,7 +590,7 @@ import { z } from 'zod'
 export const getUserEndpoint = defineEndpoint({
   operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
-  response: z.object({ id: z.number(), name: z.string() }),
+  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
 })
 ```
 

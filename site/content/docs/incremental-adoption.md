@@ -26,24 +26,25 @@ export default defineEventHandler((event) => {
 })
 ```
 
-Add the contract next to the handler and swap the wrapper:
+Add the contract and handler in one call, replacing the plain event handler:
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   params: z.object({
     id: z.coerce.number(),
   }),
-  response: z.object({
-    id: z.number(),
-    name: z.string(),
-  }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  return { id: params.id, name: 'Tom' }
+  responses: {
+    200: z.object({
+      id: z.number(),
+      name: z.string(),
+    }),
+  },
+  handler: ({ params }) => {
+    return { id: params.id, name: 'Tom' }
+  },
 })
 ```
 

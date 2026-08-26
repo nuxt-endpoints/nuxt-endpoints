@@ -55,7 +55,7 @@ Add `operation` only when you also want a named call target.
 export const endpoint = defineEndpoint({
   operation: 'getUser',
   params: UserParams,
-  response: User,
+  responses: { 200: User },
 })
 
 await $endpoint('getUser', { params: { id: '123' } })

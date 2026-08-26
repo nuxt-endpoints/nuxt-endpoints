@@ -149,13 +149,12 @@ user.name // User — inferred from the contract`,
       {
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
-        code: `export const endpoint = defineEndpoint({
+        code: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  return findUser(params.id)
-  // client types are inferred from this return value
+  handler: ({ params }) => {
+    return findUser(params.id)
+    // client types are inferred from this return value
+  },
 })`,
       },
       {

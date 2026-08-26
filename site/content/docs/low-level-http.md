@@ -3,21 +3,20 @@ title: Low-level HTTP
 description: Handle files, streams, redirects, proxies, raw Responses, and 204 routes.
 ---
 
-Nuxt Endpoints is strongest for JSON REST APIs. Use `response` or `responses` when the route returns typed JSON bodies.
+Nuxt Endpoints is strongest for JSON REST APIs. Use `responses` when the route returns typed JSON bodies.
 
-For lower-level HTTP behavior, omit `response` and `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
+For lower-level HTTP behavior, omit `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
 
 Response type checking only applies when a route opts into a response contract. If a route needs to return a redirect, a proxy response, or another native `Response` that should not be modelled as a status at all, leave the response contract out and handle the client side as raw HTTP.
 
 Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and event streams all have a [first-class declaration](/docs/endpoints#non-json-responses) that keeps them in the contract without pretending their payload is validated.
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   params: z.object({ id: z.string() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  return new Response(`raw response for ${params.id}`)
+  handler: ({ params }) => {
+    return new Response(`raw response for ${params.id}`)
+  },
 })
 ```
 
@@ -37,20 +36,19 @@ A download is a media response like any other, so it can stay in the contract:
 
 ```ts
 // server/api/files/[id].get.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'downloadFile',
   params: z.object({ id: z.string() }),
   responses: {
     200: { media: 'application/pdf', description: 'Invoice PDF' },
   },
-})
+  handler: async ({ params, respond }) => {
+    const file = await loadFile(params.id)
 
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const file = await loadFile(params.id)
-
-  return respond(200, file.bytes, {
-    headers: { 'content-disposition': `attachment; filename="${file.name}"` },
-  })
+    return respond(200, file.bytes, {
+      headers: { 'content-disposition': `attachment; filename="${file.name}"` },
+    })
+  },
 })
 ```
 
@@ -62,19 +60,18 @@ When the content type varies per file and cannot be declared, drop the response 
 
 ```ts
 // server/api/files/[id].get.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   params: z.object({ id: z.string() }),
-})
+  handler: async ({ params }) => {
+    const file = await loadFile(params.id)
 
-export default defineEndpointHandler(endpoint, async ({ params }) => {
-  const file = await loadFile(params.id)
-
-  return new Response(file.bytes, {
-    headers: {
-      'content-type': file.contentType,
-      'content-disposition': `attachment; filename="${file.name}"`,
-    },
-  })
+    return new Response(file.bytes, {
+      headers: {
+        'content-type': file.contentType,
+        'content-disposition': `attachment; filename="${file.name}"`,
+      },
+    })
+  },
 })
 ```
 
@@ -136,21 +133,20 @@ body so callers receive the live stream.
 
 ```ts
 // server/api/events.get.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   operation: 'streamEvents',
   responses: {
     200: { media: 'text/event-stream' },
   },
-})
+  handler: ({ respond }) => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
+      },
+    })
 
-export default defineEndpointHandler(endpoint, ({ respond }) => {
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
-    },
-  })
-
-  return respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
+    return respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
+  },
 })
 ```
 
@@ -182,17 +178,16 @@ For API redirects, return a native redirect response. Browser fetch follows redi
 
 ```ts
 // server/api/auth/callback.get.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   query: z.object({ next: z.string().optional() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ query }) => {
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location: query.next ?? '/dashboard',
-    },
-  })
+  handler: ({ query }) => {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: query.next ?? '/dashboard',
+      },
+    })
+  },
 })
 ```
 
@@ -215,12 +210,11 @@ Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `
 
 ```ts
 // server/api/proxy/[id].get.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   params: z.object({ id: z.string() }),
-})
-
-export default defineEndpointHandler(endpoint, async ({ params }) => {
-  return await fetch(`https://api.example.com/files/${params.id}`)
+  handler: async ({ params }) => {
+    return await fetch(`https://api.example.com/files/${params.id}`)
+  },
 })
 ```
 
@@ -239,15 +233,15 @@ Use raw `Response` returns when the route owns status, headers, cookies, or a bo
 
 ```ts
 // server/api/report.get.ts
-export const endpoint = defineEndpoint({})
-
-export default defineEndpointHandler(endpoint, () => {
-  return new Response('created', {
-    status: 201,
-    headers: {
-      'x-report-id': 'report_123',
-    },
-  })
+export default defineEndpoint({
+  handler: () => {
+    return new Response('created', {
+      status: 201,
+      headers: {
+        'x-report-id': 'report_123',
+      },
+    })
+  },
 })
 ```
 
@@ -263,15 +257,14 @@ For no-content JSON API routes, keep the response contract. Declare `204` and re
 
 ```ts
 // server/api/sessions/current.delete.ts
-export const endpoint = defineEndpoint({
+export default defineEndpoint({
   responses: {
     204: z.undefined(),
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ respond }) => {
-  clearSession()
-  return respond(204, undefined)
+  handler: ({ respond }) => {
+    clearSession()
+    return respond(204, undefined)
+  },
 })
 ```
 

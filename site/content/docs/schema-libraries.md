@@ -24,10 +24,12 @@ defineEndpoint({
   params: Schema.Struct({
     id: Schema.NumberFromString,
   }),
-  response: Schema.Struct({
-    id: Schema.Number,
-    name: Schema.String,
-  }),
+  responses: {
+    200: Schema.Struct({
+      id: Schema.Number,
+      name: Schema.String,
+    }),
+  },
 })
 ```
 
@@ -44,7 +46,7 @@ const Id = v.pipe(v.string(), v.transform(Number), v.number())
 
 defineEndpoint({
   body: v.object({ id: Id }), // OpenAPI request schema: string
-  response: v.object({ id: Id }), // OpenAPI response schema: number
+  responses: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
 })
 ```
 

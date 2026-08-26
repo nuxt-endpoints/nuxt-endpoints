@@ -29,16 +29,15 @@ export const contractSteps = [
       { text: 'validated values', tone: 'server' },
       { text: ' instead of raw strings.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-})
-
-export default defineEndpointHandler(endpoint, ({ params }) => {
-  const userId = params.id // number — validated & coerced
+  handler: ({ params }) => {
+    const userId = params.id // number — validated & coerced
+  },
 })`,
     clientCode: '',
     highlightLines: {
-      serverCode: [5, 6, 7],
+      serverCode: [3, 4, 5],
       clientCode: [],
     },
     serverEffect: '`params.id` is type-safe inside the handler.',
@@ -53,13 +52,12 @@ export default defineEndpointHandler(endpoint, ({ params }) => {
       { text: 'returned data is inferred from server code', tone: 'client' },
       { text: ', so unknown fields fail in TypeScript.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-})
-
-export default defineEndpointHandler(endpoint, async ({ params }) => {
-  const user = await findUserById(params.id)
-  return user // client types are inferred from here
+  handler: async ({ params }) => {
+    const user = await findUserById(params.id)
+    return user // client types are inferred from here
+  },
 })`,
     clientCode: `const user = await $endpoint('/api/users/:id', {
   method: 'get',
@@ -67,7 +65,7 @@ export default defineEndpointHandler(endpoint, async ({ params }) => {
 }) // user: typed from the handler return
 console.log(\`id: \${user.id}, name: \${user.name}\`)`,
     highlightLines: {
-      serverCode: [5, 6, 7],
+      serverCode: [3, 4, 5],
       clientCode: [1, 2, 3, 4, 5],
     },
     serverEffect: 'The handler return becomes the inferred success body.',
@@ -82,17 +80,16 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
       { text: 'returned status responses', tone: 'server' },
       { text: ', so handlers can only return the statuses and body shapes you declared.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
   responses: { // now the handler is checked against these
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
+  handler: async ({ params, respond }) => {
+    const user = await findUserById(params.id)
+    return user ?? respond(404, { message: 'User not found' })
+  },
 })`,
     clientCode: `const user = await $endpoint('/api/users/:id', {
   method: 'get',
@@ -100,7 +97,7 @@ export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
 })
 console.log(\`id: \${user.id}, name: \${user.name}\`)`,
     highlightLines: {
-      serverCode: [3, 4, 5, 6, 11],
+      serverCode: [3, 4, 5, 6, 9],
       clientCode: [],
     },
     serverEffect: '`responses` turns the inferred shape into explicit 200 and 404 contracts.',
@@ -115,18 +112,17 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
       { text: 'OpenAPI operationId', tone: 'operation' },
       { text: '. Path-based calls still work.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   operation: 'getUser', // names the client call & operationId
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
+  handler: async ({ params, respond }) => {
+    const user = await findUserById(params.id)
+    return user ?? respond(404, { message: 'User not found' })
+  },
 })`,
     clientCode: `const user = await $endpoint.getUser({
   params: { id: '123' },
@@ -148,18 +144,17 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
       { text: 'type narrowing', tone: 'client' },
       { text: ' for the matching response body.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
+  handler: async ({ params, respond }) => {
+    const user = await findUserById(params.id)
+    return user ?? respond(404, { message: 'User not found' })
+  },
 })`,
     clientCode: `const result = await $endpoint.getUser({ params: { id: '123' } }).result()
 // checking the status narrows the body type
@@ -181,18 +176,17 @@ if (result.status === 200) console.log(result.body.name)`,
       { text: 'data, pending, error, and refresh', tone: 'client' },
       { text: ' for Nuxt-style state.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
+  handler: async ({ params, respond }) => {
+    const user = await findUserById(params.id)
+    return user ?? respond(404, { message: 'User not found' })
+  },
 })`,
     clientCode: `const { data: result, pending, error, refresh } = await useEndpointResult('getUser', {
   params: { id: '123' },
@@ -213,18 +207,17 @@ export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
       { text: 'useQuery', tone: 'client' },
       { text: '. Vue Query owns the cache while the endpoint contract owns the types.' },
     ],
-    serverCode: `export const endpoint = defineEndpoint({
+    serverCode: `export default defineEndpoint({
   operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-})
-
-export default defineEndpointHandler(endpoint, async ({ params, respond }) => {
-  const user = await findUserById(params.id)
-  return user ?? respond(404, { message: 'User not found' })
+  handler: async ({ params, respond }) => {
+    const user = await findUserById(params.id)
+    return user ?? respond(404, { message: 'User not found' })
+  },
 })`,
     clientCode: `import { useQuery } from '@tanstack/vue-query'
 import { endpointQueryOptions } from '#endpoints/query'
