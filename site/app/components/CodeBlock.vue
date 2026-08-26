@@ -18,6 +18,12 @@ if (import.meta.server && highlighted.value === '') {
       light: 'github-light-default',
       dark: 'github-dark-default',
     },
+    // Without this, Shiki writes the first theme as a plain inline `color:` and
+    // only the second as a variable. The inline value then outranks the
+    // stylesheet rule that swaps themes, so dark mode kept the light token
+    // colours on a dark background. `false` emits both as variables and no
+    // inline colour, which is what the `.shiki span` rules in base.css expect.
+    defaultColor: false,
   })
 }
 
