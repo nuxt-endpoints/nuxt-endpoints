@@ -5,8 +5,8 @@
 // storage claim/replay, and completion, and always resolves to an
 // `EndpointRuntimeResponse` rather than mutating the event itself.
 import type { EndpointDefinition } from './contract'
-import { createRuntimeError, getRuntimeRequestHeaders } from './h3-adapter'
-import type { RuntimeEvent } from './h3-adapter'
+import { createRuntimeError, getRuntimeRequestHeaders } from './platform'
+import type { RuntimeEvent } from './platform'
 import type {
   EndpointRouteIdentity,
   IdempotencyAuthorizationDelegation,

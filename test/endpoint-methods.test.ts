@@ -7,7 +7,7 @@ import {
   defineEndpointMethodHandlers,
   defineEndpointMethods,
 } from '../src/runtime'
-import { defineRuntimeHandler } from '../src/runtime/h3-adapter'
+import { defineRuntimeHandler } from '../src/runtime/platform'
 
 // These run a real HTTP request through a real H3 app (router included, since
 // the dispatcher depends on `event.context.params` populated by route

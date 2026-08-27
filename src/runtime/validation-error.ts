@@ -2,7 +2,7 @@
 // request does not match its contract. It sits at the validation boundary,
 // before the interception seam in interceptor.ts: an interceptor only ever
 // sees a request that already validated, so it cannot describe these failures.
-import type { RuntimeEvent } from './h3-adapter'
+import type { RuntimeEvent } from './platform'
 import type { ValidationIssue } from './validator'
 
 /** Which part of the request failed to match the contract. */

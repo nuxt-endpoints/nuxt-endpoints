@@ -11,7 +11,7 @@ const setHeaders = vi.fn()
 
 // '../src/runtime' is imported dynamically in `beforeAll` (rather than
 // statically at the top, as endpoint.test.ts also does) because a static
-// import would evaluate the h3-adapter -> 'h3' import chain immediately,
+// import would evaluate the platform -> 'h3' import chain immediately,
 // before `setResponseStatus`/`setHeaders` above are assigned — tripping
 // Vitest's hoisted `vi.mock` factory into a temporal-dead-zone
 // ReferenceError.

@@ -17,7 +17,7 @@ import type {
 import { hasHttpControlCharacter } from './idempotency'
 import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
-import type { EndpointWireValue } from './wire'
+import type { EndpointWireValue } from './platform'
 
 export type EndpointRouteEntry = {
   path: string

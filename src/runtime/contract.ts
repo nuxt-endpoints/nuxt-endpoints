@@ -1,4 +1,4 @@
-import type { RuntimeEvent } from './h3-adapter'
+import type { RuntimeEvent } from './platform'
 import type { InferInput, InferOutput, ValidatorSchema } from './validator'
 import type { ResponseOptions, StatusCode, StatusResponse } from './response'
 

@@ -34,8 +34,8 @@ import {
   readRuntimeTextBody,
   setRuntimeResponseHeaders,
   setRuntimeResponseStatus,
-} from './h3-adapter'
-import type { RuntimeEvent } from './h3-adapter'
+} from './platform'
+import type { RuntimeEvent } from './platform'
 import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'

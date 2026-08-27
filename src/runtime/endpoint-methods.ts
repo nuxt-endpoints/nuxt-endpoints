@@ -19,8 +19,8 @@ import {
   getRuntimeMethod,
   setRuntimeResponseHeaders,
   setRuntimeResponseStatus,
-} from './h3-adapter'
-import type { RuntimeEvent } from './h3-adapter'
+} from './platform'
+import type { RuntimeEvent } from './platform'
 import type { EndpointRuntime } from './endpoint-runtime'
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>

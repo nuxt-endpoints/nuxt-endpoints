@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The h3 and Nitro seam is now one directory, `src/runtime/platform/`, split
+  by role: `request.ts` reads the request, `response.ts` writes the response,
+  `handler.ts` registers the handler and aliases the event, and `wire.ts`
+  projects a handler return through JSON serialization. It replaces
+  `h3-adapter.ts` and the top-level `wire.ts`, whose single files answered
+  "where do we touch h3?" but not "which of this does core absorb next?" —
+  the directory README now carries that map, with each capability graded by
+  how certainly h3 v2 / Nitro 3 take it over, and the four migration events
+  kept separate. `test/platform-isolation.test.ts` pins that nothing outside
+  the directory imports either package (the Nitro plugin wrapper in
+  `server-plugin.ts` is the one documented exception), since nothing else
+  would catch an import creeping back out.
+
 ## 0.7.0 - 2026-08-26
 
 ### Changed

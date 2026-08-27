@@ -6,7 +6,7 @@ import {
   defineRuntimeHandler,
   getRuntimeQuery,
   getRuntimeRequestHeaders,
-} from '../src/runtime/h3-adapter'
+} from '../src/runtime/platform'
 
 // These run a real HTTP request through a real H3 app instead of a mocked
 // event, so they pin the request-parsing semantics the adapter depends on.

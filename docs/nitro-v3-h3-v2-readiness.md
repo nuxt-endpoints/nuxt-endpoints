@@ -14,6 +14,12 @@ runtime rows were additionally observed by dispatching requests through a real
 stable — and note that the verified version is not the latest RC, so a row can
 have moved since.
 
+## Where the seam lives
+
+The code this document describes is `src/runtime/platform/` — its
+[README](../src/runtime/platform/README.md) maps the files, grades what core
+is expected to absorb, and links back here for the per-call tables.
+
 ## Current support boundary
 
 The current package baseline is Nitro 2 and H3 1. The `nitropack` dependency is
@@ -54,17 +60,17 @@ export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
 
 ## Completed preparation
 
-| Area                       | Current boundary                                                                                                                                                                                                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H3 runtime calls           | [`src/runtime/h3-adapter.ts`](../src/runtime/h3-adapter.ts) is the only production runtime file that imports H3 directly. Two places assume H3 shapes without importing it: `src/runtime/endpoint.ts` reads `event.context` (unchanged in v2), and `src/module.ts` encodes H3's trailing-slash route registration in `comparableRoutePath`. |
-| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                                                                                                                                                                                       |
-| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                                                                                                                                                                                           |
-| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                                                                                                                                                                                     |
-| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                                                                                                                                                                                       |
-| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                                                                                                                                                                                    |
-| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                                                                                                                                                                                           |
-| Client JSON wire types     | [`src/runtime/wire.ts`](../src/runtime/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`.                                                                                                                                                              |
-| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                                                                                                                                                                                         |
+| Area                       | Current boundary                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| H3 runtime calls           | [`src/runtime/platform/`](../src/runtime/platform/) is the only place that imports H3 directly (see its README for the file map); `test/platform-isolation.test.ts` pins that. Two places assume H3 shapes without importing it: `src/runtime/endpoint.ts` reads `event.context` (unchanged in v2), and `src/module.ts` encodes H3's trailing-slash route registration in `comparableRoutePath`. |
+| Endpoint types             | `EndpointContext` depends on the adapter's `RuntimeEvent`, not directly on `H3Event`.                                                                                                                                                                                                                                                                                                            |
+| Web request access         | The H3 v1 adapter normalizes an event with `toWebRequest(event)`.                                                                                                                                                                                                                                                                                                                                |
+| Nitro handler discovery    | [`src/nitro-route-handlers.ts`](../src/nitro-route-handlers.ts) isolates the build-time `scannedHandlers` and configured-handler shape.                                                                                                                                                                                                                                                          |
+| Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                                                                                                                                                                                                                                            |
+| OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                                                                                                                                                                                                                                         |
+| Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                                                                                                                                                                                                                                                |
+| Client JSON wire types     | [`src/runtime/platform/wire.ts`](../src/runtime/platform/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`.                                                                                                                                                                                                 |
+| Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                                                                                                                                                                                                                                              |
 
 The current Nitro 2/H3 1 implementation is covered by unit, type, build, and
 Nuxt end-to-end tests.
@@ -101,7 +107,7 @@ layer touches outside the adapter, so Nitro middleware context keeps working.
 `{ tag: ['a', 'b'] }`), matching v1 exactly. `URLSearchParams.get()` returns
 only the first value and `Object.fromEntries` collapses duplicates, so
 "modernizing" this call silently drops repeated query values — which endpoint
-contracts document as a supported input shape. `test/h3-adapter.test.ts` pins
+contracts document as a supported input shape. `test/platform.test.ts` pins
 this behavior through a real request so the regression fails loudly.
 
 ### The error wire body changes shape
@@ -137,13 +143,13 @@ H3 v2 it is the canonical Web `Request`. Therefore checks such as
 ### H3 v2-only release
 
 The preferred migration path is to replace the implementation of
-`h3-adapter.ts`, update dependency ranges, and run the complete compatibility
+`src/runtime/platform/`, update dependency ranges, and run the complete compatibility
 matrix. Endpoint definitions and handlers should not need to change.
 
 ### Simultaneous H3 v1 and v2 support
 
 If one package release must support both majors, provide separate
-implementations such as `h3-adapter-v1.ts` and `h3-adapter-v2.ts`, then select
+implementations such as `platform/h3-v1/` and `platform/h3-v2/`, then select
 one at build or module-setup time from the resolved H3 major. Do not import both
 implementations into the server bundle and do not infer the H3 major for each
 request from the event shape.
@@ -155,14 +161,14 @@ name: `nitropack` is renamed to `nitro`, and `nitropack` itself has no 3.x
 releases. Every integration point survives; the changes are import paths plus
 one renamed export.
 
-| Integration point                            | Nitro 3 status                                                                                       | Change required      |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------- |
-| `Serialize` / `Simplify` in `wire.ts`        | Present in `nitro/types`. Nitro's own build still composes `InternalApi` as `Simplify<Serialize<…>>` | Import path only     |
-| `InternalApi`                                | Still declared in `nitro/types` and module-augmented during build                                    | Import path only     |
-| `defineNitroPlugin`                          | The `nitropack/runtime/plugin` subpath is gone; the root export is `definePlugin`                    | Import path and name |
-| `scannedHandlers`, `options.handlers`        | Present, same fields (`handler`, `route`, `method`, `middleware`)                                    | None                 |
-| `options.scanDirs`, `options.ignore`         | Present, same meaning                                                                                | None                 |
-| `types:extend`, `nitro:init`, `nitro:config` | Present with identical signatures                                                                    | None                 |
+| Integration point                              | Nitro 3 status                                                                                       | Change required      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------- |
+| `Serialize` / `Simplify` in `platform/wire.ts` | Present in `nitro/types`. Nitro's own build still composes `InternalApi` as `Simplify<Serialize<…>>` | Import path only     |
+| `InternalApi`                                  | Still declared in `nitro/types` and module-augmented during build                                    | Import path only     |
+| `defineNitroPlugin`                            | The `nitropack/runtime/plugin` subpath is gone; the root export is `definePlugin`                    | Import path and name |
+| `scannedHandlers`, `options.handlers`          | Present, same fields (`handler`, `route`, `method`, `middleware`)                                    | None                 |
+| `options.scanDirs`, `options.ignore`           | Present, same meaning                                                                                | None                 |
+| `types:extend`, `nitro:init`, `nitro:config`   | Present with identical signatures                                                                    | None                 |
 
 The runtime plugin already consumes a module-owned generated manifest rather
 than Nitro's private `#nitro-internal-virtual/server-handlers`, so no private
