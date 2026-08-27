@@ -72,6 +72,28 @@ D — h3#1437 explicitly leaves the typed client, the codegen, and OpenAPI
 generation downstream, and Nitro's OpenAPI route reads hand-written
 `meta.openAPI` rather than schemas.
 
+## Slot correspondence with h3 v2
+
+The flat authoring shape here and h3 v2's nested `validate:` differ on purpose:
+`defineValidatedHandler` is still marked `@experimental` and appears nowhere in
+h3's own docs, so restructuring a public API to match it would risk matching a
+moving target. The mapping is mechanical, and this is it:
+
+| This module                                                      | h3 v2 `defineValidatedHandler`                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `params`                                                         | `validate.params` ([h3#1501](https://github.com/h3js/h3/pull/1501), open)                   |
+| `query`                                                          | `validate.query`                                                                            |
+| `headers`                                                        | `validate.headers`                                                                          |
+| `body` (single schema)                                           | `validate.body`                                                                             |
+| `body` (media-type map)                                          | no equivalent — see the grade-D row above                                                   |
+| `responses`                                                      | proposed as a `validate.response` slot in [h3#1437](https://github.com/h3js/h3/issues/1437) |
+| `onValidationError`                                              | `validate.onError`                                                                          |
+| `handler`                                                        | `handler`                                                                                   |
+| `operation` / `summary` / `description` / `tags` / `idempotency` | no counterpart — contract metadata, not validation                                          |
+
+If core stabilises the nested shape — `@experimental` dropped, documented —
+revisiting the authoring shape against this table is the intended move.
+
 ## Four independent events
 
 Each of these lands on this directory separately; none blocks another.
