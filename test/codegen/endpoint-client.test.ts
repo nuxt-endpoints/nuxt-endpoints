@@ -87,6 +87,27 @@ describe('generateEndpointClient', () => {
     expect(disabled).not.toContain('useEndpointResult')
   })
 
+  // `useFetch` swaps in `useRequestFetch()` for relative paths during SSR, so
+  // the composables that stand in for it have to forward the request too.
+  // `$endpoint` stands in for `$fetch`, which does not.
+  it('captures the request-aware fetcher for the useEndpoint family only', () => {
+    const content = generateEndpointClient(resolve, [healthHandler], {
+      client: { result: true, raw: true },
+    })
+
+    expect(content).toContain("import { useRequestFetch } from 'nuxt/app'")
+    expect(content).toContain('const captureFetcher = () => {')
+    expect(content).toContain(
+      'export const useEndpoint = createUseEndpoint(routes, __useEndpointAsyncData, { features: {"result":true,"raw":true}, captureFetcher })',
+    )
+    expect(content).toContain(
+      'export const useEndpointResult = createUseEndpointResult(routes, __useEndpointAsyncData, { features: {"result":true,"raw":true}, captureFetcher })',
+    )
+    expect(content).toContain(
+      'export const $endpoint = createEndpointClient(routes, { features: {"result":true,"raw":true} })',
+    )
+  })
+
   it('embeds the raw feature flag in the client features object', () => {
     const rawEnabled = generateEndpointClient(resolve, [healthHandler], {
       client: { result: true, raw: true },

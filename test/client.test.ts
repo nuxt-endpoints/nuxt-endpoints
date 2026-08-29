@@ -634,4 +634,130 @@ describe('createEndpointClient', () => {
       body: { message: 'Not found' },
     })
   })
+
+  // `useFetch` swaps plain `$fetch` for `useRequestFetch()` on relative paths
+  // during SSR, so the incoming cookies reach the internal route. The
+  // composables that stand in for it capture the same request-aware fetcher;
+  // `$endpoint` stands in for `$fetch` and deliberately does not.
+  describe('request-aware fetcher capture', () => {
+    const routes = [{ path: '/api/users/:id', method: 'get', operation: 'getUser' }] as const
+
+    function createUseAsyncDataStub() {
+      return vi.fn(
+        (
+          key: string,
+          handler: (_nuxtApp: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>,
+        ): UseAsyncDataStub => ({
+          key,
+          run: (signal = new AbortController().signal) => handler({}, { signal }),
+        }),
+      )
+    }
+
+    function createFetcher(data: ReturnType<typeof vi.fn>) {
+      return Object.assign(data, { raw: vi.fn() }) as never
+    }
+
+    it('uses the value returned by captureFetcher', async () => {
+      const capturedData = vi.fn().mockResolvedValue({ id: 5, name: 'Captured' })
+      const useEndpoint = createUseEndpoint(routes, createUseAsyncDataStub(), {
+        captureFetcher: () => createFetcher(capturedData),
+      })
+
+      const state = useEndpoint('getUser', { params: { id: 5 } }) as UseAsyncDataStub
+      await state.run()
+
+      expect(capturedData).toHaveBeenCalledWith('/api/users/5', {
+        method: 'get',
+        signal: expect.any(AbortSignal),
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('captures for useEndpointResult too', async () => {
+      const capturedRaw = vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        headers: new Headers(),
+        _data: { id: 7 },
+      })
+      const useEndpointResult = createUseEndpointResult(routes, createUseAsyncDataStub(), {
+        features: { result: true, raw: true },
+        captureFetcher: () => Object.assign(vi.fn(), { raw: capturedRaw }) as never,
+      })
+
+      const state = useEndpointResult('getUser', { params: { id: 7 } }) as UseAsyncDataStub
+      await state.run()
+
+      expect(capturedRaw).toHaveBeenCalled()
+      expect(fetchRawMock).not.toHaveBeenCalled()
+    })
+
+    it('prefers an explicit fetcher over captureFetcher', async () => {
+      const explicitData = vi.fn().mockResolvedValue({ id: 1 })
+      const captureData = vi.fn().mockResolvedValue({ id: 2 })
+      const useEndpoint = createUseEndpoint(routes, createUseAsyncDataStub(), {
+        fetcher: createFetcher(explicitData),
+        captureFetcher: () => createFetcher(captureData),
+      })
+
+      const state = useEndpoint('getUser', { params: { id: 1 } }) as UseAsyncDataStub
+      await state.run()
+
+      expect(explicitData).toHaveBeenCalled()
+      expect(captureData).not.toHaveBeenCalled()
+    })
+
+    // Outside a Nuxt request context the generated `captureFetcher` returns
+    // undefined rather than throwing, so the call still goes out — on plain
+    // `$fetch`, exactly as before this capture existed.
+    it('falls back to $fetch when captureFetcher returns undefined', async () => {
+      fetchMock.mockResolvedValue({ id: 3 })
+      const useEndpoint = createUseEndpoint(routes, createUseAsyncDataStub(), {
+        captureFetcher: () => undefined,
+      })
+
+      const state = useEndpoint('getUser', { params: { id: 3 } }) as UseAsyncDataStub
+      await state.run()
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/users/3', {
+        method: 'get',
+        signal: expect.any(AbortSignal),
+      })
+    })
+
+    // The fetcher belongs to the request, so a module-scope client reused
+    // across concurrent SSR requests must re-capture per call. Capturing once
+    // at creation would serve request B with request A's cookies.
+    it('re-captures per composable call rather than once at creation', async () => {
+      const firstData = vi.fn().mockResolvedValue({ from: 'A' })
+      const secondData = vi.fn().mockResolvedValue({ from: 'B' })
+      let current = createFetcher(firstData)
+      const useEndpoint = createUseEndpoint(routes, createUseAsyncDataStub(), {
+        captureFetcher: () => current,
+      })
+
+      await (useEndpoint('getUser', { params: { id: 1 } }) as UseAsyncDataStub).run()
+      current = createFetcher(secondData)
+      await (useEndpoint('getUser', { params: { id: 2 } }) as UseAsyncDataStub).run()
+
+      expect(firstData).toHaveBeenCalledTimes(1)
+      expect(secondData).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves $endpoint on plain $fetch', async () => {
+      fetchMock.mockResolvedValue({ id: 9 })
+      const captured = vi.fn()
+      const client = createEndpointClient(routes, {
+        captureFetcher: () => createFetcher(captured),
+      } as never)
+
+      await client('getUser', { params: { id: 9 } })
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/users/9', {
+        method: 'get',
+      })
+      expect(captured).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -574,6 +574,17 @@ export type EndpointFetcherRuntime = {
 export type EndpointClientRuntimeOptions = {
   features?: Partial<EndpointClientFeatureOptions>
   fetcher?: EndpointFetcherRuntime
+  /**
+   * Resolves the request-aware fetcher for the current SSR request, so a
+   * composable forwards the incoming cookies and headers to the internal
+   * route the way `useFetch` does. Called per composable call rather than
+   * once at module scope, because the fetcher belongs to the request.
+   *
+   * Only the `useEndpoint` family passes this. `$endpoint` deliberately stays
+   * on plain `$fetch`, matching Nuxt's own asymmetry between `$fetch` and
+   * `useFetch`.
+   */
+  captureFetcher?: () => EndpointFetcherRuntime | undefined
 }
 
 export type EndpointCallRuntime = {
@@ -671,9 +682,9 @@ export function createUseEndpoint(
 ) {
   const features = resolveClientFeatures(options.features)
   const routes = normalizeRoutes(routesInput)
-  const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
+    const fetcher = options.fetcher ?? options.captureFetcher?.()
     return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'data')
   }) as UseEndpointClientRuntimeValue
 
@@ -687,9 +698,9 @@ export function createUseEndpointResult(
 ) {
   const features = resolveClientFeatures(options.features)
   const routes = normalizeRoutes(routesInput)
-  const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
+    const fetcher = options.fetcher ?? options.captureFetcher?.()
     return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'result')
   }) as UseEndpointResultClientRuntimeValue
 

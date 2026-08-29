@@ -523,6 +523,29 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       ).resolves.toContain('query-whoami: alice')
     })
 
+    // `useEndpoint` mirrors `useFetch`, so it has to forward the request the
+    // same way. Without the captured `useRequestFetch()` the internal route
+    // reads no cookie and renders `anonymous`.
+    it('forwards request cookies to internal endpoints during SSR useEndpoint calls', async () => {
+      await expect(
+        $fetch<string>('/endpoint-whoami', { headers: { cookie: 'session=alice' } }),
+      ).resolves.toContain('endpoint-whoami: alice')
+    })
+
+    it('isolates SSR useEndpoint results between users', async () => {
+      const alice = await $fetch<string>('/endpoint-whoami', {
+        headers: { cookie: 'session=alice' },
+      })
+      const bob = await $fetch<string>('/endpoint-whoami', {
+        headers: { cookie: 'session=bob' },
+      })
+
+      expect(alice).toContain('alice')
+      expect(alice).not.toContain('bob')
+      expect(bob).toContain('bob')
+      expect(bob).not.toContain('alice')
+    })
+
     it('isolates SSR query caches between users', async () => {
       const alice = await $fetch<string>('/query-whoami', {
         headers: { cookie: 'session=alice' },

@@ -49,6 +49,40 @@ Use the optional [Vue Query](/docs/tanstack-query) adapter when the same
 endpoint needs shared server-state caching, retries, invalidation, optimistic
 updates, prefetching, or infinite-query state.
 
+## Request forwarding during SSR
+
+Each client mirrors the Nuxt primitive it stands in for, and Nuxt treats those
+two primitives differently:
+
+| Client                                      | Incoming cookies and headers during SSR | Mirrors    |
+| ------------------------------------------- | --------------------------------------- | ---------- |
+| `useEndpoint`, `useEndpointResult`          | Forwarded                               | `useFetch` |
+| [Vue Query](/docs/tanstack-query) factories | Forwarded                               | `useFetch` |
+| `$endpoint`                                 | Not forwarded                           | `$fetch`   |
+
+`useFetch` swaps plain `$fetch` for `useRequestFetch()` when the path is
+relative, so a session cookie reaches the internal route. `useEndpoint` and
+`useEndpointResult` capture the same request-aware fetcher, per call rather than
+once, so concurrent SSR requests never share one another's credentials.
+
+`$fetch` does not forward, and neither does `$endpoint`. Calling a
+cookie-authenticated endpoint through `$endpoint` during SSR reaches the route
+unauthenticated, exactly as the same call through `$fetch` would. Reach for
+`useEndpoint` in that case:
+
+```vue
+<script setup lang="ts">
+// Forwards the session cookie during SSR.
+const { data: user } = await useEndpoint('/api/users/:id', {
+  method: 'get',
+  params: { id: '123' },
+})
+</script>
+```
+
+None of this applies on the client, where there is no incoming request to
+forward and every client issues the same browser `fetch`.
+
 Add `operation` only when you also want a named call target.
 
 ```ts

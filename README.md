@@ -72,6 +72,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
 - ✅ Generated `$endpoint` client: success-body calls, `.result()`, `.raw()`
 - ✅ `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
+- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the query factories forward the request the way `useFetch` does
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Optional named operations (`$endpoint.getUser(...)`) and importable types from `#endpoints`
 - ✅ Generated TanStack/Vue Query adapter: `useQuery` / `useMutation` / `useInfiniteQuery` option factories from named endpoints, with optional Nuxt SSR setup

@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `useEndpoint` and `useEndpointResult` now forward the incoming request's
+  cookies and headers to the internal route during SSR. They stand in for
+  `useFetch`, which swaps plain `$fetch` for `useRequestFetch()` on relative
+  paths, but they were built on `useAsyncData` and kept plain `$fetch` — so a
+  cookie-authenticated endpoint returned 401 during SSR and succeeded only
+  after hydration. The Vue Query factories already captured the request-aware
+  fetcher; the composables now use the same mechanism, re-capturing per call so
+  concurrent SSR requests never share credentials.
+
+  `$endpoint` is unchanged and still does not forward, matching Nuxt's own
+  asymmetry between `$fetch` and `useFetch`.
+
+### Documentation
+
+- The [client docs](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client)
+  gained a "Request forwarding during SSR" section: which client forwards the
+  incoming cookies and headers, which Nuxt primitive each one mirrors, and why
+  `$endpoint` deliberately does not.
+
 ## 0.7.1 - 2026-08-27
 
 ### Changed

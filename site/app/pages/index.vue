@@ -45,6 +45,10 @@ const queryPitch = {
       icon: 'lucide:globe',
       text: 'Keep app-owned setup by default, or opt into a request-scoped Nuxt SSR QueryClient and hydration',
     },
+    {
+      icon: 'lucide:cookie',
+      text: 'Every client forwards the SSR request: useEndpoint, useEndpointResult, and the query factories carry the incoming cookies to the internal route',
+    },
   ],
   cta: { label: 'Use Vue Query', to: '/docs/tanstack-query' },
   blocks: [
