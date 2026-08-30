@@ -282,6 +282,22 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       )
     })
 
+    it('serializes status-specific response outputs to their JSON wire representation', async () => {
+      const response = await fetch('/api/serialized?fail=true')
+
+      expect(response.status).toBe(422)
+      await expect(response.json()).resolves.toEqual({
+        rejectedAt: '2026-08-15T00:00:00.000Z',
+      })
+    })
+
+    it('validates a transformed query input before the handler runs', async () => {
+      await expect($fetch('/api/merged', { query: { id: '42' } })).resolves.toEqual({
+        id: 42,
+        name: 'Merged',
+      })
+    })
+
     it('serves an endpoint whose contract is defined in a separate module', async () => {
       await expect($fetch('/api/separated')).resolves.toEqual({
         name: 'separated',

@@ -64,7 +64,7 @@ describe('h3 v2 validated-handler upstream gaps', () => {
       handler: (event) => Object.fromEntries(event.url.searchParams),
     })
 
-    const response = await requestThroughH3(handler, 'http://test.local/?tag=a&tag=b')
+    const response = await requestThroughH3(handler as never, 'http://test.local/?tag=a&tag=b')
 
     expect(validatorInput).toEqual({ tag: 'b' })
     await expect(response.json()).resolves.toEqual({ tag: 'b' })

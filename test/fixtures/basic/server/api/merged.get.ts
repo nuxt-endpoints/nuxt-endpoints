@@ -4,7 +4,7 @@ import { defineEndpoint } from '../../../../../src/runtime'
 // PROTOTYPE: single-define (merged) form - contract and handler in one call.
 export default defineEndpoint({
   operation: 'getMerged',
-  query: z.object({ id: z.coerce.number() }),
+  query: z.object({ id: z.coerce.number<string>() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),

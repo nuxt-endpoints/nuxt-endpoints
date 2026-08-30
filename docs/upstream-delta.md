@@ -250,12 +250,18 @@ the h3 v2 event shape expressed without depending on h3.
 ## Environment notes
 
 The full Nuxt integration suite has now run against the pinned stack through
-Nuxt's patched Nitro: 46 tests pass and the three browser-only tests remain
+Nuxt's patched Nitro: 48 tests pass and the three browser-only tests remain
 explicitly skipped unless `NUXT_ENDPOINTS_BROWSER_E2E=1` is set. This exercises
 real bound servers, generated clients and types, SSR request forwarding,
 per-status responses, OpenAPI, Vue Query hydration, and the SQLite-backed
-idempotency implementation. The unit suite also passes all 409 tests, including
+idempotency implementation. The unit suite also passes all 411 tests, including
 the five native `better-sqlite3` tests.
+
+The generated fixture now pins both transform boundaries explicitly. A
+`z.coerce.number<string>()` query accepts `string` (and rejects `number`) in the
+client while its real handler receives `number`. A `Date` in both the 200 and
+422 response schemas is a `Date` in the handler contract and a `string` through
+the generated client and on the real JSON wire.
 
 The first full Nuxt 5 integration run exposed two generated-type path changes,
 both adaptations to Nitro 3 rather than module defects. Nitro now writes its
