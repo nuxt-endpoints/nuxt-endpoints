@@ -261,7 +261,18 @@ The repeated-query defect was also reproduced directly on h3 `main` at
 `1892ee9cae06533c7db72a5213bceda61cc1d58d` (`2.0.1-rc.29`): an upstream-style
 test expecting `{ tag: ['a', 'b'] }` fails because the validator receives
 `{ tag: 'b' }`. At that SHA, `validatedURL` still constructs its input with
-`Object.fromEntries(url.searchParams.entries())`.
+`Object.fromEntries(url.searchParams.entries())`. h3#1539 is the isolated
+upstream patch: it reuses h3's existing `parseQuery`, writes validated arrays
+back as repeated `URLSearchParams` entries, and passes h3's full 2,734-test
+suite, lint, typecheck, and coverage run.
+
+h3#1538 now exposes the validated body/query/header output shape from a returned
+handler, but still projects all three slots through `InferOutput`. A prototype
+on its head commit `4cf1110` typed the already-present `.validate` property with
+the original schemas. Its type test preserved both `{ count: string }` from
+`z.input<typeof Body>` and the handler's `{ count: number }` output, with all 26
+type tests passing. That result was shared on #1538 before opening any competing
+change; no separate PR has been opened.
 
 Nitro 3 no longer declares a global `$fetch`. Nitro 2's `nitropack/types`
 provided it; the Nitro 3 `declare global` block carries only `ImportMeta`. Nuxt
@@ -290,9 +301,11 @@ Every row is UNVERIFIED until this branch proves it. Rows are filled in as the
 phases land; the table is deliberately empty of claims rather than populated
 with expectations.
 
-| Capability  | Local implementation | Upstream status | Local patch | Removal condition |
-| ----------- | -------------------- | --------------- | ----------- | ----------------- |
-| _(pending)_ |                      |                 |             |                   |
+| Capability                                         | Local implementation                                                      | Upstream status                                                                                                           | Local patch                                                        | Removal condition                                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Repeated query parsing                             | `getRuntimeQuery` preserves duplicate keys for contract validation        | h3 `getQuery` preserves them, but `defineValidatedHandler` loses them before validation on rc.22 and main `1892ee9`       | h3#1539                                                            | The fix ships in the h3 version pinned by Nuxt/Nitro and the real-request array test passes through `defineValidatedHandler`             |
+| Validated-handler contract introspection           | Discovery evaluates route modules and extracts their endpoint definitions | h3 retains `.validate` schemas by identity, but the property is undocumented and untyped                                  | Prototype shared on h3#1538; h3#1437 tracks the contract direction | h3 intentionally types/tests schema identity and Nitro provides a supported way to obtain evaluated handlers or equivalent rich metadata |
+| Nitro 3 platform imports and generated route types | Platform seam plus integration assertions                                 | Nuxt's patched Nitro serves the module successfully; Nitro 3 uses `nitro/*` and generates `types/nitro/nitro-routes.d.ts` | Local import/test-path adaptation only                             | Complete for the pinned stack; retain the seam for upstream version isolation                                                            |
 
 ## Method
 
