@@ -199,7 +199,9 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     name: `nuxt-${moduleName}`,
     configKey: camelCase(moduleName),
     compatibility: {
-      nuxt: '^4.5.0',
+      // The `upstream-integration` branch targets the Nuxt 5 nightly stack
+      // only. `main` keeps the `^4.5.0` claim.
+      nuxt: '^5.0.0-0',
     },
   },
   // All defaulting is centralized in `resolveModuleOptions` so there is a single

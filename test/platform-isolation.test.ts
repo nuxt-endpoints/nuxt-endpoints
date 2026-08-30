@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 const runtimeDirectory = fileURLToPath(new URL('../src/runtime', import.meta.url))
 
 // The Nitro plugin wrapper is the one documented exception: server-plugin.ts
-// is 195 lines of startup logic whose only platform touch is `defineNitroPlugin`,
+// is 195 lines of startup logic whose only platform touch is `definePlugin`,
 // and moving the whole file into the seam would bury the seam in bootstrapping.
 const nitroExceptions = new Set(['server-plugin.ts'])
 
@@ -44,12 +44,12 @@ describe('the platform seam', () => {
     expect(offenders, 'h3 imports outside src/runtime/platform/').toEqual([])
   })
 
-  it('is the only place that imports nitropack, except the plugin wrapper', () => {
+  it('is the only place that imports nitro, except the plugin wrapper', () => {
     const offenders = files
       .filter(({ name }) => !name.startsWith('platform/') && !nitroExceptions.has(name))
-      .filter(({ content }) => /from 'nitropack/.test(content))
+      .filter(({ content }) => /from 'nitro(\/|')/.test(content))
       .map(({ name }) => name)
 
-    expect(offenders, 'nitropack imports outside src/runtime/platform/').toEqual([])
+    expect(offenders, 'nitro imports outside src/runtime/platform/').toEqual([])
   })
 })

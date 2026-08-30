@@ -2,8 +2,8 @@
 // registered with the platform, and how the platform's event reaches the rest
 // of the runtime. Everything else in this package sees `RuntimeEvent`, never
 // `H3Event` — that one alias is what keeps the h3 major version a detail of
-// this directory. See README.md for where each call goes on h3 v2.
-import { defineEventHandler, toWebRequest } from 'h3'
+// this directory. See README.md for where each call goes.
+import { defineHandler } from 'h3'
 import type { H3Event } from 'h3'
 
 export type RuntimeEvent = H3Event
@@ -11,16 +11,16 @@ export type RuntimeEvent = H3Event
 export function defineRuntimeHandler<RESPONSE>(
   handler: (event: RuntimeEvent) => RESPONSE,
 ): (event: RuntimeEvent) => RESPONSE {
-  return defineEventHandler(handler as never) as unknown as (event: RuntimeEvent) => RESPONSE
+  return defineHandler(handler as never) as unknown as (event: RuntimeEvent) => RESPONSE
 }
 
 /**
- * Normalizes the platform event into a Web `Request` for the handler context.
- * The one call in this directory with no h3 v2 equivalent — `event.req` is
- * already a `Request` there, so this becomes a property read.
+ * The incoming request as a Web `Request` for the handler context. On h3 v2
+ * this is a property read: `event.req` is already a `Request`, so the v1
+ * `toWebRequest(event)` call this replaced is gone rather than renamed.
  */
 export function getRuntimeWebRequest(event: RuntimeEvent): Request {
-  return toWebRequest(event)
+  return event.req
 }
 
 /**
@@ -29,5 +29,5 @@ export function getRuntimeWebRequest(event: RuntimeEvent): Request {
  * method's sub-handler runs.
  */
 export function getRuntimeMethod(event: RuntimeEvent): string {
-  return event.method
+  return event.req.method
 }

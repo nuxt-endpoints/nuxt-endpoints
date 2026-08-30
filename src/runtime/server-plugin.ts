@@ -1,4 +1,4 @@
-import { defineNitroPlugin } from 'nitropack/runtime/plugin'
+import { definePlugin } from 'nitro'
 import endpointsOptions from '#nuxt-endpoints/options'
 import endpointRuntimeModule from '#nuxt-endpoints/runtime'
 import type { EndpointDefinition } from './contract'
@@ -40,7 +40,7 @@ type HandlerDefinition = {
   load: () => Promise<HandlerFunction>
 }
 
-export default defineNitroPlugin(async () => {
+export default definePlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
