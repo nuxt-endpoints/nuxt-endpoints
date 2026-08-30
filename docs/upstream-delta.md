@@ -222,6 +222,47 @@ the h3 v2 event shape expressed without depending on h3.
 
 ## Environment notes
 
+The full Nuxt integration suite has now run against the pinned stack through
+Nuxt's patched Nitro: 46 tests pass and the three browser-only tests remain
+explicitly skipped unless `NUXT_ENDPOINTS_BROWSER_E2E=1` is set. This exercises
+real bound servers, generated clients and types, SSR request forwarding,
+per-status responses, OpenAPI, Vue Query hydration, and the SQLite-backed
+idempotency implementation. The unit suite also passes all 409 tests, including
+the five native `better-sqlite3` tests.
+
+The first full Nuxt 5 integration run exposed two generated-type path changes,
+both adaptations to Nitro 3 rather than module defects. Nitro now writes its
+route augmentation to `types/nitro/nitro-routes.d.ts`, and that file augments
+`nitro/types` rather than `nitropack/types`. The integration assertions now
+consume those Nitro 3 locations. This was measured through the Nuxt nightly's
+patched Nitro, not bare Nitro.
+
+The same run found one remaining Nitro 2 application import outside the module:
+the playground database helper imported `useRuntimeConfig` from
+`nitropack/runtime`. That pulled Nitro 2's runtime into the Nitro 3 production
+build, where Rolldown failed to resolve `#nitro-internal-virtual/app-config`.
+Moving the helper to Nitro 3's focused `nitro/runtime-config` export fixes the
+build. This was our playground assuming a Nitro 2 package path, not an upstream
+defect.
+
+Nitro does not currently make evaluated route handler exports available during
+type generation. In `nitro@3.0.260610-beta`, `scanServerRoutes` stores
+`NitroEventHandler.handler` as a file path string, `nitro.scannedHandlers` and
+`nitro.routing.routes` retain those descriptors, and `writeTypes` builds
+response-type strings from `typeof import(path).default` before calling
+`types:extend`. Its routing metadata virtual module also statically parses only
+a literal `defineRouteMeta(...)` call through a `?meta` transform; it does not
+load the route's default export. Therefore blessing h3's runtime
+`handler.validate` property would remove an unsafe introspection assumption but
+would not remove this module's need to evaluate route modules. An evaluated
+handler export or a richer build-time metadata channel is a separate Nitro gap.
+
+The repeated-query defect was also reproduced directly on h3 `main` at
+`1892ee9cae06533c7db72a5213bceda61cc1d58d` (`2.0.1-rc.29`): an upstream-style
+test expecting `{ tag: ['a', 'b'] }` fails because the validator receives
+`{ tag: 'b' }`. At that SHA, `validatedURL` still constructs its input with
+`Object.fromEntries(url.searchParams.entries())`.
+
 Nitro 3 no longer declares a global `$fetch`. Nitro 2's `nitropack/types`
 provided it; the Nitro 3 `declare global` block carries only `ImportMeta`. Nuxt
 supplies `$fetch` to an app through auto-imports, which this package's own

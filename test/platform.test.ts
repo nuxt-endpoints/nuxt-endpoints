@@ -1,4 +1,4 @@
-import { createApp, toWebHandler } from 'h3'
+import { createApp, defineValidatedHandler, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { defineEndpoint, defineEndpointHandler } from '../src/runtime'
@@ -49,6 +49,35 @@ describe('h3 adapter request parsing', () => {
     })
 
     await expect(response.json()).resolves.toMatchObject({ 'x-request-id': 'abc' })
+  })
+})
+
+describe('h3 v2 validated-handler upstream gaps', () => {
+  it('loses repeated query values before the validator can inspect them', async () => {
+    let validatorInput: unknown
+    const Query = z.preprocess((input) => {
+      validatorInput = input
+      return input
+    }, z.unknown())
+    const handler = defineValidatedHandler({
+      validate: { query: Query },
+      handler: (event) => Object.fromEntries(event.url.searchParams),
+    })
+
+    const response = await requestThroughH3(handler, 'http://test.local/?tag=a&tag=b')
+
+    expect(validatorInput).toEqual({ tag: 'b' })
+    await expect(response.json()).resolves.toEqual({ tag: 'b' })
+  })
+
+  it('retains validation schemas by identity without typing that property', () => {
+    const Body = z.object({ name: z.string() })
+    const handler = defineValidatedHandler({
+      validate: { body: Body },
+      handler: async (event) => event.req.json(),
+    })
+
+    expect((handler as typeof handler & { validate: { body: unknown } }).validate.body).toBe(Body)
   })
 })
 

@@ -424,7 +424,10 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const buildDir = getBuildDir(useTestContext)
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
-      const nitroRoutes = await readFile(join(buildDir, 'types/nitro-routes.d.ts'), 'utf8')
+      const nitroRoutes = await readFile(
+        join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
+        'utf8',
+      )
 
       expect(endpointTypes).toContain("operation: 'getUser'")
       expect(endpointTypes).toContain("operation: 'createUser'")
@@ -479,7 +482,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       // `InternalApi` this agreement file compares against.
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
-        join(buildDir, 'types/nitro-routes.d.ts'),
+        join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
         join(buildDir, 'types/endpoints.d.ts'),
         internalApiAgreementPath,
       ])
@@ -619,7 +622,7 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
   const assertions = [...singleAssertions, ...groupAssertions].join('\n')
 
   return `import type { $EndpointPathResponse } from '#endpoints'
-import type { InternalApi } from 'nitropack/types'
+import type { InternalApi } from 'nitro/types'
 
 type Equal<LEFT, RIGHT> =
   (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends
