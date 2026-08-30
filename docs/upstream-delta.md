@@ -19,13 +19,13 @@ nightly channel, and its own workspace pins the stack below. This branch adopts
 those pins rather than newer prereleases, so that a failure here is a failure
 Nuxt itself would see.
 
-| Package               | Version pinned here                                         | Source of the pin                                    |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
-| `nuxt`                | `npm:nuxt-nightly@5.0.0-29800730.fb02c57e`                  | `nuxt-nightly` dist-tag `5x`                         |
-| `@nuxt/kit`           | `npm:@nuxt/kit-nightly@5.0.0-29800730.fb02c57e`             | same nightly build                                   |
-| `@nuxt/schema`        | `npm:@nuxt/schema-nightly@5.0.0-29800730.fb02c57e`          | same nightly build                                   |
-| `nitro`               | `^3.0.260610-beta`                                          | `nuxt/nuxt` `pnpm-workspace.yaml`, catalog `nitro-runtime` |
-| `h3`                  | `2.0.1-rc.22`                                               | same catalog, "intentionally pinned to match nitro's dependency" |
+| Package        | Version pinned here                                | Source of the pin                                                |
+| -------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
+| `nuxt`         | `npm:nuxt-nightly@5.0.0-29800730.fb02c57e`         | `nuxt-nightly` dist-tag `5x`                                     |
+| `@nuxt/kit`    | `npm:@nuxt/kit-nightly@5.0.0-29800730.fb02c57e`    | same nightly build                                               |
+| `@nuxt/schema` | `npm:@nuxt/schema-nightly@5.0.0-29800730.fb02c57e` | same nightly build                                               |
+| `nitro`        | `^3.0.260610-beta`                                 | `nuxt/nuxt` `pnpm-workspace.yaml`, catalog `nitro-runtime`       |
+| `h3`           | `2.0.1-rc.22`                                      | same catalog, "intentionally pinned to match nitro's dependency" |
 
 Recorded on 2026-08-30. `nuxt/nuxt@main` declares version `5.0.0-0`; the nightly
 above is built from commit `fb02c57e`.
@@ -58,18 +58,23 @@ declare function defineValidatedHandler<
   RequestHeaders extends StandardSchemaV1,
   RequestQuery extends StandardSchemaV1,
   Res extends EventHandlerResponse = EventHandlerResponse,
->(def: Omit<EventHandlerObject, 'handler'> & {
-  validate?: {
-    body?: RequestBody
-    headers?: RequestHeaders
-    query?: RequestQuery
-    onError?: OnValidateError
-  }
-  handler: EventHandler<{
-    body: InferOutput<RequestBody>
-    query: StringHeaders<InferOutput<RequestQuery>>
-  }, Res>
-}): EventHandlerWithFetch<TypedRequest<InferOutput<RequestBody>, InferOutput<RequestHeaders>>, Res>
+>(
+  def: Omit<EventHandlerObject, 'handler'> & {
+    validate?: {
+      body?: RequestBody
+      headers?: RequestHeaders
+      query?: RequestQuery
+      onError?: OnValidateError
+    }
+    handler: EventHandler<
+      {
+        body: InferOutput<RequestBody>
+        query: StringHeaders<InferOutput<RequestQuery>>
+      },
+      Res
+    >
+  },
+): EventHandlerWithFetch<TypedRequest<InferOutput<RequestBody>, InferOutput<RequestHeaders>>, Res>
 ```
 
 It is marked `@experimental`. `validate` has three slots: `body`, `headers`,
@@ -89,7 +94,7 @@ can move:
 
 1. **Body validation is lazy.** A handler that never reads the body never
    triggers it. `POST { n: 'nope' }` against `validate.body = z.object({ n:
-   z.number() })` returned **200** when the handler ignored the body, and
+z.number() })` returned **200** when the handler ignored the body, and
    **400** when the handler awaited `event.req.json()`. A declared contract is
    therefore not enforced by declaring it.
 2. **Repeated query values are lost.** `?tag=a&tag=b` reaches a plain h3
@@ -101,11 +106,11 @@ can move:
    cannot move to core until this changes.
 3. **`.text()`, `.formData()`, and `.arrayBuffer()` throw** once JSON body
    validation is enabled: `TypeError: Cannot access .text on request with JSON
-   validation enabled. Use .json() instead.` Media-type-map contracts need
+validation enabled. Use .json() instead.` Media-type-map contracts need
    exactly those reads.
 4. **`InferInput` is not in h3's public types.** The emitted `.d.mts` exports
    `InferOutput` only, and both the handler argument and the returned
-   `TypedRequest` are built from `InferOutput`. What a client must *send* is
+   `TypedRequest` are built from `InferOutput`. What a client must _send_ is
    not recoverable from a validated handler's type.
 
 **Contract introspection already works at runtime, by accident.**
@@ -119,7 +124,7 @@ handler.validate.body === Body   true
 handler.meta                     { operation: 'probe' }
 ```
 
-The schema objects are held by identity, so `InferInput` *is* derivable from
+The schema objects are held by identity, so `InferInput` _is_ derivable from
 them — downstream, from the raw schema, not from h3's types. `meta` is the
 intentional metadata bag (`H3RouteMeta`); `validate` is incidental to how
 `defineHandler` merges properties, is untyped on the return type, and is
@@ -170,6 +175,69 @@ It carries request `body` / `query` / `headers` and `responseHeaders`, which is
 more than Nitro 3 transports today — but `response` is a single type, with no
 per-status key. Status discrimination stays downstream under this shape.
 
+## Nuxt 5 moves the typed-fetch extension point
+
+This is the largest structural change found so far, and it is Nuxt's, not
+Nitro's. `@nuxt/schema` on the 5.x nightly declares two new interfaces:
+
+```ts
+interface ServerTypes {}
+interface ServerRoutes {}
+```
+
+`ServerRoutes` is documented as the extension point "through which the
+configured `server.builder` contributes the response types of the routes its
+runtime serves", augmented as:
+
+```ts
+declare module '@nuxt/schema' {
+  interface ServerRoutes {
+    '/api/hello': { get: { message: string } }
+  }
+}
+```
+
+Keys are route patterns and may contain `:param` and `**` segments; values map
+a lowercased method — or `default` — to the type the route resolves to. The
+doc comment says `@nuxt/nitro-server` declares Nitro's scanned routes there,
+"so `$fetch` and `useFetch` typing stays accurate without the app layer
+depending on a particular server runtime."
+
+Two consequences for this module, neither yet verified by a running app:
+
+- The augmentation target for typed `$fetch` in a Nuxt 5 app is plausibly
+  `@nuxt/schema`'s `ServerRoutes` rather than `nitro/types`' `InternalApi`.
+  This branch still writes the Nitro 2-era projection; whether both, one, or
+  neither is read at runtime is unknown until the playground builds.
+- `ServerRoutes` carries **one response type per route and method**, the same
+  shape as Nitro's `InternalApi` and fetchdts's `EndpointMetadata`. Three
+  layers now independently agree on one-response-per-route, which is evidence
+  that status discrimination is a downstream concern by design rather than an
+  oversight.
+
+Also present is `RequestEventFallback`, "the fallback request event shape,
+described in web standards only, used when no server builder has contributed
+an event type" — `{ req: Request; url: URL; res: { status?, statusText?, … } }`,
+the h3 v2 event shape expressed without depending on h3.
+
+## Environment notes
+
+Nitro 3 no longer declares a global `$fetch`. Nitro 2's `nitropack/types`
+provided it; the Nitro 3 `declare global` block carries only `ImportMeta`. Nuxt
+supplies `$fetch` to an app through auto-imports, which this package's own
+type-check does not see, so `src/runtime/virtual-modules.d.ts` declares it.
+
+The `createApp()` / `createRouter()` shims still exist on h3 v2 but no longer
+populate `event.context.params` from route matching — they answer `{}` where
+`new H3()` + `app.all()` answers `{ id: '7' }`. The runtime's own
+`event.context.params` read is correct on v2; only test fixtures built on the
+shims broke. `test/endpoint-methods.test.ts` now builds a v2-native app.
+
+`defineNuxtModule`'s parameter is `ModuleDefinition<…> | NuxtModule<…>`, and
+contextual typing does not reach a method's parameters through that union, so
+`setup(options, nuxt)` arrives as implicit `any` under `strict`. The parameters
+are annotated explicitly in `src/module.ts`.
+
 ## Capability ledger
 
 `Local` is what this repository implements today. `Upstream` is what the pinned
@@ -181,9 +249,9 @@ Every row is UNVERIFIED until this branch proves it. Rows are filled in as the
 phases land; the table is deliberately empty of claims rather than populated
 with expectations.
 
-| Capability | Local implementation | Upstream status | Local patch | Removal condition |
-| ---------- | -------------------- | --------------- | ----------- | ----------------- |
-| _(pending)_ | | | | |
+| Capability  | Local implementation | Upstream status | Local patch | Removal condition |
+| ----------- | -------------------- | --------------- | ----------- | ----------------- |
+| _(pending)_ |                      |                 |             |                   |
 
 ## Method
 

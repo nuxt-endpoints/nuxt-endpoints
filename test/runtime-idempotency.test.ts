@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import {
   createMemoryIdempotencyStorage,
@@ -7,20 +7,29 @@ import {
 } from '../src/runtime'
 import type { EndpointEventHandler, StandardSchemaLike } from '../src/runtime'
 
-const { setHeaders, setResponseStatus } = vi.hoisted(() => ({
-  setHeaders: vi.fn(),
-  setResponseStatus: vi.fn(),
-}))
-
 vi.mock('h3', () => ({
-  createError: (error: unknown) => error,
-  defineEventHandler: (handler: unknown) => handler,
-  getHeaders: (event: H3Event) => event.node.req.headers,
+  defineHandler: (handler: unknown) => handler,
+  // h3 v2's thrown error carries `status`/`statusText` rather than v1's
+  // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads
+  // back the same fields `createRuntimeError` sets.
+  HTTPError: class HTTPError extends Error {
+    status: number
+    statusText?: string
+    data?: unknown
+    constructor(options: {
+      status: number
+      statusText?: string
+      message?: string
+      data?: unknown
+    }) {
+      super(options.message)
+      this.status = options.status
+      this.statusText = options.statusText
+      this.data = options.data
+    }
+  },
   getQuery: (event: H3Event) => event.context.query ?? {},
   readBody: async (event: H3Event) => event.context.body,
-  setHeaders,
-  setResponseStatus,
-  toWebRequest: () => new Request('http://localhost/test'),
 }))
 
 const jsonRecord: StandardSchemaLike<Record<string, unknown>> = {
@@ -47,11 +56,6 @@ const positiveIdResponse: StandardSchemaLike<unknown, { id: number }> = {
 }
 
 describe('endpoint idempotency runtime', () => {
-  beforeEach(() => {
-    setHeaders.mockClear()
-    setResponseStatus.mockClear()
-  })
-
   it('configures immutable, client-safe definition metadata', () => {
     const storage = createMemoryIdempotencyStorage()
     const base = defineEndpoint({ operation: 'createItem', body: jsonRecord })
@@ -130,20 +134,18 @@ describe('endpoint idempotency runtime', () => {
     })
     const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
 
-    await expect(handler(createEvent({ body: {} }))).resolves.toMatchObject({
+    const missingKeyEvent = createEvent({ body: {} })
+    await expect(handler(missingKeyEvent)).resolves.toMatchObject({
       status: 400,
       code: 'IDEMPOTENCY_KEY_REQUIRED',
     })
+    expect(missingKeyEvent.res.headers.get('content-type')).toBe('application/problem+json')
 
     for (const key of ['', 'one,two', `k${'x'.repeat(255)}`]) {
       await expect(
         handler(createEvent({ body: {}, headers: { 'idempotency-key': key } })),
       ).resolves.toMatchObject({ status: 400, code: 'IDEMPOTENCY_KEY_INVALID' })
     }
-
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-      'content-type': 'application/problem+json',
-    })
   })
 
   it('authorizes every request and replays a completed response without rerunning the handler', async () => {
@@ -167,11 +169,12 @@ describe('endpoint idempotency runtime', () => {
       })
 
     await expect(handler(request())).resolves.toEqual({ id: 1 })
-    await expect(handler(request())).resolves.toEqual({ id: 1 })
+    const secondEvent = request()
+    await expect(handler(secondEvent)).resolves.toEqual({ id: 1 })
 
     expect(authorize).toHaveBeenCalledTimes(2)
     expect(execute).toHaveBeenCalledTimes(1)
-    expect(setResponseStatus).toHaveBeenLastCalledWith(expect.anything(), 200)
+    expect(secondEvent.res.status).toBe(200)
   })
 
   it('replays a repeated key for a single-define endpoint exactly like the two-call form', async () => {
@@ -249,9 +252,10 @@ describe('endpoint idempotency runtime', () => {
       createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } })
 
     await expect(handler(request())).resolves.toBeUndefined()
-    await expect(handler(request())).resolves.toBeUndefined()
+    const secondEvent = request()
+    await expect(handler(secondEvent)).resolves.toBeUndefined()
     expect(execute).toHaveBeenCalledOnce()
-    expect(setResponseStatus).toHaveBeenLastCalledWith(expect.anything(), 204)
+    expect(secondEvent.res.status).toBe(204)
   })
 
   it('rejects reuse with a different validated request fingerprint', async () => {
@@ -498,9 +502,11 @@ describe('endpoint idempotency runtime', () => {
     const request = () =>
       createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } })
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(request())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Response Contract Error',
+      status: 500,
+      statusText: 'Response Contract Error',
     })
     await expect(handler(request())).resolves.toEqual({ id: 1 })
     expect(execute).toHaveBeenCalledTimes(2)
@@ -520,11 +526,13 @@ describe('endpoint idempotency runtime', () => {
     const request = () =>
       createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } })
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(request())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Idempotency Response Serialization Error',
+      status: 500,
+      statusText: 'Idempotency Response Serialization Error',
     })
-    await expect(handler(request())).rejects.toMatchObject({ statusCode: 500 })
+    await expect(handler(request())).rejects.toMatchObject({ status: 500 })
     expect(execute).toHaveBeenCalledTimes(2)
   })
 
@@ -597,15 +605,15 @@ describe('endpoint idempotency runtime', () => {
       createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } })
 
     await handler(request())
-    setHeaders.mockClear()
-    await expect(handler(request())).resolves.toEqual({ message: 'Already submitted' })
+    const secondEvent = request()
+    await expect(handler(secondEvent)).resolves.toEqual({ message: 'Already submitted' })
 
     expect(execute).toHaveBeenCalledTimes(1)
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
+    expect(Object.fromEntries(secondEvent.res.headers.entries())).toEqual({
       location: '/api/items/1',
       etag: 'item-1',
     })
-    expect(setResponseStatus).toHaveBeenLastCalledWith(expect.anything(), 409)
+    expect(secondEvent.res.status).toBe(409)
   })
 
   it('refuses keyed execution without injected route metadata and duplicate route identities', async () => {
@@ -619,9 +627,11 @@ describe('endpoint idempotency runtime', () => {
     const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
     const event = createEvent({ body: {}, headers: { 'idempotency-key': 'request-1' } })
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(event)).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Idempotency Route Metadata Error',
+      status: 500,
+      statusText: 'Idempotency Route Metadata Error',
     })
 
     attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
@@ -740,13 +750,15 @@ describe('endpoint idempotency runtime', () => {
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
 
+      // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+      // `statusCode`/`statusMessage`.
       await expect(
         handler(
           createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'request-1' } }),
         ),
       ).rejects.toMatchObject({
-        statusCode: 500,
-        statusMessage: 'Idempotency Runtime Options Error',
+        status: 500,
+        statusText: 'Idempotency Runtime Options Error',
       })
     })
   })
@@ -770,16 +782,12 @@ function createEvent(input: {
   tenant?: string
 }): H3Event {
   return {
+    req: new Request('http://localhost/test', { headers: input.headers ?? {} }),
+    res: { status: 200, statusText: undefined, headers: new Headers() },
     context: {
       body: input.body,
       query: input.query,
       tenant: input.tenant,
-    },
-    node: {
-      req: {
-        headers: input.headers ?? {},
-      },
-      res: {},
     },
   } as unknown as H3Event
 }

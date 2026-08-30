@@ -1,4 +1,4 @@
-import { createApp, createRouter, toWebHandler } from 'h3'
+import { H3 } from 'h3'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
@@ -19,14 +19,18 @@ async function requestThroughH3(
   url: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const app = createApp()
-  const router = createRouter()
-  // `router.use()` (no method argument) registers the handler under h3's
-  // internal "all" bucket, so every HTTP method for this path reaches the
-  // dispatcher itself instead of h3 short-circuiting on method lookup.
-  router.use(routePath, handler as never)
-  app.use(router)
-  return toWebHandler(app)(new Request(url, init))
+  const app = new H3()
+  // `app.all()` registers the handler for every HTTP method on this path, so
+  // each one reaches the dispatcher itself instead of h3 short-circuiting on
+  // method lookup.
+  //
+  // Built through the v2 `H3` class rather than the `createApp`/`createRouter`
+  // shims: those still exist on v2 but no longer populate
+  // `event.context.params` from route matching, which is the whole reason this
+  // helper builds a real app. The shims answer `{}` where `new H3()` answers
+  // `{ id: '7' }`.
+  app.all(routePath, handler as never)
+  return app.fetch(new Request(url, init))
 }
 
 function userEndpoints() {

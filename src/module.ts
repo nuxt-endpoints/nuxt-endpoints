@@ -208,7 +208,12 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
   // source of truth; a `defaults` block here would duplicate those values and
   // pre-fill `options.openApi`, making the `options.openApi === undefined`
   // branch below unreachable.
-  async setup(options, nuxt) {
+  // The parameters are annotated rather than inferred: `defineNuxtModule`
+  // takes `ModuleDefinition<…> | NuxtModule<…>`, and contextual typing does
+  // not reach a method's parameters through that union, so both arrive as
+  // implicit `any`. Annotating restores exactly the types the overload would
+  // have supplied.
+  async setup(options: EndpointsModuleOptions, nuxt: Nuxt) {
     const resolver = createResolver(import.meta.url)
     const resolve = (...paths: string[]) => resolver.resolve(...paths)
     const typeFile = resolve(nuxt.options.buildDir, `types/${moduleName}.d.ts`)

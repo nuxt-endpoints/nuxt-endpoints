@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type {
@@ -6,15 +6,11 @@ import type {
   defineEndpointHandler as DefineEndpointHandler,
 } from '../src/runtime'
 
-const setResponseStatus = vi.fn()
-const setHeaders = vi.fn()
-
 // '../src/runtime' is imported dynamically in `beforeAll` (rather than
-// statically at the top, as endpoint.test.ts also does) because a static
-// import would evaluate the platform -> 'h3' import chain immediately,
-// before `setResponseStatus`/`setHeaders` above are assigned — tripping
-// Vitest's hoisted `vi.mock` factory into a temporal-dead-zone
-// ReferenceError.
+// statically at the top, as endpoint.test.ts also does) to keep this test in
+// the same shape as before the h3 v2 migration, when a static import would
+// have evaluated the platform -> 'h3' import chain before this file's own
+// mock state was ready.
 let defineEndpoint: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
@@ -24,21 +20,28 @@ beforeAll(async () => {
 
 vi.mock('h3', () => {
   return {
-    createError: (error: unknown) => error,
-    defineEventHandler: (handler: unknown) => handler,
-    getHeaders: (event: H3Event) => event.node.req.headers,
+    defineHandler: (handler: unknown) => handler,
+    // h3 v2's thrown error carries `status`/`statusText` rather than v1's
+    // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads
+    // back the same fields `createRuntimeError` sets.
+    HTTPError: class HTTPError extends Error {
+      status: number
+      statusText?: string
+      data?: unknown
+      constructor(options: {
+        status: number
+        statusText?: string
+        message?: string
+        data?: unknown
+      }) {
+        super(options.message)
+        this.status = options.status
+        this.statusText = options.statusText
+        this.data = options.data
+      }
+    },
     getQuery: (event: H3Event) => event.context.query || {},
     readBody: async (event: H3Event) => event.context.body || {},
-    readFormData: async (event: H3Event) => event.context.formData as FormData,
-    // Mirrors h3: `readRawBody(event, false)` yields bytes, any other
-    // encoding yields a decoded string.
-    readRawBody: async (event: H3Event, encoding?: false | string) =>
-      encoding === false
-        ? Buffer.from((event.context.rawBody as string) ?? '')
-        : (event.context.rawBody as string),
-    setHeaders,
-    setResponseStatus,
-    toWebRequest: () => new Request('http://localhost/test'),
   }
 })
 
@@ -48,17 +51,20 @@ function createEvent(input: {
   rawBody?: string
   headers?: Record<string, string>
 }): H3Event {
+  // A real Request gives .formData()/.text()/.arrayBuffer() for free, so the
+  // fixture's raw/form bodies are fed through it rather than hand-rolled.
+  const requestInit: RequestInit = { method: 'POST', headers: input.headers || {} }
+  if (input.formData) {
+    requestInit.body = input.formData
+  } else if (input.rawBody !== undefined) {
+    requestInit.body = input.rawBody
+  }
+
   return {
+    req: new Request('http://localhost/test', requestInit),
+    res: { status: 200, statusText: undefined, headers: new Headers() },
     context: {
       body: input.body,
-      formData: input.formData,
-      rawBody: input.rawBody,
-    },
-    node: {
-      req: {
-        headers: input.headers || {},
-      },
-      res: {},
     },
   } as unknown as H3Event
 }
@@ -66,11 +72,6 @@ function createEvent(input: {
 const UserJson = z.object({ name: z.string() })
 
 describe('single-schema body (regression: unchanged behavior)', () => {
-  beforeEach(() => {
-    setResponseStatus.mockClear()
-    setHeaders.mockClear()
-  })
-
   it('validates the body through the original readRuntimeBody path and leaves bodyMediaType undefined', async () => {
     const endpoint = defineEndpoint({ operation: 'createUser', body: UserJson })
     const handler = defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => {
@@ -97,11 +98,6 @@ describe('single-schema body (regression: unchanged behavior)', () => {
 })
 
 describe('media-type-map body: request-time dispatch', () => {
-  beforeEach(() => {
-    setResponseStatus.mockClear()
-    setHeaders.mockClear()
-  })
-
   const Multipart = z.object({ tag: z.array(z.string()), name: z.string() })
   const Text = z.string()
 
@@ -173,7 +169,8 @@ describe('media-type-map body: request-time dispatch', () => {
     const endpoint = mapEndpoint()
     const handler = defineEndpointHandler(endpoint, ({ bodyMediaType }) => ({ bodyMediaType }))
 
-    await expect(handler(createEvent({ body: { name: 'Tom' } }))).resolves.toEqual({
+    const event = createEvent({ body: { name: 'Tom' } })
+    await expect(handler(event)).resolves.toEqual({
       statusCode: 415,
       statusMessage: 'Unsupported Media Type',
       data: {
@@ -187,7 +184,8 @@ describe('media-type-map body: request-time dispatch', () => {
         ],
       },
     })
-    expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 415, 'Unsupported Media Type')
+    expect(event.res.status).toBe(415)
+    expect(event.res.statusText).toBe('Unsupported Media Type')
   })
 
   it('returns the usual 400 validation failure when the matched member rejects the body', async () => {

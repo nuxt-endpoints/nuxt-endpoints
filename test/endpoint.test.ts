@@ -1,20 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import type { StandardSchemaLike } from '../src/runtime'
 
-const setResponseStatus = vi.fn()
-const setHeaders = vi.fn()
-
 vi.mock('h3', () => {
   return {
-    createError: (error: unknown) => error,
-    defineEventHandler: (handler: unknown) => handler,
-    getHeaders: (event: H3Event) => event.node.req.headers,
+    defineHandler: (handler: unknown) => handler,
+    // h3 v2's thrown error carries `status`/`statusText` rather than v1's
+    // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads
+    // back the same fields `createRuntimeError` sets.
+    HTTPError: class HTTPError extends Error {
+      status: number
+      statusText?: string
+      data?: unknown
+      constructor(options: {
+        status: number
+        statusText?: string
+        message?: string
+        data?: unknown
+      }) {
+        super(options.message)
+        this.status = options.status
+        this.statusText = options.statusText
+        this.data = options.data
+      }
+    },
     getQuery: (event: H3Event) => event.context.query || {},
     readBody: async (event: H3Event) => event.context.body || {},
-    setHeaders,
-    setResponseStatus,
-    toWebRequest: () => new Request('http://localhost/test'),
   }
 })
 
@@ -68,11 +79,6 @@ const errorResponse: StandardSchemaLike<{ message: string }> = {
 }
 
 describe('DefinedEndpoint', () => {
-  beforeEach(() => {
-    setResponseStatus.mockClear()
-    setHeaders.mockClear()
-  })
-
   it('passes validated request data into the handler', async () => {
     const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
 
@@ -159,12 +165,13 @@ describe('DefinedEndpoint', () => {
       return respond(404, { message: 'Not found' }, { headers: { 'x-test': '1' } })
     })
 
-    await expect(handler(createEvent({ params: { id: '123' } }))).resolves.toEqual({
+    const event = createEvent({ params: { id: '123' } })
+    await expect(handler(event)).resolves.toEqual({
       message: 'Not found',
     })
 
-    expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 404)
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), { 'x-test': '1' })
+    expect(event.res.status).toBe(404)
+    expect(event.res.headers.get('x-test')).toBe('1')
   })
 
   it('returns validation errors without exposing an exception stack', async () => {
@@ -180,17 +187,17 @@ describe('DefinedEndpoint', () => {
       return { id: 1, name: 'Tom' }
     })
 
-    await expect(handler(createEvent({ params: { id: 'abc' } }))).resolves.toEqual({
+    const event = createEvent({ params: { id: 'abc' } })
+    await expect(handler(event)).resolves.toEqual({
       statusCode: 400,
       statusMessage: 'Validation Error',
       data: {
         params: [{ path: ['id'], message: 'Expected numeric string' }],
       },
     })
-    expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 400, 'Validation Error')
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-      'content-type': 'application/json',
-    })
+    expect(event.res.status).toBe(400)
+    expect(event.res.statusText).toBe('Validation Error')
+    expect(event.res.headers.get('content-type')).toBe('application/json')
   })
 
   it('can validate response contracts at runtime', async () => {
@@ -208,9 +215,11 @@ describe('DefinedEndpoint', () => {
       return { id: 'wrong', name: 'Tom' } as any
     })
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(createEvent({}))).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Response Contract Error',
+      status: 500,
+      statusText: 'Response Contract Error',
       data: {
         status: 200,
         issues: [{ message: 'Invalid user response' }],
@@ -379,16 +388,12 @@ function createEvent(input: {
   body?: unknown
 }): H3Event {
   return {
+    req: new Request('http://localhost/test'),
+    res: { status: 200, statusText: undefined, headers: new Headers() },
     context: {
       params: input.params,
       query: input.query,
       body: input.body,
-    },
-    node: {
-      req: {
-        headers: {},
-      },
-      res: {},
     },
   } as unknown as H3Event
 }

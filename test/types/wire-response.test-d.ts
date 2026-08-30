@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import type { Serialize, Simplify } from 'nitropack/types'
+import type { Serialize, Simplify } from 'nitro/types'
 import type {
   EndpointClient,
   StandardSchemaLike,

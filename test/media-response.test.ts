@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type {
@@ -6,15 +6,11 @@ import type {
   defineEndpointHandler as DefineEndpointHandler,
 } from '../src/runtime'
 
-const setResponseStatus = vi.fn()
-const setHeaders = vi.fn()
-
 // '../src/runtime' is imported dynamically in `beforeAll` (rather than
-// statically at the top, as endpoint.test.ts also does) because a static
-// import would evaluate the platform -> 'h3' import chain immediately,
-// before `setResponseStatus`/`setHeaders` above are assigned — tripping
-// Vitest's hoisted `vi.mock` factory into a temporal-dead-zone
-// ReferenceError.
+// statically at the top, as endpoint.test.ts also does) to keep this test in
+// the same shape as before the h3 v2 migration, when a static import would
+// have evaluated the platform -> 'h3' import chain before this file's own
+// mock state was ready.
 let defineEndpoint: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
@@ -24,27 +20,39 @@ beforeAll(async () => {
 
 vi.mock('h3', () => {
   return {
-    createError: (error: unknown) => error,
-    defineEventHandler: (handler: unknown) => handler,
-    getHeaders: (event: H3Event) => event.node.req.headers,
+    defineHandler: (handler: unknown) => handler,
+    // h3 v2's thrown error carries `status`/`statusText` rather than v1's
+    // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads
+    // back the same fields `createRuntimeError` sets.
+    HTTPError: class HTTPError extends Error {
+      status: number
+      statusText?: string
+      data?: unknown
+      constructor(options: {
+        status: number
+        statusText?: string
+        message?: string
+        data?: unknown
+      }) {
+        super(options.message)
+        this.status = options.status
+        this.statusText = options.statusText
+        this.data = options.data
+      }
+    },
     getQuery: (event: H3Event) => event.context.query || {},
     readBody: async (event: H3Event) => event.context.body || {},
-    setHeaders,
-    setResponseStatus,
-    toWebRequest: () => new Request('http://localhost/test'),
   }
 })
 
 function createEvent(input: { params?: Record<string, string>; accept?: string } = {}): H3Event {
   return {
+    req: new Request('http://localhost/test', {
+      headers: input.accept === undefined ? undefined : { accept: input.accept },
+    }),
+    res: { status: 200, statusText: undefined, headers: new Headers() },
     context: {
       params: input.params,
-    },
-    node: {
-      req: {
-        headers: input.accept === undefined ? {} : { accept: input.accept },
-      },
-      res: {},
     },
   } as unknown as H3Event
 }
@@ -59,11 +67,6 @@ function createReadableStream(): ReadableStream {
 }
 
 describe('media response contracts', () => {
-  beforeEach(() => {
-    setResponseStatus.mockClear()
-    setHeaders.mockClear()
-  })
-
   it('passes a returned ReadableStream through untouched, even with response validation enabled', async () => {
     const endpoint = defineEndpoint(
       {
@@ -97,15 +100,14 @@ describe('media response contracts', () => {
       respond(200, stream, { headers: { 'Content-Type': 'text/csv; charset=utf-8' } }),
     )
 
-    await handler(createEvent())
+    const event = createEvent()
+    await handler(event)
 
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-      'Content-Type': 'text/csv; charset=utf-8',
-    })
-    expect(setHeaders).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ 'content-type': 'text/csv' }),
-    )
+    expect(event.res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8')
+    // h3 v2's response headers are a Web `Headers`, so there is exactly one
+    // content-type entry - the declared 'text/csv' never gets written
+    // alongside it.
+    expect([...event.res.headers.keys()]).toEqual(['content-type'])
   })
 
   it('still validates a non-media status declared on the same endpoint', async () => {
@@ -124,9 +126,11 @@ describe('media response contracts', () => {
       respond(404, { wrong: 'shape' } as never),
     )
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(createEvent())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Response Contract Error',
+      status: 500,
+      statusText: 'Response Contract Error',
       data: { status: 404 },
     })
   })
@@ -147,9 +151,11 @@ describe('media response contracts', () => {
       respond(201 as never, stream as never),
     )
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(handler(createEvent())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Response Contract Error',
+      status: 500,
+      statusText: 'Response Contract Error',
       data: {
         status: 201,
         issues: [{ message: 'Response status 201 is not declared' }],
@@ -176,19 +182,20 @@ describe('media response contracts', () => {
       respond(404, { type: 'about:blank', title: 'Not Found' }),
     )
 
-    await handler(createEvent())
+    const event = createEvent()
+    await handler(event)
 
-    expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
-      'content-type': 'application/problem+json',
-    })
+    expect(event.res.headers.get('content-type')).toBe('application/problem+json')
 
     const invalidHandler = defineEndpointHandler(endpoint, ({ respond }) =>
       respond(404, { wrong: 'shape' } as never),
     )
 
+    // h3 v2's error wire shape uses `status`/`statusText`, not v1's
+    // `statusCode`/`statusMessage`.
     await expect(invalidHandler(createEvent())).rejects.toMatchObject({
-      statusCode: 500,
-      statusMessage: 'Response Contract Error',
+      status: 500,
+      statusText: 'Response Contract Error',
       data: { status: 404 },
     })
   })
@@ -203,9 +210,10 @@ describe('media response contracts', () => {
 
     const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
 
-    await handler(createEvent())
+    const event = createEvent()
+    await handler(event)
 
-    expect(setHeaders).not.toHaveBeenCalled()
+    expect([...event.res.headers.keys()]).toHaveLength(0)
   })
 
   describe('Accept negotiation scope', () => {
@@ -223,10 +231,11 @@ describe('media response contracts', () => {
         return respond(200, 'id,name\n')
       })
 
-      const result = await handler(createEvent({ accept: 'application/json' }))
+      const event = createEvent({ accept: 'application/json' })
+      const result = await handler(event)
 
       expect(result).toBe('id,name\n')
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), { 'content-type': 'text/csv' })
+      expect(event.res.headers.get('content-type')).toBe('text/csv')
     })
 
     it('never negotiates its way into an error status representation', async () => {
@@ -263,12 +272,13 @@ describe('media response contracts', () => {
         respond(200, 'id,name\n', { headers: { Vary: 'Accept-Encoding' } }),
       )
 
-      await handler(createEvent({}))
+      const event = createEvent({})
+      await handler(event)
 
-      const headers = setHeaders.mock.calls.at(-1)![1] as Record<string, string>
-      expect(headers.vary).toBe('Accept, Accept-Encoding')
-      // One header entry, not two spellings of it.
-      expect(Object.keys(headers).filter((name) => name.toLowerCase() === 'vary')).toHaveLength(1)
+      expect(event.res.headers.get('vary')).toBe('Accept, Accept-Encoding')
+      // One header entry, not two spellings of it - h3 v2's response headers
+      // are a Web `Headers`, which folds any duplicate spelling into one key.
+      expect([...event.res.headers.keys()].filter((name) => name === 'vary')).toHaveLength(1)
     })
 
     it('does not repeat Accept when the handler already declared it', async () => {
@@ -276,22 +286,22 @@ describe('media response contracts', () => {
         respond(200, 'id,name\n', { headers: { vary: 'accept' } }),
       )
 
-      await handler(createEvent({}))
+      const event = createEvent({})
+      await handler(event)
 
-      const headers = setHeaders.mock.calls.at(-1)![1] as Record<string, string>
-      expect(headers.vary).toBe('Accept')
+      expect(event.res.headers.get('vary')).toBe('Accept')
     })
 
     it('varies the refusal too', async () => {
       const handler = createNegotiator(({ respond }) => respond(200, 'id,name\n'))
 
-      const result = await handler(createEvent({ accept: 'application/xml' }))
+      const event = createEvent({ accept: 'application/xml' })
+      const result = await handler(event)
 
       expect(result).toMatchObject({ statusCode: 406 })
-      const headers = setHeaders.mock.calls.at(-1)![1] as Record<string, string>
       // The 406 is the response a cache must never reuse for a client that
       // accepts something else.
-      expect(headers.vary).toBe('Accept')
+      expect(event.res.headers.get('vary')).toBe('Accept')
     })
   })
 
@@ -318,10 +328,11 @@ describe('media response contracts', () => {
         return respond(200, createReadableStream())
       })
 
-      await handler(createEvent({ accept: 'application/json' }))
+      const event = createEvent({ accept: 'application/json' })
+      await handler(event)
 
       expect(negotiated).toEqual(['application/json'])
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
+      expect(Object.fromEntries(event.res.headers.entries())).toEqual({
         vary: 'Accept',
         'content-type': 'application/json',
       })
@@ -341,14 +352,12 @@ describe('media response contracts', () => {
         return respond(200, createReadableStream())
       })
 
-      await handler(createEvent({ accept: 'application/json' }))
+      const event = createEvent({ accept: 'application/json' })
+      await handler(event)
 
       expect(negotiated).toEqual(['text/csv'])
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), { 'content-type': 'text/csv' })
-      expect(setHeaders).not.toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ vary: 'Accept' }),
-      )
+      expect(event.res.headers.get('content-type')).toBe('text/csv')
+      expect(event.res.headers.get('vary')).toBeNull()
     })
 
     it('varies on Accept for every status of a negotiating endpoint, validated ones included', async () => {
@@ -364,9 +373,10 @@ describe('media response contracts', () => {
         respond(404, { message: 'Not found' }),
       )
 
-      await handler(createEvent())
+      const event = createEvent()
+      await handler(event)
 
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), { vary: 'Accept' })
+      expect(event.res.headers.get('vary')).toBe('Accept')
     })
 
     it('answers 406 with the documented body, without ever running the handler', async () => {
@@ -378,10 +388,12 @@ describe('media response contracts', () => {
         return respond(200, createReadableStream())
       })
 
-      const result = await handler(createEvent({ accept: 'application/xml' }))
+      const event = createEvent({ accept: 'application/xml' })
+      const result = await handler(event)
 
       expect(ran).toBe(false)
-      expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 406, 'Not Acceptable')
+      expect(event.res.status).toBe(406)
+      expect(event.res.statusText).toBe('Not Acceptable')
       expect(result).toEqual({
         statusCode: 406,
         statusMessage: 'Not Acceptable',
@@ -416,7 +428,8 @@ describe('media response contracts', () => {
         respond(200, createReadableStream()),
       )
 
-      const result = await handler(createEvent({ accept: 'application/xml' }))
+      const event = createEvent({ accept: 'application/xml' })
+      const result = await handler(event)
 
       expect(failures).toEqual([
         expect.objectContaining({
@@ -426,7 +439,7 @@ describe('media response contracts', () => {
           supportedMediaTypes: ['text/csv', 'application/json'],
         }),
       ])
-      expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 415)
+      expect(event.res.status).toBe(415)
       expect(result).toEqual({ claimed: true, of: ['text/csv', 'application/json'] })
     })
 
@@ -447,9 +460,10 @@ describe('media response contracts', () => {
         return respond(404, { type: 'about:blank', title: 'Not Found' })
       })
 
-      await handler(createEvent({ accept: 'text/csv' }))
+      const event = createEvent({ accept: 'text/csv' })
+      await handler(event)
 
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
+      expect(Object.fromEntries(event.res.headers.entries())).toEqual({
         vary: 'Accept',
         'content-type': 'application/problem+json',
       })
@@ -464,11 +478,12 @@ describe('media response contracts', () => {
         }),
       )
 
-      await handler(createEvent({ accept: 'application/json' }))
+      const event = createEvent({ accept: 'application/json' })
+      await handler(event)
 
-      expect(setHeaders).toHaveBeenCalledWith(expect.anything(), {
+      expect(Object.fromEntries(event.res.headers.entries())).toEqual({
         vary: 'Accept',
-        'Content-Type': 'text/csv; charset=utf-8',
+        'content-type': 'text/csv; charset=utf-8',
       })
     })
   })
