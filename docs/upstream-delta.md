@@ -175,6 +175,33 @@ It carries request `body` / `query` / `headers` and `responseHeaders`, which is
 more than Nitro 3 transports today — but `response` is a single type, with no
 per-status key. Status discrimination stays downstream under this shape.
 
+### fetchdts route machinery assessment
+
+fetchdts `main` at `664415d821383788a0604f05c9c6e59bfc1703ce` is materially
+newer than the published `0.1.7` declarations bundled with the pinned h3. Its
+serializer accepts an already-tokenized `segments` array, supports dynamic and
+wildcard nodes at any depth, preserves static-over-dynamic precedence, and now
+supports `ALL` handlers with method-specific overrides. All 87 upstream tests
+pass (one todo), together with its standalone TypeScript check.
+
+It does not replace a local type utility on the current public API boundary.
+fetchdts resolves a _concrete request URL_ such as `/api/users/123` into one
+fetch metadata object. Nuxt Endpoints deliberately accepts the _route template_
+`/api/users/:id` plus a separately typed `{ params: { id } }`, because the
+parameter names feed runtime substitution and OpenAPI. `RouteTree` erases those
+names. Our `EndpointRouteEntry` union additionally carries operation names, the
+full contract definition, handler return inference, per-status responses, raw
+response types, and `.result()` discrimination; projecting that union into a
+second route tree would add a parallel source of truth without deleting the
+union or `path-template.ts`.
+
+The reusable part is the ordinary typed-fetch projection once Nitro adopts it:
+one response plus request and response-header metadata. That channel should not
+be overloaded with the status-aware contract. This branch therefore does not
+add a direct fetchdts dependency yet. Revisit when Nitro exposes its fetchdts
+schema or when fetchdts offers a named-template representation from which the
+existing params/OpenAPI utilities can actually be deleted.
+
 ## Nuxt 5 moves the typed-fetch extension point
 
 This is the largest structural change found so far, and it is Nuxt's, not
@@ -301,11 +328,12 @@ Every row is UNVERIFIED until this branch proves it. Rows are filled in as the
 phases land; the table is deliberately empty of claims rather than populated
 with expectations.
 
-| Capability                                         | Local implementation                                                      | Upstream status                                                                                                           | Local patch                                                        | Removal condition                                                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Repeated query parsing                             | `getRuntimeQuery` preserves duplicate keys for contract validation        | h3 `getQuery` preserves them, but `defineValidatedHandler` loses them before validation on rc.22 and main `1892ee9`       | h3#1539                                                            | The fix ships in the h3 version pinned by Nuxt/Nitro and the real-request array test passes through `defineValidatedHandler`             |
-| Validated-handler contract introspection           | Discovery evaluates route modules and extracts their endpoint definitions | h3 retains `.validate` schemas by identity, but the property is undocumented and untyped                                  | Prototype shared on h3#1538; h3#1437 tracks the contract direction | h3 intentionally types/tests schema identity and Nitro provides a supported way to obtain evaluated handlers or equivalent rich metadata |
-| Nitro 3 platform imports and generated route types | Platform seam plus integration assertions                                 | Nuxt's patched Nitro serves the module successfully; Nitro 3 uses `nitro/*` and generates `types/nitro/nitro-routes.d.ts` | Local import/test-path adaptation only                             | Complete for the pinned stack; retain the seam for upstream version isolation                                                            |
+| Capability                                         | Local implementation                                                      | Upstream status                                                                                                                      | Local patch                                                        | Removal condition                                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Repeated query parsing                             | `getRuntimeQuery` preserves duplicate keys for contract validation        | h3 `getQuery` preserves them, but `defineValidatedHandler` loses them before validation on rc.22 and main `1892ee9`                  | h3#1539                                                            | The fix ships in the h3 version pinned by Nuxt/Nitro and the real-request array test passes through `defineValidatedHandler`             |
+| Validated-handler contract introspection           | Discovery evaluates route modules and extracts their endpoint definitions | h3 retains `.validate` schemas by identity, but the property is undocumented and untyped                                             | Prototype shared on h3#1538; h3#1437 tracks the contract direction | h3 intentionally types/tests schema identity and Nitro provides a supported way to obtain evaluated handlers or equivalent rich metadata |
+| Nitro 3 platform imports and generated route types | Platform seam plus integration assertions                                 | Nuxt's patched Nitro serves the module successfully; Nitro 3 uses `nitro/*` and generates `types/nitro/nitro-routes.d.ts`            | Local import/test-path adaptation only                             | Complete for the pinned stack; retain the seam for upstream version isolation                                                            |
+| Route matching and typed-fetch metadata            | Named route-template params and rich `EndpointRouteEntry` union           | fetchdts main handles deep segment trees, precedence, wildcards and `ALL`, but targets concrete URLs and one-response fetch metadata | None; adopting it now would duplicate the route model              | Nitro exposes a shared fetchdts projection, or fetchdts can replace the named-template/params utilities rather than sit beside them      |
 
 ## Method
 
