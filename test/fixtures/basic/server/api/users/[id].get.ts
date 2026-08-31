@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../../src/runtime'
 
 const User = z.object({
   id: z.number(),
@@ -10,24 +10,25 @@ const ErrorResponse = z.object({
   message: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'getUser',
   params: z.object({
     id: z.string(),
   }),
-  responses: {
-    200: User,
-    404: ErrorResponse,
+  validate: {
+    response: {
+      200: User,
+      404: ErrorResponse,
+    },
   },
-})
+  handler: ({ params, respond }) => {
+    if (params.id === '404') {
+      return respond(404, { message: 'Not found' })
+    }
 
-export default defineEndpointHandler(endpoint, ({ params, respond }) => {
-  if (params.id === '404') {
-    return respond(404, { message: 'Not found' })
-  }
-
-  return {
-    id: Number(params.id),
-    name: 'Tom',
-  }
+    return {
+      id: Number(params.id),
+      name: 'Tom',
+    }
+  },
 })

@@ -1,20 +1,26 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
 let executionCount = 0
 
-export const endpoint = defineEndpoint({
-  operation: 'createIdempotentCentralItem',
-  body: z.object({ amount: z.number().positive() }),
-  responses: {
-    201: z.object({ id: z.number(), amount: z.number() }),
+export default defineRouteHandler(
+  {
+    operation: 'createIdempotentCentralItem',
+    validate: {
+      body: z.object({ amount: z.number().positive() }),
+      response: {
+        201: z.object({ id: z.number(), amount: z.number() }),
+      },
+    },
+    idempotency: {
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: true,
+    },
+    handler: ({ body, respond }) => {
+      executionCount += 1
+      return respond(201, { id: executionCount, amount: body.amount })
+    },
   },
-}).idempotency({
-  required: true,
-  replayStatuses: [201],
-})
-
-export default defineEndpointHandler(endpoint, ({ body, respond }) => {
-  executionCount += 1
-  return respond(201, { id: executionCount, amount: body.amount })
-})
+  { idempotency: { replayStatuses: [201] } },
+)

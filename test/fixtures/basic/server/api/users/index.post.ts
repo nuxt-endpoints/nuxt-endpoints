@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../../src/runtime'
 
 const UserInput = z.object({
   name: z.string(),
@@ -10,17 +10,18 @@ const User = z.object({
   name: z.string(),
 })
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'createUser',
-  body: UserInput,
-  responses: {
-    201: User,
+  validate: {
+    body: UserInput,
+    response: {
+      201: User,
+    },
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ body, respond }) => {
-  return respond(201, {
-    id: 1,
-    name: body.name,
-  })
+  handler: ({ body, respond }) => {
+    return respond(201, {
+      id: 1,
+      name: body.name,
+    })
+  },
 })

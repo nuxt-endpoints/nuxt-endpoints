@@ -16,28 +16,27 @@ const users = {
   '2': { id: 2, name: 'Jane', age: 22 },
 } as const
 
-export default defineEndpoint({
+export default defineRouteHandler({
   operation: 'getUser',
   params: z.object({
     id: z.string(),
   }),
-  query: z.object({
-    includeAge: z.coerce.boolean().optional(),
-  }),
-  headers: z.object({
-    'x-client-version': z.string().min(1),
-  }),
-  responses: {
-    200: User,
-    404: ErrorResponse,
+  validate: {
+    query: z.object({
+      includeAge: z.coerce.boolean().optional(),
+    }),
+    headers: z.object({
+      'x-client-version': z.string().min(1),
+    }),
+    response: {
+      200: User,
+      404: ErrorResponse,
+    },
   },
   handler: ({ params, query, headers, respond }) => {
     const user = users[params.id as keyof typeof users]
 
-    if (!user) {
-      return respond(404, { message: 'User not found' })
-    }
-
+    if (!user) return respond(404, { message: 'User not found' })
     return {
       id: user.id,
       name: user.name,

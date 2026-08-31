@@ -1,21 +1,21 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'getProblem',
-  responses: {
-    200: z.object({ ok: z.literal(true) }),
-    404: {
-      body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
-      contentType: 'application/problem+json',
+  validate: {
+    response: {
+      200: z.object({ ok: z.literal(true) }),
+      404: {
+        body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
+        contentType: 'application/problem+json',
+      },
     },
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ respond }) => {
-  return respond(404, {
-    type: 'https://example.com/probs/not-found',
-    title: 'Not Found',
-    status: 404,
-  })
+  handler: ({ respond }) =>
+    respond(404, {
+      type: 'https://example.com/probs/not-found',
+      title: 'Not Found',
+      status: 404,
+    }),
 })

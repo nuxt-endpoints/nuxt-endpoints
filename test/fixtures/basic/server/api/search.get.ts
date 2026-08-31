@@ -1,19 +1,16 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-export const endpoint = defineEndpoint({
-  query: z.object({
-    q: z.string(),
-  }),
-  responses: {
-    200: z.object({
-      items: z.array(z.string()),
+export default defineRouteHandler({
+  validate: {
+    query: z.object({
+      q: z.string(),
     }),
+    response: {
+      200: z.object({
+        items: z.array(z.string()),
+      }),
+    },
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ query }) => {
-  return {
-    items: [query.q],
-  }
+  handler: ({ query }) => ({ items: [query.q] }),
 })

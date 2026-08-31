@@ -53,8 +53,11 @@ const tsconfigPath = join(buildDir, 'fixture-typecheck.json')
 const files = await existingFiles([
   join(buildDir, 'types/imports.d.ts'),
   join(buildDir, 'types/nitro-routes.d.ts'),
+  join(buildDir, 'types/nitro-route-schema.d.ts'),
+  join(buildDir, 'types/nitro/nitro-route-schema.d.ts'),
   join(buildDir, 'types/endpoints.d.ts'),
   join(buildDir, 'types/endpoints-query.d.ts'),
+  join(fixtureRoot, 'schema-provider-typecheck.ts'),
   join(fixtureRoot, 'typecheck.ts'),
 ])
 

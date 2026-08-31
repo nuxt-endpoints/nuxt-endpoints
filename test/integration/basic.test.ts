@@ -444,6 +444,10 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
         'utf8',
       )
+      const nitroRouteSchema = await readFile(
+        join(fixtureRoot, '.nuxt/types/nitro/nitro-route-schema.d.ts'),
+        'utf8',
+      )
 
       expect(endpointTypes).toContain("operation: 'getUser'")
       expect(endpointTypes).toContain("operation: 'createUser'")
@@ -464,6 +468,12 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointTypes).toContain('raw: true')
       expect(nitroRoutes).toContain('interface InternalApi')
       expect(nitroRoutes).toContain("'/api/users/:id'")
+      expect(nitroRoutes).toContain("'/api/multi'")
+      expect(nitroRoutes).toContain("'get':")
+      expect(nitroRoutes).toContain("'put':")
+      expect(nitroRouteSchema).toContain('"contract"')
+      expect(nitroRouteSchema).toContain('"handlerReturn"')
+      expect(nitroRouteSchema).toContain('interface InternalRouteSchema extends NitroRouteSchema')
     })
 
     it('generates TanStack Query client artifacts when endpoints.client.query is enabled', async () => {
@@ -499,6 +509,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
         join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
+        join(fixtureRoot, '.nuxt/types/nitro/nitro-route-schema.d.ts'),
         join(buildDir, 'types/endpoints.d.ts'),
         internalApiAgreementPath,
       ])
@@ -598,44 +609,28 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
 }
 
 function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
-  // Each union member is one line, so a line carrying `__endpoint_contracts__`
-  // came from a multi-method group. Nitro types a method-suffix-free route
-  // file under `InternalApi[path]['default']`, so those paths are compared as
-  // the union of their declared methods instead of method by method.
+  // Each union member is one line. The provider contributes every discovered
+  // method separately, including methods authored together in one route file,
+  // so the standard InternalApi projection must agree method by method.
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
       const match = line.match(/\| \{ path: '([^']+)', method: '([^']+)'/)
       if (!match) return []
       const [, path, method] = match
-      return [{ path, method, group: line.includes('__endpoint_contracts__') }]
+      return [{ path, method }]
     })
     .filter((route) => route.path !== undefined && route.method !== undefined)
   if (routes.length === 0) {
     throw new Error('No generated endpoint routes were available for InternalApi comparison.')
   }
 
-  const groupMethodsByPath = new Map<string, string[]>()
-  for (const route of routes) {
-    if (!route.group) continue
-    const methods = groupMethodsByPath.get(route.path) ?? []
-    methods.push(route.method)
-    groupMethodsByPath.set(route.path, methods)
-  }
-
-  const singleAssertions = routes
-    .filter((route) => !route.group)
+  const assertions = routes
     .map(
       ({ path, method }, index) =>
         `type RouteAgreement${index} = Assert<Agrees<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
     )
-  const groupAssertions = Array.from(groupMethodsByPath, ([path, methods], index) => {
-    const union = methods
-      .map((method) => `$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>`)
-      .join(' | ')
-    return `type GroupRouteAgreement${index} = Assert<Agrees<${union}, InternalApi[${JSON.stringify(path)}]['default']>>`
-  })
-  const assertions = [...singleAssertions, ...groupAssertions].join('\n')
+    .join('\n')
 
   return `import type { $EndpointPathResponse } from '#endpoints'
 import type { InternalApi } from 'nitro/types'
@@ -657,7 +652,13 @@ type Assert<VALUE extends true> = VALUE
 // produces, so a JSON route whose projection drifted cannot slip through it -
 // and \`typecheck.ts\` asserts the streaming side positively.
 type Agrees<LEFT, RIGHT> =
-  Equal<LEFT, ReadableStream<Uint8Array>> extends true ? true : Equal<LEFT, RIGHT>
+  Equal<LEFT, ReadableStream<Uint8Array>> extends true
+    ? true
+    : [LEFT] extends [RIGHT]
+      ? [RIGHT] extends [LEFT]
+        ? true
+        : false
+      : false
 
 ${assertions}
 `

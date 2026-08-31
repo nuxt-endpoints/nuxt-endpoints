@@ -1,26 +1,21 @@
 import { z } from 'zod'
-import {
-  defineEndpoint,
-  defineEndpointMethodHandlers,
-  defineEndpointMethods,
-} from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-export const endpoints = defineEndpointMethods({
-  get: defineEndpoint({
+export default defineRouteHandler({
+  get: {
     operation: 'getMulti',
-    query: z.object({ name: z.string().default('multi') }),
-    responses: { 200: z.object({ name: z.string() }) },
-  }),
-  put: defineEndpoint({
-    operation: 'putMulti',
-    body: z.object({ name: z.string() }),
-    responses: {
-      200: z.object({ name: z.string() }),
+    validate: {
+      query: z.object({ name: z.string().default('multi') }),
+      response: { 200: z.object({ name: z.string() }) },
     },
-  }),
-})
-
-export default defineEndpointMethodHandlers(endpoints, {
-  get: ({ query }) => ({ name: query.name }),
-  put: ({ body, respond }) => respond(200, { name: body.name }),
+    handler: ({ query }) => ({ name: query.name }),
+  },
+  put: {
+    operation: 'putMulti',
+    validate: {
+      body: z.object({ name: z.string() }),
+      response: { 200: z.object({ name: z.string() }) },
+    },
+    handler: ({ body, respond }) => respond(200, { name: body.name }),
+  },
 })
