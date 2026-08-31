@@ -9,3 +9,7 @@ minimumReleaseAgeExclude:
   - '@nuxt/schema-nightly@5.0.0-29800730.fb02c57e'
   - '@nuxt/vite-builder-nightly@5.0.0-29800730.fb02c57e'
   - nuxt-nightly@5.0.0-29800730.fb02c57e
+overrides:
+  h3: link:../upstream/h3
+  fetchdts: link:../upstream/fetchdts-pr192
+  nitro: link:../upstream/nitro
