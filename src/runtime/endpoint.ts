@@ -34,8 +34,10 @@ import {
   readRuntimeTextBody,
   setRuntimeResponseHeaders,
   setRuntimeResponseStatus,
+  validateRouteContractRequest,
+  validateRouteContractResponse,
 } from './platform'
-import type { RuntimeEvent } from './platform'
+import type { RouteContractValidator, RuntimeEvent } from './platform'
 import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
@@ -60,12 +62,13 @@ import type {
   EndpointValidationErrorHandler,
   EndpointValidationErrorResponse,
   EndpointValidationFailure,
-  EndpointValidationSource,
 } from './validation-error'
 import { parseValidator } from './validator'
 import type { ValidationIssue, ValidatorSchema } from './validator'
 
 export type EndpointRuntimeOptions<DEFINITION extends EndpointDefinition = EndpointDefinition> = {
+  /** Request-time implementation for build-time idempotency contract metadata. */
+  idempotency?: EndpointIdempotencyOptions<DEFINITION>
   validation?: {
     response?: boolean
   }
@@ -147,18 +150,11 @@ type RequestValidationIssue = {
   code?: string
 }
 
-type ParsedRequestPart =
-  | { success: true; value: unknown }
-  | { success: false; issues: readonly ValidationIssue[] }
-
 type RequestValidationFailure = { success: false; failure: EndpointValidationFailure }
-
-type BodyMediaTypeFailure = { success: false; failure: EndpointValidationFailure }
 
 type BuildContextResult<DEFINITION extends EndpointDefinition> =
   | { success: true; context: EndpointContext<DEFINITION> }
   | RequestValidationFailure
-  | BodyMediaTypeFailure
 
 export type NormalizedEndpointIdempotencyOptions = {
   storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
@@ -256,6 +252,22 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     }
 
     return new DefinedEndpoint(definition, this.options, normalized, marker)
+  }
+
+  /** Attach request-time idempotency policy to contract metadata discovered at build time. */
+  idempotencyRuntime(
+    this: DefinedEndpoint<DEFINITION & { idempotency: EndpointIdempotencyMetadata }>,
+    options: EndpointIdempotencyOptions<DEFINITION> = {},
+  ): DefinedEndpoint<DEFINITION> {
+    const metadata = this.definition.idempotency
+    const normalized = normalizeIdempotencyOptions({
+      ...options,
+      headerName: metadata.headerName,
+      required: metadata.required,
+    })
+    assertIdempotencyFingerprintIsDeterminable(this.definition, options)
+    const marker = createIdempotencyRuntimeMarker((key) => options[key] !== undefined)
+    return new DefinedEndpoint(this.definition, this.options, normalized, marker)
   }
 
   // Single signature for the same reason as `defineEndpointHandler` below:
@@ -425,27 +437,12 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       return
     }
 
-    const contract = getResponseContract(this.definition, status)
-    if (!contract) {
-      throw createRuntimeError({
-        statusCode: 500,
-        statusMessage: 'Response Contract Error',
-        data: {
-          status,
-          issues: [{ message: `Response status ${status} is not declared` }],
-        },
-      })
-    }
-
-    // A media response is declared, never checked. There is no schema to
-    // check it against, and for a stream, reading it here would consume the
-    // very thing the handler is streaming.
-    if (isMediaResponseContract(contract)) {
-      return
-    }
-
-    const schema = getResponseBodySchema(contract)
-    const result = await parseValidator(schema, body)
+    const result = await validateRouteContractResponse(
+      this.definition,
+      status,
+      body,
+      validateContractSchema,
+    )
     if (!result.success) {
       throw createRuntimeError({
         statusCode: 500,
@@ -457,6 +454,13 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       })
     }
   }
+}
+
+const validateContractSchema: RouteContractValidator = async (schema, input) => {
+  const result = await parseValidator(schema as ValidatorSchema, input)
+  return result.success
+    ? { success: true, value: result.value }
+    : { success: false, issues: result.issues }
 }
 
 export type EndpointEventHandler<
@@ -1033,10 +1037,35 @@ export function defineEndpointHandler<
   DEFINITION,
   HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
 >
+export function defineEndpointHandler<
+  const DEFINITION extends EndpointDefinition,
+  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
+    HandlerReturn<DEFINITION>
+  >,
+>(
+  contract: DEFINITION,
+  handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>,
+  options?: EndpointRuntimeOptions,
+): EndpointEventHandler<
+  DEFINITION,
+  HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
+>
 export function defineEndpointHandler<const DEFINITION extends EndpointDefinition>(
-  endpoint: DefinedEndpoint<DEFINITION>,
+  endpointOrContract: DefinedEndpoint<DEFINITION> | DEFINITION,
   handler: (context: EndpointContext<DEFINITION>) => unknown,
+  options?: EndpointRuntimeOptions,
 ): EndpointEventHandler<DEFINITION, unknown> {
+  const endpoint =
+    endpointOrContract instanceof DefinedEndpoint
+      ? endpointOrContract
+      : endpointOrContract.idempotency
+        ? new DefinedEndpoint(
+            endpointOrContract as DEFINITION & { idempotency: EndpointIdempotencyMetadata },
+            options,
+          ).idempotencyRuntime(
+            options?.idempotency as EndpointIdempotencyOptions<DEFINITION> | undefined,
+          )
+        : new DefinedEndpoint(endpointOrContract, options)
   return endpoint.handler(handler as never)
 }
 
@@ -1074,90 +1103,48 @@ async function buildContext<DEFINITION extends EndpointDefinition>(
     responseMediaType = offeredMediaTypes[0]
   }
 
-  const params = await parsePart(definition.params, event.context.params || {})
-  if (!params.success) return validationFailure(event, 'params', params.issues)
-
-  const query = await parsePart(definition.query, getRuntimeQuery(event))
-  if (!query.success) return validationFailure(event, 'query', query.issues)
-
-  const headers = await parsePart(
-    definition.headers,
-    omitRequestHeader(getRuntimeRequestHeaders(event), excludedHeaderName),
+  const bodyMediaType =
+    definition.body !== undefined && isBodyMediaTypeMap(definition.body)
+      ? normalizeBodyContentType(getRuntimeRequestHeaders(event)['content-type'])
+      : undefined
+  const validated = await validateRouteContractRequest(
+    definition,
+    {
+      params: event.context.params || {},
+      query: getRuntimeQuery(event),
+      headers: omitRequestHeader(getRuntimeRequestHeaders(event), excludedHeaderName),
+      body: undefined,
+      bodyMediaType,
+      readBody: (schema) =>
+        bodyMediaType
+          ? readBodyForMediaType(event, bodyMediaType, schema === true)
+          : readRuntimeBody(event),
+    },
+    validateContractSchema,
   )
-  if (!headers.success) return validationFailure(event, 'headers', headers.issues)
-
-  let body: ParsedRequestPart
-  let bodyMediaType: string | undefined
-  if (!definition.body) {
-    // No `body` contract: identical to the pre-media-type-map behavior.
-    body = { success: true, value: undefined }
-    bodyMediaType = undefined
-  } else if (!isBodyMediaTypeMap(definition.body)) {
-    // Single-schema `body` contract: the original code path, untouched.
-    body = await parsePart(definition.body, await readRuntimeBody(event))
-    bodyMediaType = undefined
-  } else {
-    const resolution = await resolveBodyMediaTypeMember(event, definition.body)
-    if (!resolution.success) {
-      return { success: false, failure: resolution.failure }
+  if (!validated.success) {
+    return {
+      success: false,
+      failure:
+        validated.kind === 'media-type'
+          ? { ...validated, event }
+          : { ...validated, issues: validated.issues as readonly ValidationIssue[], event },
     }
-    const member = definition.body[resolution.mediaType]
-    // An unparsed member has nothing to check: the bytes are the value.
-    body =
-      member === true
-        ? { success: true, value: resolution.raw }
-        : await parsePart(member, resolution.raw)
-    bodyMediaType = resolution.mediaType
   }
-  if (!body.success) return validationFailure(event, 'body', body.issues)
 
   return {
     success: true,
     context: {
       event,
       request: getRuntimeWebRequest(event),
-      params: params.value,
-      query: query.value,
-      headers: headers.value,
-      body: body.value,
+      params: validated.value.params,
+      query: validated.value.query,
+      headers: validated.value.headers,
+      body: validated.value.body,
       bodyMediaType,
       responseMediaType,
       respond: createResponse,
     } as EndpointContext<DEFINITION>,
-  }
-}
-
-type BodyMediaTypeResolution =
-  | { success: true; mediaType: string; raw: unknown }
-  | { success: false; failure: EndpointValidationFailure }
-
-// Selects the media-type map member matching the request's Content-Type and
-// reads the body with the parser that member's media type requires. Never
-// runs for a single-schema `body` contract.
-async function resolveBodyMediaTypeMember(
-  event: RuntimeEvent,
-  map: EndpointBodyMediaTypeMap,
-): Promise<BodyMediaTypeResolution> {
-  const contentType = normalizeBodyContentType(getRuntimeRequestHeaders(event)['content-type'])
-  const supportedMediaTypes = Object.keys(map)
-
-  if (contentType === undefined || !(contentType in map)) {
-    return {
-      success: false,
-      failure: {
-        kind: 'media-type',
-        source: 'body',
-        received: contentType ?? null,
-        supportedMediaTypes,
-        event,
-      },
-    }
-  }
-
-  return {
-    success: true,
-    mediaType: contentType,
-    raw: await readBodyForMediaType(event, contentType, map[contentType] === true),
   }
 }
 
@@ -1181,14 +1168,6 @@ async function readBodyForMediaType(
   // 'application/json' and 'application/x-www-form-urlencoded': h3's
   // readBody natively supports both.
   return readRuntimeBody(event)
-}
-
-function validationFailure(
-  event: RuntimeEvent,
-  source: EndpointValidationSource,
-  issues: readonly ValidationIssue[],
-): RequestValidationFailure {
-  return { success: false, failure: { kind: 'schema', source, issues, event } }
 }
 
 // The default shape, used when no handler claims the failure. It is built here
@@ -1510,27 +1489,4 @@ function getResponseContract(
     return definition.responses[status] || definition.responses[String(status)]
   }
   return undefined
-}
-
-function getResponseBodySchema(contract: Exclude<ResponseContract, MediaResponseContract>) {
-  if (typeof contract === 'object' && contract !== null && 'body' in contract) {
-    return contract.body
-  }
-  return contract
-}
-
-async function parsePart(
-  schema: ValidatorSchema | undefined,
-  input: unknown,
-): Promise<ParsedRequestPart> {
-  if (!schema) {
-    return { success: true, value: undefined }
-  }
-
-  const result = await parseValidator(schema, input)
-  if (result.success) {
-    return { success: true, value: result.value }
-  }
-
-  return { success: false, issues: result.issues }
 }

@@ -103,6 +103,12 @@ export type {
 } from './idempotency'
 export { createMemoryIdempotencyStorage } from './idempotency'
 export { defineEndpoint, defineEndpointHandler } from './endpoint'
+export { defineRouteHandler } from './route-handler'
+export type {
+  EndpointDefinitionFromRoute,
+  EndpointHandlerReturnFromRoute,
+  EndpointRouteMethodsEventHandler,
+} from './route-handler'
 export { defineEndpointRuntime } from './endpoint-runtime'
 export type { EndpointOpenApiRuntime, EndpointRuntime } from './endpoint-runtime'
 export type {

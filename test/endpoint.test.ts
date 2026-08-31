@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import type { StandardSchemaLike } from '../src/runtime'
 
-vi.mock('h3', () => {
+vi.mock('h3', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('h3')>()
   return {
+    ...actual,
     defineHandler: (handler: unknown) => handler,
     // h3 v2's thrown error carries `status`/`statusText` rather than v1's
     // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads

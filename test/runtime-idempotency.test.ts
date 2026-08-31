@@ -7,7 +7,8 @@ import {
 } from '../src/runtime'
 import type { EndpointEventHandler, StandardSchemaLike } from '../src/runtime'
 
-vi.mock('h3', () => ({
+vi.mock('h3', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('h3')>()),
   defineHandler: (handler: unknown) => handler,
   // h3 v2's thrown error carries `status`/`statusText` rather than v1's
   // `statusCode`/`statusMessage`; this fake mirrors that shape so it reads

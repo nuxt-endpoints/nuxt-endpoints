@@ -3,16 +3,72 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Nuxt } from '@nuxt/schema'
+import type { NitroTypes } from 'nitro/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   assertOpenApiRoutesDoNotOverlap,
+  composeHandlers,
+  contributeEndpointRouteTypes,
   findUnsupportedRouteTemplateSyntax,
   getEndpointFromCarrier,
+  indexRouteContracts,
   resolveConventionPath,
   resolveExplicitConventionPath,
   resolveModuleOptions,
   resolveQueryClientOption,
 } from '../src/module'
+
+describe('Nitro route contract provider', () => {
+  it('composes handlers exclusively from provider contracts', async () => {
+    const handler = {
+      handler: '/project/server/api/users.get.ts',
+      route: '/api/users',
+      method: 'get',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: { operation: 'listUsers', responses: {} },
+      },
+    ])
+
+    await expect(
+      composeHandlers([handler], contracts, false, false, () => {}),
+    ).resolves.toMatchObject([{ route: '/api/users', method: 'get', operation: 'listUsers' }])
+  })
+
+  it('projects provider handlers into InternalApi and opaque fetchdts metadata', () => {
+    const types: NitroTypes = {
+      routes: {
+        '/api/multi': { default: ['OriginalDispatcherResponse'] },
+      },
+      routeMetadata: {},
+    }
+
+    contributeEndpointRouteTypes(
+      types,
+      [
+        {
+          handler: '/project/server/api/multi.ts',
+          route: '/api/multi',
+          method: 'get',
+          methodGroup: true,
+        },
+      ],
+      '/project/runtime',
+    )
+
+    expect(types.routes['/api/multi']).not.toHaveProperty('default')
+    expect(types.routes['/api/multi']?.get?.[0]).toContain('EndpointHandlerSuccessBody')
+    expect(types.routeMetadata['/api/multi']?.get?.contract?.[0]).toContain(
+      "NitroRouteContractDefinition<typeof import('/project/server/api/multi.ts').default, 'get'>",
+    )
+    expect(types.routeMetadata['/api/multi']?.get?.handlerReturn?.[0]).toContain(
+      'EndpointHandlerReturnFromRoute',
+    )
+  })
+})
 
 describe('build-time idempotency runtime gap detection', () => {
   it('returns null for carriers without endpoint metadata', () => {

@@ -1,7 +1,6 @@
 import fsp from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, isAbsolute, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import {
   addImports,
   addPluginTemplate,
@@ -15,7 +14,7 @@ import {
   useLogger,
 } from '@nuxt/kit'
 import type { Nuxt, NuxtModule } from '@nuxt/schema'
-import { createJiti } from 'jiti'
+import type { NitroRouteContract, NitroRouteMethod, NitroTypes } from 'nitro/types'
 import { camelCase } from 'scule'
 import {
   generateEndpointClient,
@@ -27,16 +26,9 @@ import {
   toImportPath,
 } from './codegen'
 import type { EndpointRouteHandler } from './codegen'
-import { assertEndpointModuleEvaluated, resolveEndpointCarrierSource } from './discovery'
-import type { ContractModuleLoaders } from './discovery'
 import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
-import {
-  defineEndpoint,
-  defineEndpointHandler,
-  idempotencyMetadataWithoutRuntimeMessage,
-} from './runtime/endpoint'
-import { defineEndpointMethodHandlers, defineEndpointMethods } from './runtime/endpoint-methods'
+import { idempotencyMetadataWithoutRuntimeMessage } from './runtime/endpoint'
 import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import { isMediaResponseContract } from './runtime/response'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
@@ -65,14 +57,12 @@ const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
 const queryHttpMethods = new Set<string>(queryHttpMethodList)
 const mutationHttpMethods = new Set<string>(mutationHttpMethodList)
 
-// Helpers that discovery-evaluated modules (route and contract files) may use
-// through Nuxt auto-imports. Each needs a matching global shim while jiti
-// evaluates those modules, where Nuxt auto-imports do not exist.
-const discoveryEvaluatedServerHelpers = [
-  { name: 'defineEndpoint', value: defineEndpoint },
-  { name: 'defineEndpointHandler', value: defineEndpointHandler },
-  { name: 'defineEndpointMethods', value: defineEndpointMethods },
-  { name: 'defineEndpointMethodHandlers', value: defineEndpointMethodHandlers },
+const endpointServerAutoImports = [
+  'defineEndpoint',
+  'defineEndpointHandler',
+  'defineRouteHandler',
+  'defineEndpointMethods',
+  'defineEndpointMethodHandlers',
 ] as const
 
 export type EndpointsOpenApiModuleOptions = {
@@ -125,27 +115,6 @@ type EndpointExport = Partial<
   definition?: EndpointCarrierDefinition
 }
 
-type EndpointCarrier = {
-  __endpoint_contract__?: EndpointExport
-  // Present on a defineEndpointMethodHandlers() dispatcher's default export
-  // instead of __endpoint_contract__: the exact EndpointMethodsMap passed to
-  // defineEndpointMethods(), keyed by declared HTTP method.
-  __endpoint_contracts__?: Record<string, EndpointExport>
-}
-
-// A contract-module export can also be a defineEndpointMethods() group
-// itself (rather than a single defineEndpoint() result), when a route file
-// imports its group contract instead of declaring it inline.
-type EndpointGroupCarrier = {
-  __endpoint_methods__: true
-  methods: Record<string, EndpointExport>
-}
-
-type EndpointRouteModule = {
-  default?: EndpointCarrier
-  endpoint?: EndpointExport
-}
-
 // Detection result for one declared method (single endpoint, or one member
 // of a defineEndpointMethods() group).
 type EndpointMethodDetection = {
@@ -167,6 +136,7 @@ type EndpointDetection =
   | { methods: Record<string, EndpointMethodDetection> }
 
 type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
+  getRouteContracts: () => Promise<NitroRouteContract<EndpointDefinition>[]>
   options: {
     scanDirs: string[]
     dev?: boolean
@@ -174,7 +144,7 @@ type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
     openAPI?: { route?: string; production?: false | 'runtime' | 'prerender' }
   }
   hooks: {
-    hook: (name: 'types:extend', listener: () => void | Promise<void>) => void
+    hook: (name: 'types:extend', listener: (types: NitroTypes) => void | Promise<void>) => void
   }
 }
 
@@ -182,7 +152,10 @@ type EndpointsNuxtHook = ((
   name: 'nitro:init',
   listener: (nitro: NitroWithEndpointHandlers) => void | Promise<void>,
 ) => void) &
-  ((name: 'nitro:config', listener: (config: { ignore?: string[] }) => void) => void)
+  ((
+    name: 'nitro:config',
+    listener: (config: { ignore?: string[]; experimental?: { routeContracts?: boolean } }) => void,
+  ) => void)
 
 // Sibling contract files live next to their route inside server/api, so Nitro
 // must be told not to register them as routes. The pattern also excludes
@@ -259,31 +232,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       })
     }
 
-    const jiti = createJiti(nuxt.options.rootDir, {
-      alias: nuxt.options.alias,
-      moduleCache: false,
-    })
-    const loaders: ContractModuleLoaders = {
-      loadModule: async (path) => {
-        const restoreGlobals = installEndpointServerImportGlobals()
-        try {
-          return { module: await jiti.import<EndpointRouteModule>(path) }
-        } catch (error) {
-          return { error }
-        } finally {
-          restoreGlobals()
-        }
-      },
-      resolveImport: (specifier, parentPath) => {
-        try {
-          const resolved = jiti.esmResolve(specifier, parentPath)
-          return resolved.startsWith('file:') ? fileURLToPath(resolved) : resolved
-        } catch {
-          return undefined
-        }
-      },
-    }
-
     addServerTemplate({
       filename: `#nuxt-${moduleName}/options`,
       getContents: () => `export default ${JSON.stringify(resolvedOptions, null, 2)}\n`,
@@ -317,6 +265,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
     hook('nitro:config', (nitroConfig) => {
       nitroConfig.ignore = [...(nitroConfig.ignore ?? []), endpointContractIgnorePattern]
+      nitroConfig.experimental = {
+        ...nitroConfig.experimental,
+        routeContracts: true,
+      }
     })
     hook('nitro:init', async (nitro) => {
       if (resolvedOptions.openApi.enabled) {
@@ -324,7 +276,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           logger.warn(message),
         )
       }
-      const generateArtifacts = async () => {
+      const generateArtifacts = async (nitroTypes?: NitroTypes) => {
         if (!options.runtime?.path) {
           runtimePath = await resolveConventionPath(
             nuxt.options.rootDir,
@@ -335,12 +287,15 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         }
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
-          loaders,
+          indexRouteContracts(await nitro.getRouteContracts()),
           runtimePath !== undefined,
           resolvedOptions.client.query,
           (message) => logger.warn(message),
         )
         endpointHandlerManifest = handlers
+        if (nitroTypes) {
+          contributeEndpointRouteTypes(nitroTypes, handlers, resolve('./runtime'))
+        }
         await writeGenerated(typeFile, generateEndpointTypes(resolve, handlers, resolvedOptions))
         await writeGenerated(
           runtimeFile,
@@ -369,10 +324,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     }
 
     addServerImports([
-      ...discoveryEvaluatedServerHelpers.map(({ name }) => ({ from: resolve('./runtime'), name })),
-      // defineEndpointRuntime needs no jiti shim: the runtime file
-      // is not a discovery-evaluated module (route or contract file), so
-      // this auto-import is only ever exercised through Nitro's own bundling.
+      ...endpointServerAutoImports.map((name) => ({ from: resolve('./runtime'), name })),
       { from: resolve('./runtime'), name: 'defineEndpointRuntime' },
     ])
 
@@ -406,9 +358,40 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
 export default nuxtEndpointsModule
 
-async function composeHandlers(
+export function contributeEndpointRouteTypes(
+  types: NitroTypes,
+  handlers: readonly EndpointRouteHandler[],
+  runtimePath: string,
+): void {
+  const runtimeImport = toImportPath(runtimePath)
+
+  for (const handler of handlers) {
+    const routeImport = toImportPath(handler.handler)
+    const routeDefinition = `typeof import('${routeImport}').default['~routeDef']`
+    const method = handler.method.toLowerCase() as NitroRouteMethod
+    const definition = `import('${runtimeImport}').EndpointDefinitionFromRoute<${routeDefinition}, '${method}'>`
+    const handlerReturn = `import('${runtimeImport}').EndpointHandlerReturnFromRoute<${routeDefinition}, '${method}'>`
+    const successResponse = `Simplify<Serialize<import('${runtimeImport}').EndpointHandlerSuccessBody<${definition}, ${handlerReturn}>>>`
+
+    types.routes[handler.route] ??= {}
+    if (handler.methodGroup) {
+      delete types.routes[handler.route].default
+    }
+    types.routes[handler.route][method] = [successResponse]
+
+    types.routeMetadata[handler.route] ??= {}
+    types.routeMetadata[handler.route][method] ??= {}
+    const metadata = types.routeMetadata[handler.route][method]!
+    metadata.contract = [
+      `NitroRouteContractDefinition<typeof import('${routeImport}').default, '${method}'>`,
+    ]
+    metadata.handlerReturn = [handlerReturn]
+  }
+}
+
+export async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],
-  loaders: ContractModuleLoaders,
+  routeContracts: ReadonlyMap<string, EndpointDetection>,
   policyFileExists: boolean,
   queryClientEnabled: boolean,
   warn: (message: string) => void,
@@ -487,7 +470,7 @@ async function composeHandlers(
     }
     const route = handler.route
 
-    const detection = await detectEndpoint(handler, loaders)
+    const detection = routeContracts.get(routeContractKey(handler.handler, handler.method))
     if (!detection) {
       continue
     }
@@ -514,6 +497,46 @@ async function composeHandlers(
   }
 
   return endpointHandlers
+}
+
+export function indexRouteContracts(
+  contracts: readonly NitroRouteContract<EndpointDefinition>[],
+): Map<string, EndpointDetection> {
+  const indexed = new Map<string, EndpointDetection>()
+  const methodGroups = new Map<string, Record<string, EndpointMethodDetection>>()
+  for (const entry of contracts) {
+    const detection = getEndpointFromProviderContract(entry.contract)
+    indexed.set(routeContractKey(entry.handler, entry.method), detection)
+    if (entry.method) {
+      const methods = methodGroups.get(entry.handler) ?? {}
+      methods[entry.method] = detection
+      methodGroups.set(entry.handler, methods)
+    }
+  }
+  for (const [handler, methods] of methodGroups) {
+    if (Object.keys(methods).length > 1) {
+      indexed.set(routeContractKey(handler), { methods })
+    }
+  }
+  return indexed
+}
+
+function getEndpointFromProviderContract(definition: EndpointDefinition): EndpointMethodDetection {
+  const operation = typeof definition.operation === 'string' ? definition.operation : undefined
+  const mediaResponse = hasMediaResponse(definition)
+  const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
+  if (idempotency && definition.headers) {
+    assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
+  }
+  return {
+    ...(operation ? { operation } : {}),
+    ...(mediaResponse ? { mediaResponse: true as const } : {}),
+    ...(idempotency ? { idempotency } : {}),
+  }
+}
+
+function routeContractKey(handler: string, method?: string): string {
+  return `${handler}\0${method?.toLowerCase() ?? ''}`
 }
 
 function isEndpointGroupDetection(
@@ -545,94 +568,6 @@ export function findUnsupportedRouteTemplateSyntax(
 async function writeGenerated(filePath: string, content: string): Promise<void> {
   await fsp.mkdir(dirname(filePath), { recursive: true })
   await fsp.writeFile(filePath, content)
-}
-
-// A scanned user route is always an absolute path to a JS/TS file. The other
-// two shapes Nitro hands over are not route sources and must not be read:
-// module-registered handlers resolve to an absolute path with no extension
-// (this module's own OpenAPI route among them, whose specifier sits right
-// next to a real runtime file), and Nuxt's internal handlers use virtual
-// specifiers such as `#internal/nuxt/island-renderer.mjs`, which carry an
-// extension but no file.
-const routeSourceFilePattern = /\.[cm]?[jt]sx?$/
-
-function isScannedRouteSource(handlerPath: string): boolean {
-  return isAbsolute(handlerPath) && routeSourceFilePattern.test(handlerPath)
-}
-
-async function detectEndpoint(
-  handler: NitroRouteHandlerDescriptor,
-  loaders: ContractModuleLoaders,
-): Promise<EndpointDetection | null> {
-  if (!isScannedRouteSource(handler.handler)) {
-    return null
-  }
-  // A scanned route file that cannot be read is a real problem, so this stays
-  // loud rather than treating the route as non-endpoint.
-  const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
-  const source = await resolveEndpointCarrierSource(fileContent, handler.handler, loaders)
-
-  if (source.kind === 'skip') {
-    return null
-  }
-  if (source.kind === 'contract') {
-    return getEndpointDetectionFromContractCarrier(source.carrier)
-  }
-
-  const loadResult = await loaders.loadModule(handler.handler)
-  const routeModuleEndpoint = getEndpointFromRouteModule(
-    loadResult.module as EndpointRouteModule | undefined,
-  )
-  if (routeModuleEndpoint) {
-    return routeModuleEndpoint
-  }
-
-  assertEndpointModuleEvaluated(fileContent, handler.handler, loadResult.error)
-  return null
-}
-
-// An imported contract module's export is either a single defineEndpoint()
-// result or a defineEndpointMethods() group; discovery.ts's
-// isEndpointCarrierCandidate() already restricted the carrier to one of
-// these two shapes before this runs.
-function getEndpointDetectionFromContractCarrier(carrier: unknown): EndpointDetection | null {
-  if (isEndpointGroupCarrier(carrier)) {
-    return { methods: getEndpointMethodDetections(carrier.methods) }
-  }
-  return getEndpointFromCarrier(carrier as EndpointExport | undefined)
-}
-
-function isEndpointGroupCarrier(value: unknown): value is EndpointGroupCarrier {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __endpoint_methods__?: unknown }).__endpoint_methods__ === true
-  )
-}
-
-function getEndpointFromRouteModule(
-  routeModule: EndpointRouteModule | undefined,
-): EndpointDetection | null {
-  const defaultExport = routeModule?.default
-  if (defaultExport?.__endpoint_contracts__) {
-    return { methods: getEndpointMethodDetections(defaultExport.__endpoint_contracts__) }
-  }
-  const carrier = defaultExport?.__endpoint_contract__ || routeModule?.endpoint
-  return getEndpointFromCarrier(carrier)
-}
-
-// Applies getEndpointFromCarrier() to every member of a
-// defineEndpointMethods() group instead of reimplementing its
-// operation/idempotency/idempotency-runtime-gap logic per method: each
-// member is itself an ordinary defineEndpoint() result.
-function getEndpointMethodDetections(
-  methods: Record<string, EndpointExport>,
-): Record<string, EndpointMethodDetection> {
-  const detections: Record<string, EndpointMethodDetection> = {}
-  for (const method of Object.keys(methods)) {
-    detections[method] = getEndpointFromCarrier(methods[method]) ?? {}
-  }
-  return detections
 }
 
 // Exported for focused unit testing of the build-time idempotency gap
@@ -786,33 +721,6 @@ function parseEndpointIdempotencyMetadata(value: unknown): EndpointIdempotencyMe
     return undefined
   }
   return { enabled: true, headerName: value.headerName, required: value.required }
-}
-
-function installEndpointServerImportGlobals(): () => void {
-  const globalObject = globalThis as typeof globalThis & Record<string, unknown>
-  const restorations = discoveryEvaluatedServerHelpers.map(({ name, value }) => {
-    const previous = { exists: name in globalObject, value: globalObject[name] }
-    globalObject[name] = value
-    return { name, previous }
-  })
-
-  return () => {
-    for (const { name, previous } of restorations) {
-      restoreGlobalValue(globalObject, name, previous)
-    }
-  }
-}
-
-function restoreGlobalValue(
-  globalObject: Record<string, unknown>,
-  key: string,
-  previous: { exists: boolean; value: unknown },
-) {
-  if (previous.exists) {
-    globalObject[key] = previous.value
-    return
-  }
-  delete globalObject[key]
 }
 
 // Exported for focused unit testing of option defaulting/normalization

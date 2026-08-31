@@ -56,10 +56,10 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union).toContain("method: 'get'")
     expect(union).toContain("operation: 'listUsers'")
     expect(union).toContain(
-      "definition: typeof import('/server/api/users.get.ts').default['__endpoint_contract__']['definition']",
+      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/users', 'contract', 'get'>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/users.get.ts').default['__endpoint_handler_return__']",
+      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/users', 'handlerReturn', 'get'>",
     )
   })
 
@@ -75,30 +75,30 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union.split('\n')).toHaveLength(2)
   })
 
-  it('accesses a method-group entry through __endpoint_contracts__/__endpoint_method_handler_returns__ keyed by method', () => {
+  it('accesses every method through the shared fetchdts metadata schema', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
-      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['get']['definition']",
+      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'get'>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['get']",
+      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'handlerReturn', 'get'>",
     )
     expect(union).toContain(
-      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['put']['definition']",
+      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'put'>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['put']",
+      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'handlerReturn', 'put'>",
     )
-    expect(union).not.toContain("'__endpoint_contract__'")
-    expect(union).not.toContain('__endpoint_handler_return__')
+    expect(union).not.toContain('__endpoint_contract')
+    expect(union).not.toContain('__endpoint_handler_return')
   })
 
-  it('keeps the single-endpoint accessor shape unchanged when methodGroup is not set', () => {
+  it('does not reference private runtime carriers', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler])
 
-    expect(union).not.toContain('__endpoint_contracts__')
-    expect(union).not.toContain('__endpoint_method_handler_returns__')
+    expect(union).not.toContain('__endpoint_contract')
+    expect(union).not.toContain('__endpoint_handler_return')
   })
 })
 
@@ -114,6 +114,9 @@ describe('generateEndpointTypes', () => {
 
     expect(content).toContain(
       "import type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from './runtime'",
+    )
+    expect(content).toContain(
+      "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",
     )
   })
 

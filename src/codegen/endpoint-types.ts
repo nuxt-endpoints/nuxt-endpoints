@@ -8,19 +8,8 @@ export function buildEndpointRouteEntryUnion(handlers: readonly EndpointRouteHan
     ? handlers
         .map((handler) => {
           const operation = handler.operation ? `, operation: '${handler.operation}'` : ''
-          const importPath = toImportPath(handler.handler)
-          // A method-group entry's default export is the
-          // defineEndpointMethodHandlers() dispatcher, which carries every
-          // declared method's contract/handler-return under
-          // __endpoint_contracts__/__endpoint_method_handler_returns__ keyed
-          // by method, rather than the single-endpoint
-          // __endpoint_contract__/__endpoint_handler_return__ markers.
-          const definitionAccessor = handler.methodGroup
-            ? `typeof import('${importPath}').default['__endpoint_contracts__']['${handler.method}']['definition']`
-            : `typeof import('${importPath}').default['__endpoint_contract__']['definition']`
-          const handlerReturnAccessor = handler.methodGroup
-            ? `typeof import('${importPath}').default['__endpoint_method_handler_returns__']['${handler.method}']`
-            : `typeof import('${importPath}').default['__endpoint_handler_return__']`
+          const definitionAccessor = `TypedFetchMetadataField<InternalRouteSchema, '${handler.route}', 'contract', '${handler.method}'>`
+          const handlerReturnAccessor = `TypedFetchMetadataField<InternalRouteSchema, '${handler.route}', 'handlerReturn', '${handler.method}'>`
           return `  | { path: '${handler.route}', method: '${handler.method}'${operation}, definition: ${definitionAccessor}, handlerReturn: ${handlerReturnAccessor} }`
         })
         .join('\n')
@@ -52,6 +41,7 @@ export function generateEndpointTypes(
 
   return `
 import type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from '${toImportPath(resolve('./runtime'))}'
+import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'
 
 type EndpointRouteEntry =
 ${endpointUnion}
