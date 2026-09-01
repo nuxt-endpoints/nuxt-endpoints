@@ -230,7 +230,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects the removed singular `response` contract with a migration hint', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint, defineRouteHandler } = await import('../src/runtime')
 
     // TypeScript already rejects the key as an excess property, but discovery
     // jiti-evaluates plain JS route modules too, so the removal is enforced at
@@ -239,6 +239,13 @@ describe('DefinedEndpoint', () => {
       defineEndpoint({
         operation: 'getUser',
         response: userResponse,
+      } as never),
+    ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
+
+    expect(() =>
+      defineRouteHandler({
+        response: userResponse,
+        handler: () => ({ id: 1, name: 'Tom' }),
       } as never),
     ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
   })

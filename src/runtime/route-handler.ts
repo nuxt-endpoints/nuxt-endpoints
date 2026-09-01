@@ -18,6 +18,7 @@ import {
   type EndpointHandlerSuccessBody,
   type EndpointRouteIdentity,
   type EndpointRuntimeOptions,
+  validateEndpointDefinition,
 } from './endpoint'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './endpoint-methods'
 import type { EndpointRuntime } from './endpoint-runtime'
@@ -89,9 +90,22 @@ type RuntimeMethodsDefinition = {
   put?: RuntimeMethodDefinition
   patch?: RuntimeMethodDefinition
   delete?: RuntimeMethodDefinition
+  head?: RuntimeMethodDefinition
+  options?: RuntimeMethodDefinition
+  connect?: RuntimeMethodDefinition
+  trace?: RuntimeMethodDefinition
 }
 
-type RouteMethodKey = 'get' | 'post' | 'put' | 'patch' | 'delete'
+type RouteMethodKey =
+  | 'get'
+  | 'post'
+  | 'put'
+  | 'patch'
+  | 'delete'
+  | 'head'
+  | 'options'
+  | 'connect'
+  | 'trace'
 
 type PropertyOf<Value, Key extends PropertyKey> = Value extends unknown
   ? Key extends keyof Value
@@ -328,6 +342,34 @@ export function defineRouteHandler<
   > = DeepReadonly<
     HandlerReturn<ResolvedRuntimeMethodDefinition<Params, DeleteMetadata, DeleteValidation>>
   >,
+  const HeadMetadata extends RuntimeMethodMetadata = Record<never, never>,
+  const HeadValidation extends RuntimeMethodValidation = Record<never, never>,
+  const HeadReturn extends DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadValidation>>
+  > = DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadValidation>>
+  >,
+  const OptionsMetadata extends RuntimeMethodMetadata = Record<never, never>,
+  const OptionsValidation extends RuntimeMethodValidation = Record<never, never>,
+  const OptionsReturn extends DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsValidation>>
+  > = DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsValidation>>
+  >,
+  const ConnectMetadata extends RuntimeMethodMetadata = Record<never, never>,
+  const ConnectValidation extends RuntimeMethodValidation = Record<never, never>,
+  const ConnectReturn extends DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectValidation>>
+  > = DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectValidation>>
+  >,
+  const TraceMetadata extends RuntimeMethodMetadata = Record<never, never>,
+  const TraceValidation extends RuntimeMethodValidation = Record<never, never>,
+  const TraceReturn extends DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceValidation>>
+  > = DeepReadonly<
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceValidation>>
+  >,
   const Definition extends Record<string, unknown> = Record<never, never>,
 >(
   definition: Definition & {
@@ -337,6 +379,10 @@ export function defineRouteHandler<
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
     delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
+    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadValidation, HeadReturn>
+    options?: InferredRuntimeMethod<Params, OptionsMetadata, OptionsValidation, OptionsReturn>
+    connect?: InferredRuntimeMethod<Params, ConnectMetadata, ConnectValidation, ConnectReturn>
+    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceValidation, TraceReturn>
   },
   options?: EndpointRuntimeOptions,
 ): EndpointRouteMethodsEventHandler<
@@ -347,6 +393,10 @@ export function defineRouteHandler<
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
     delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
+    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadValidation, HeadReturn>
+    options?: InferredRuntimeMethod<Params, OptionsMetadata, OptionsValidation, OptionsReturn>
+    connect?: InferredRuntimeMethod<Params, ConnectMetadata, ConnectValidation, ConnectReturn>
+    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceValidation, TraceReturn>
   }
 >
 export function defineRouteHandler(
@@ -354,19 +404,30 @@ export function defineRouteHandler(
   options?: EndpointRuntimeOptions,
 ): unknown {
   if ('handler' in definition && typeof definition.handler === 'function') {
-    return Object.assign(
-      defineEndpointHandler(toEndpointDefinition(definition), definition.handler, options),
-      { '~routeDef': definition },
-    )
+    const contract = toEndpointDefinition(definition)
+    validateEndpointDefinition(contract)
+    return Object.assign(defineEndpointHandler(contract, definition.handler, options), {
+      '~routeDef': definition,
+    })
   }
 
   const methodsDefinition = definition as RuntimeMethodsDefinition
   const endpoints: Record<string, unknown> = {}
   const handlers: Record<string, (context: RuntimeMethodContext) => unknown> = {}
-  for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+  for (const method of [
+    'get',
+    'post',
+    'put',
+    'patch',
+    'delete',
+    'head',
+    'options',
+    'connect',
+    'trace',
+  ] as const) {
     const entry = methodsDefinition[method]
     if (!entry) continue
-    endpoints[method] = defineEndpoint(toEndpointDefinition(entry, definition.params))
+    endpoints[method] = defineEndpoint(toEndpointDefinition(entry, definition.params), options)
     handlers[method] = entry.handler
   }
   return Object.assign(

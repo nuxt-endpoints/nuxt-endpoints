@@ -11,6 +11,7 @@ export function generateEndpointQueryTypes(
 
   return `
 import type { EndpointInfiniteQueryOptionsClient, EndpointMutationOptionsClient, EndpointQueryOptionsClient } from '${toImportPath(resolve('./runtime/tanstack-query'))}'
+import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'
 
 type EndpointRouteEntry =
 ${endpointUnion}

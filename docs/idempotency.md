@@ -427,13 +427,12 @@ Layering is deliberate:
   preserved — the explicitness moves to exactly one reviewed place, and
   route-specific permission checks stay available as endpoint overrides.
 
-The "metadata implies a matching runtime policy" guarantee is preserved but
-relocated. The `__idempotency_runtime_marker__` property records which runtime options
-the endpoint provided. Build-time discovery fails when an endpoint has gaps and
-no policy file exists (the policy file's contents are not inspected at build
-time because it is never evaluated there). Nitro startup verifies the merged
-configuration and fails when `storage`, `scope`, or `authorization` is still
-missing, or when the policy file does not default-export a valid policy.
+The "metadata implies a matching runtime policy" guarantee is enforced at
+Nitro startup. The route-contract registry contains portable metadata, not
+runtime callbacks, so the server plugin resolves the endpoint override and
+central policy together and fails before serving when `storage`, `scope`, or
+`authorization` is still missing, or when the policy file does not
+default-export a valid policy.
 Supplying idempotency metadata directly to `defineEndpoint()` remains
 rejected for the same reasons as before.
 

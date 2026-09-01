@@ -18,7 +18,11 @@ import type { RuntimeEvent } from './handler'
  * docs/upstream-delta.md — which is why query validation has not moved to it.
  */
 export function getRuntimeQuery(event: RuntimeEvent): unknown {
-  return getQuery(event)
+  // H3 v2 may return its parsed-query record with an internal prototype.
+  // Contracts and idempotency treat query data as JSON-shaped application
+  // input, so remove that transport-specific identity while preserving array
+  // values for repeated parameters.
+  return { ...(getQuery(event) as Record<string, string | string[]>) }
 }
 
 export function getRuntimeRequestHeaders(

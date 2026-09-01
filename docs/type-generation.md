@@ -2,13 +2,12 @@
 
 Status: maintainer architecture note.
 
-Last verified: 2026-08-14
+Last verified: 2026-09-01
 
 This document is the source of truth for how Nuxt Endpoints discovers route
-contracts, generates client types, stays aligned with Nitro 2 `InternalApi`,
-and plans to integrate with Nuxt 5 typed fetch.
+contracts, generates client types, and stays aligned with Nitro 3 and Nuxt 5.
 
-## Current Nuxt 4 and Nitro 2 implementation
+## Current prototype implementation
 
 Nuxt Endpoints does not use `InternalApi` as the source of its complete client
 contract. `InternalApi` contains route methods and serialized success returns,
@@ -20,23 +19,17 @@ The current build flow is:
 
 1. [`collectNitroRouteHandlers`](../src/nitro-route-handlers.ts) reads Nitro's
    discovered and configured route handlers.
-2. The module statically inspects each route source to decide what to evaluate
-   with Jiti: nothing for routes without endpoint calls, only the imported
-   contract module when `defineEndpointHandler` receives a statically imported
-   identifier, and the route module itself for co-located contracts. Metadata
-   is read from the evaluated endpoint definition or handler. Separated
-   contracts conventionally live in a sibling `*.endpoint-contract.*` file;
-   the module adds that pattern to Nitro's `ignore` option so those files are
-   never scanned as routes, which also excludes matching filenames from
-   Nitro's public-asset copying.
-3. The generated `EndpointRouteEntry` imports the handler's
-   `__endpoint_contract__` and `__endpoint_handler_return__` type markers.
-4. Nitro independently generates `InternalApi` from the same route handler's
-   public return type.
+2. Nitro's compiler extracts the contract expression and only its required
+   bindings. Handler-only code is not imported during the build.
+3. NE reads the supported `nitro.getRouteContracts()` provider; it no longer
+   scans or Jiti-evaluates route files.
+4. Nitro generates `InternalRouteSchema`; NE contributes opaque `contract` and
+   `handlerReturn` fields through Nitro's type-generation input.
+5. The endpoint client and Query adapter read those fields through
+   `TypedFetchMetadataField`.
 
-The contract markers remain the source for the richer endpoint surface.
-Nitro's generated type remains an independent compatibility projection that is
-checked in integration tests.
+The runtime handler keeps `~routeDef` for TypeScript inference, but build-time
+metadata comes from Nitro's provider, not private NE carrier fields.
 
 ## Server values and client wire values
 
@@ -93,28 +86,11 @@ They are exposed by `.result()` and `.raw()` and are not merged into
 
 ## Discovery failure policy
 
-Evaluation of the contract-defining module is required for endpoint metadata.
-If a source file appears to call `defineEndpoint` but evaluation fails, or its
-evaluated exports do not expose endpoint metadata, the build fails with the
-route path and an actionable explanation. Routes that import their contract
-fail the same way when the contract import cannot be resolved, the contract
-module cannot be evaluated, or the imported value does not expose endpoint
-metadata — discovery never falls back to evaluating the route module in that
-case, because silently running the route's top-level code is exactly what the
-separation exists to avoid.
-
-Nuxt Endpoints does not reconstruct operation names, callbacks, schemas, or
-metadata from source text. The only static inference is syntactic: whether
-`defineEndpoint` is called, and which static import binds the identifier
-passed to `defineEndpointHandler`. Continuing from partial source inference of
-contract contents could make the generated client, runtime handler manifest,
-and OpenAPI document disagree. Ordinary Nitro routes that do not define an
-endpoint are skipped without being imported.
-
-Keep contract-defining top-level code (the route module for co-located
-contracts, the contract module for separated ones) lightweight, avoid opening
-connections or performing application work during import, and ensure imports
-resolve during Nuxt type generation.
+Nitro treats the direct `defineRouteHandler({...})` call as a macro. Unsupported
+or mutable bindings fail with a source diagnostic; extraction never silently
+drops part of a contract. Ordinary routes and unrelated helpers with the same
+local name are ignored. The extracted module may evaluate schema imports, but
+it does not retain handler-only callbacks such as `validate.onError`.
 
 ## Nuxt 5 and `fetchdts`
 
@@ -122,29 +98,23 @@ Nuxt's typed-fetch work is tracked in
 [`nuxt/nuxt#35769`](https://github.com/nuxt/nuxt/issues/35769). The reusable
 Nitro typed-fetch work is tracked in
 [`nitrojs/nitro#2758`](https://github.com/nitrojs/nitro/issues/2758). Until an
-implementation and public extension surface land, this section is a migration
-direction rather than a compatibility claim.
+upstream implementation lands, released package support remains a migration
+direction; this branch verifies the proposed integration with local prototypes.
 
 [`fetchdts`](https://github.com/unjs/fetchdts) supplies type utilities for a
 schema containing paths, methods, query, body, headers, response, and response
 headers. It does not discover Nuxt routes or provide runtime validation by
 itself.
 
-The preferred Nuxt 5 integration is:
+The implemented prototype integration is:
 
-1. Keep `defineEndpoint` and its Standard Schema contracts stable.
-2. Adapt endpoint contract metadata into Nuxt's generated fetch schema through
-   a public module hook.
-3. Let Nuxt `$fetch`, `useFetch`, and Nuxt Endpoints consume the same successful
-   fetch response projection.
+1. Author the Standard Schema contract in H3's route shape.
+2. Read it through Nitro's build-time registry provider.
+3. Add opaque NE fields to Nitro's generated fetch schema.
 4. Keep status-specific results, runtime validation, OpenAPI, idempotency,
    Effect, and TanStack Query at the Nuxt Endpoints layer.
-5. Replace the Nitro 2 wire-type and route-discovery adapters only after the
-   Nuxt 5 implementation is available in the compatibility matrix.
-
-If Nuxt 5 does not expose a module extension hook, Nuxt Endpoints can retain
-its generated contract schema and use `fetchdts` utilities internally. The
-cross-generated equality tests remain required in that mode.
+5. Keep ordinary `$fetch` success-body behavior and expose status-aware results
+   through the separate `.result()` API.
 
 ## Nuxt 5 acceptance conditions
 

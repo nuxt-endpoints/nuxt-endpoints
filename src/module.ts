@@ -28,10 +28,7 @@ import {
 import type { EndpointRouteHandler } from './codegen'
 import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
-import { idempotencyMetadataWithoutRuntimeMessage } from './runtime/endpoint'
-import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import { isMediaResponseContract } from './runtime/response'
-import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
 import { mutationHttpMethodList, queryHttpMethodList } from './runtime/tanstack-query'
 import { inspectValidatorInputObject } from './runtime/validator'
@@ -107,21 +104,11 @@ type EndpointCarrierDefinition = Pick<
   'operation' | 'idempotency' | 'headers' | 'responses'
 >
 
-// `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
-// (rejected by `parseIdempotencyRuntimeMarker` below) may omit it entirely.
-type EndpointExport = Partial<
-  Pick<DefinedEndpoint<EndpointDefinition>, '__idempotency_runtime_marker__'>
-> & {
-  definition?: EndpointCarrierDefinition
-}
-
 // Detection result for one declared method (single endpoint, or one member
 // of a defineEndpointMethods() group).
 type EndpointMethodDetection = {
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
-  /** Runtime options (storage/scope/authorization) the endpoint itself did not provide. */
-  idempotencyRuntimeGaps?: readonly string[]
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
 }
@@ -154,7 +141,10 @@ type EndpointsNuxtHook = ((
 ) => void) &
   ((
     name: 'nitro:config',
-    listener: (config: { ignore?: string[]; experimental?: { routeContracts?: boolean } }) => void,
+    listener: (config: {
+      ignore?: string[]
+      experimental?: { routeContracts?: boolean; routeContractSources?: string[] }
+    }) => void,
   ) => void)
 
 // Sibling contract files live next to their route inside server/api, so Nitro
@@ -268,6 +258,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       nitroConfig.experimental = {
         ...nitroConfig.experimental,
         routeContracts: true,
+        routeContractSources: [
+          ...(nitroConfig.experimental?.routeContractSources ?? []),
+          resolve('./runtime'),
+        ],
       }
     })
     hook('nitro:init', async (nitro) => {
@@ -288,7 +282,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
           indexRouteContracts(await nitro.getRouteContracts()),
-          runtimePath !== undefined,
           resolvedOptions.client.query,
           (message) => logger.warn(message),
         )
@@ -392,7 +385,6 @@ export function contributeEndpointRouteTypes(
 export async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],
   routeContracts: ReadonlyMap<string, EndpointDetection>,
-  policyFileExists: boolean,
   queryClientEnabled: boolean,
   warn: (message: string) => void,
 ): Promise<EndpointRouteHandler[]> {
@@ -420,12 +412,7 @@ export async function composeHandlers(
       )
     }
 
-    const { operation, idempotency, idempotencyRuntimeGaps, mediaResponse } = detection
-    if (idempotencyRuntimeGaps?.length && !policyFileExists) {
-      throw new Error(
-        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no endpoint runtime file was found. Add them to .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
-      )
-    }
+    const { operation, idempotency, mediaResponse } = detection
     const existingHandlerPath = operation ? operations.get(operation) : undefined
     if (operation && existingHandlerPath) {
       throw new Error(
@@ -570,39 +557,6 @@ async function writeGenerated(filePath: string, content: string): Promise<void> 
   await fsp.writeFile(filePath, content)
 }
 
-// Exported for focused unit testing of the build-time idempotency gap
-// computation without needing a full Nitro route-discovery/jiti pipeline.
-export function getEndpointFromCarrier(
-  carrier: EndpointExport | undefined,
-): EndpointMethodDetection | null {
-  const definition = carrier?.definition
-
-  if (!definition) {
-    return null
-  }
-
-  const operation = typeof definition.operation === 'string' ? definition.operation : undefined
-  const mediaResponse = hasMediaResponse(definition)
-  const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
-  let idempotencyRuntimeGaps: readonly string[] | undefined
-  if (idempotency) {
-    const marker = parseIdempotencyRuntimeMarker(carrier.__idempotency_runtime_marker__)
-    if (!marker) {
-      throw new Error(idempotencyMetadataWithoutRuntimeMessage('on this endpoint'))
-    }
-    idempotencyRuntimeGaps = idempotencyRuntimeOptionKeys.filter((key) => !marker[key])
-  }
-  if (idempotency && definition.headers) {
-    assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
-  }
-  return {
-    ...(operation ? { operation } : {}),
-    ...(mediaResponse ? { mediaResponse: true as const } : {}),
-    ...(idempotency ? { idempotency } : {}),
-    ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
-  }
-}
-
 // Nitro can serve an OpenAPI document of its own. It describes the same
 // routes, but it cannot describe their contracts: `defineRouteMeta()` is a
 // build-time AST macro whose argument is read as JSON literals only, so a
@@ -666,28 +620,6 @@ function comparableRoutePath(path: string): string {
 // value here and does not have to guess at it.
 function hasMediaResponse(definition: EndpointCarrierDefinition): boolean {
   return Object.values(definition.responses ?? {}).some(isMediaResponseContract)
-}
-
-// `false` marks an endpoint with hand-written (unsupported) idempotency
-// metadata; anything else that doesn't match the marker shape is treated the
-// same way so hand-written metadata is always rejected rather than silently
-// skipping the runtime-option build check.
-function parseIdempotencyRuntimeMarker(
-  value: unknown,
-): EndpointIdempotencyRuntimeMarker | false | undefined {
-  if (value === false) {
-    return false
-  }
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    idempotencyRuntimeOptionKeys.every(
-      (key) => key in value && typeof (value as Record<string, unknown>)[key] === 'boolean',
-    )
-  ) {
-    return value as EndpointIdempotencyRuntimeMarker
-  }
-  return undefined
 }
 
 function assertNoIdempotencyHeaderSchemaCollision(headers: unknown, headerName: string): void {

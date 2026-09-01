@@ -25,7 +25,17 @@ import type { EndpointRuntime } from './endpoint-runtime'
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
 
-const declarableEndpointMethods = ['get', 'post', 'put', 'patch', 'delete'] as const
+const declarableEndpointMethods = [
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'head',
+  'options',
+  'connect',
+  'trace',
+] as const
 
 export type DeclarableEndpointMethod = (typeof declarableEndpointMethods)[number]
 
@@ -92,9 +102,9 @@ export type EndpointMethodsEventHandler<
 
 /**
  * Declares several method contracts for one route file. Each member must be
- * a plain `DefinedEndpoint` produced by `defineEndpoint()` — `head` and
- * `options` are always derived automatically (HEAD from a declared GET,
- * OPTIONS from the full declared set) and cannot be declared here.
+ * a plain `DefinedEndpoint` produced by `defineEndpoint()`. When omitted,
+ * HEAD is derived from GET and OPTIONS from the declared method set; either
+ * method can also be declared explicitly.
  */
 export function defineEndpointMethods<const METHODS extends EndpointMethodsMap>(
   methods: METHODS,
@@ -216,16 +226,11 @@ function validateEndpointMethodsDefinition(methods: Record<string, unknown>): vo
   const keys = Object.keys(methods)
   if (keys.length === 0) {
     throw new TypeError(
-      '[nuxt-endpoints] defineEndpointMethods requires at least one method (get/post/put/patch/delete).',
+      `[nuxt-endpoints] defineEndpointMethods requires at least one method (${declarableEndpointMethods.join('/')}).`,
     )
   }
 
   for (const key of keys) {
-    if (key === 'head' || key === 'options') {
-      throw new TypeError(
-        `[nuxt-endpoints] defineEndpointMethods cannot declare "${key}": HEAD and OPTIONS are derived automatically from the declared methods and must never be declared directly.`,
-      )
-    }
     if (!isDeclarableEndpointMethod(key)) {
       throw new TypeError(
         `[nuxt-endpoints] defineEndpointMethods received an unsupported method "${key}". Supported methods: ${declarableEndpointMethods.join(', ')}.`,

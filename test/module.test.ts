@@ -10,7 +10,6 @@ import {
   composeHandlers,
   contributeEndpointRouteTypes,
   findUnsupportedRouteTemplateSyntax,
-  getEndpointFromCarrier,
   indexRouteContracts,
   resolveConventionPath,
   resolveExplicitConventionPath,
@@ -33,9 +32,9 @@ describe('Nitro route contract provider', () => {
       },
     ])
 
-    await expect(
-      composeHandlers([handler], contracts, false, false, () => {}),
-    ).resolves.toMatchObject([{ route: '/api/users', method: 'get', operation: 'listUsers' }])
+    await expect(composeHandlers([handler], contracts, false, () => {})).resolves.toMatchObject([
+      { route: '/api/users', method: 'get', operation: 'listUsers' },
+    ])
   })
 
   it('projects provider handlers into InternalApi and opaque fetchdts metadata', () => {
@@ -67,64 +66,6 @@ describe('Nitro route contract provider', () => {
     expect(types.routeMetadata['/api/multi']?.get?.handlerReturn?.[0]).toContain(
       'EndpointHandlerReturnFromRoute',
     )
-  })
-})
-
-describe('build-time idempotency runtime gap detection', () => {
-  it('returns null for carriers without endpoint metadata', () => {
-    expect(getEndpointFromCarrier(undefined)).toBeNull()
-    expect(getEndpointFromCarrier({ definition: undefined })).toBeNull()
-  })
-
-  it('reports no gaps when the endpoint supplies every runtime option itself', () => {
-    const detection = getEndpointFromCarrier({
-      __idempotency_runtime_marker__: { storage: true, scope: true, authorization: true },
-      definition: {
-        idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
-      },
-    })
-
-    expect(detection).toEqual({
-      idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
-    })
-  })
-
-  it('lists the runtime options the endpoint did not supply itself', () => {
-    const detection = getEndpointFromCarrier({
-      __idempotency_runtime_marker__: { storage: false, scope: true, authorization: false },
-      definition: {
-        idempotency: { enabled: true, headerName: 'Idempotency-Key', required: false },
-      },
-    })
-
-    expect(detection?.idempotencyRuntimeGaps).toEqual(['storage', 'authorization'])
-  })
-
-  it('rejects hand-written idempotency metadata without a matching runtime marker', () => {
-    expect(() =>
-      getEndpointFromCarrier({
-        __idempotency_runtime_marker__: false,
-        definition: {
-          idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
-        },
-      }),
-    ).toThrow(/no matching server runtime policy/i)
-
-    expect(() =>
-      getEndpointFromCarrier({
-        definition: {
-          idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
-        },
-      }),
-    ).toThrow(/no matching server runtime policy/i)
-  })
-
-  it('ignores non-idempotent endpoints entirely', () => {
-    const detection = getEndpointFromCarrier({
-      definition: { operation: 'getUser' },
-    })
-
-    expect(detection).toEqual({ operation: 'getUser' })
   })
 })
 
@@ -210,39 +151,51 @@ describe('Nitro built-in OpenAPI overlap', () => {
 
 describe('media response detection', () => {
   it('reports mediaResponse: true for a carrier declaring a media response via responses', () => {
-    const detection = getEndpointFromCarrier({
-      definition: {
-        operation: 'exportUsers',
-        responses: {
-          200: { media: 'text/csv' },
-          404: { message: 'not used at build time' } as never,
+    const detection = indexRouteContracts([
+      {
+        handler: '/server/api/export.get.ts',
+        method: 'get',
+        route: '/api/export',
+        contract: {
+          operation: 'exportUsers',
+          responses: {
+            200: { media: 'text/csv' },
+            404: { message: 'not used at build time' } as never,
+          },
         },
       },
-    })
+    ]).get('/server/api/export.get.ts\0get')
 
     expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
   })
 
   it('reports mediaResponse: true for a carrier declaring a media response via a bare response', () => {
-    const detection = getEndpointFromCarrier({
-      definition: {
-        operation: 'exportUsers',
-        responses: { 200: { media: 'text/csv' } },
+    const detection = indexRouteContracts([
+      {
+        handler: '/server/api/export.get.ts',
+        method: 'get',
+        route: '/api/export',
+        contract: { operation: 'exportUsers', responses: { 200: { media: 'text/csv' } } },
       },
-    })
+    ]).get('/server/api/export.get.ts\0get')
 
     expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
   })
 
   it('reports no stream key when the carrier declares only validated responses', () => {
-    const detection = getEndpointFromCarrier({
-      definition: {
-        operation: 'getUser',
-        responses: {
-          200: { message: 'validated' } as never,
+    const detection = indexRouteContracts([
+      {
+        handler: '/server/api/users.get.ts',
+        method: 'get',
+        route: '/api/users',
+        contract: {
+          operation: 'getUser',
+          responses: {
+            200: { message: 'validated' } as never,
+          },
         },
       },
-    })
+    ]).get('/server/api/users.get.ts\0get')
 
     expect(detection).toEqual({ operation: 'getUser' })
   })

@@ -6,6 +6,7 @@ import {
   defineEndpoint,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
+  defineRouteHandler,
 } from '../src/runtime'
 import { defineRuntimeHandler } from '../src/runtime/platform'
 
@@ -184,9 +185,62 @@ describe('defineEndpointMethods dispatch over real requests', () => {
     expect(response.headers.get('allow')).toBe('GET, HEAD, OPTIONS, PUT')
     await expect(response.text()).resolves.toBe('')
   })
+
+  it('prefers explicitly declared HEAD and OPTIONS handlers over derived behavior', async () => {
+    const endpoints = defineEndpointMethods({
+      get: defineEndpoint({ responses: { 200: z.object({ source: z.literal('get') }) } }),
+      head: defineEndpoint({ responses: { 202: z.undefined() } }),
+      options: defineEndpoint({ responses: { 203: z.undefined() } }),
+    })
+    const handler = defineEndpointMethodHandlers(endpoints, {
+      get: () => ({ source: 'get' as const }),
+      head: ({ respond }) => respond(202, undefined),
+      options: ({ respond }) => respond(203, undefined),
+    })
+
+    const headResponse = await requestThroughH3(
+      handler as never,
+      '/explicit',
+      'http://test.local/explicit',
+      { method: 'HEAD' },
+    )
+    const optionsResponse = await requestThroughH3(
+      handler as never,
+      '/explicit',
+      'http://test.local/explicit',
+      { method: 'OPTIONS' },
+    )
+
+    expect(headResponse.status).toBe(202)
+    expect(optionsResponse.status).toBe(203)
+  })
 })
 
 describe('defineEndpointMethods route identity and idempotency policy forwarding', () => {
+  it('applies defineRouteHandler options to every grouped method', async () => {
+    const wrapped: string[] = []
+    const handler = defineRouteHandler(
+      {
+        get: { handler: () => ({ method: 'get' }) },
+        put: { handler: () => ({ method: 'put' }) },
+      },
+      {
+        wrapHandler: async (_context, next) => {
+          const response = await next()
+          wrapped.push((response.body as { method: string }).method)
+          return response
+        },
+      },
+    )
+
+    await requestThroughH3(handler as never, '/api/items', 'http://test.local/api/items')
+    await requestThroughH3(handler as never, '/api/items', 'http://test.local/api/items', {
+      method: 'PUT',
+    })
+
+    expect(wrapped).toEqual(['get', 'put'])
+  })
+
   it('throws when a route identity is attached for a method the group does not declare', () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),
@@ -270,16 +324,25 @@ describe('defineEndpointMethods definition-time validation', () => {
     expect(() => defineEndpointMethods({})).toThrow(TypeError)
   })
 
-  it('rejects head/options as declared methods', () => {
+  it('accepts the full method set recognized by the Nitro route-contract macro', () => {
     const endpoint = defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } })
-    expect(() => defineEndpointMethods({ head: endpoint } as never)).toThrow(TypeError)
-    expect(() => defineEndpointMethods({ options: endpoint } as never)).toThrow(TypeError)
+    expect(() =>
+      defineEndpointMethods({
+        get: endpoint,
+        post: endpoint,
+        put: endpoint,
+        patch: endpoint,
+        delete: endpoint,
+        head: endpoint,
+        options: endpoint,
+        connect: endpoint,
+        trace: endpoint,
+      }),
+    ).not.toThrow()
   })
 
-  it('rejects connect/trace and other unsupported method keys', () => {
+  it('rejects unsupported method keys', () => {
     const endpoint = defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } })
-    expect(() => defineEndpointMethods({ connect: endpoint } as never)).toThrow(TypeError)
-    expect(() => defineEndpointMethods({ trace: endpoint } as never)).toThrow(TypeError)
     expect(() => defineEndpointMethods({ fetch: endpoint } as never)).toThrow(TypeError)
   })
 

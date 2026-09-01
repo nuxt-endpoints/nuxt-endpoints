@@ -26,11 +26,16 @@ async function requestThroughH3(
 
 describe('h3 adapter request parsing', () => {
   it('parses repeated query parameters into arrays', async () => {
-    const handler = defineRuntimeHandler((event) => getRuntimeQuery(event))
+    let query: unknown
+    const handler = defineRuntimeHandler((event) => {
+      query = getRuntimeQuery(event)
+      return query
+    })
 
     const response = await requestThroughH3(handler, 'http://test.local/?tag=a&tag=b&q=nuxt')
 
     await expect(response.json()).resolves.toEqual({ tag: ['a', 'b'], q: 'nuxt' })
+    expect(Object.getPrototypeOf(query as object)).toBe(Object.prototype)
   })
 
   it('parses a single query parameter as a string', async () => {

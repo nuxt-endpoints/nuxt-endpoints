@@ -107,4 +107,29 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
       put: { created: string }
     }>()
   })
+
+  it('infers explicitly declared HEAD, OPTIONS, CONNECT, and TRACE handlers', () => {
+    const endpoints = defineEndpointMethods({
+      head: defineEndpoint({ responses: { 202: schema<undefined>() } }),
+      options: defineEndpoint({ responses: { 204: schema<undefined>() } }),
+      connect: defineEndpoint({ responses: { 200: schema<{ tunnel: true }>() } }),
+      trace: defineEndpoint({ responses: { 200: schema<{ trace: string }>() } }),
+    })
+
+    const handler = defineEndpointMethodHandlers(endpoints, {
+      head: ({ respond }) => respond(202, undefined),
+      options: ({ respond }) => respond(204, undefined),
+      connect: () => ({ tunnel: true as const }),
+      trace: () => ({ trace: 'ok' }),
+    })
+
+    expectTypeOf(handler.__endpoint_method_handler_returns__.head.status).toEqualTypeOf<202>()
+    expectTypeOf(handler.__endpoint_method_handler_returns__.options.status).toEqualTypeOf<204>()
+    expectTypeOf(handler.__endpoint_method_handler_returns__.connect).toEqualTypeOf<{
+      tunnel: true
+    }>()
+    expectTypeOf(handler.__endpoint_method_handler_returns__.trace).toEqualTypeOf<{
+      trace: string
+    }>()
+  })
 })

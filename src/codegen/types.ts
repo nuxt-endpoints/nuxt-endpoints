@@ -19,13 +19,9 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.
   mediaResponse?: true
-  // Set when this entry was expanded from a `defineEndpointMethods()` group
-  // (a single method-suffix-free route file declaring several methods): its
-  // `handler` file exports one dispatcher whose per-method contract and
-  // handler-return types live under `__endpoint_contracts__`/
-  // `__endpoint_method_handler_returns__` rather than the single-endpoint
-  // `__endpoint_contract__`/`__endpoint_handler_return__` markers, so codegen
-  // needs to know which accessor shape to generate.
+  // Set when this entry was expanded from one method-suffix-free route file.
+  // Nitro initially contributes a `default` return for that dispatcher;
+  // module.ts removes it and contributes one schema entry per method.
   methodGroup?: true
 }
 

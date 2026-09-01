@@ -44,6 +44,14 @@ describe('defineRouteHandler multi-method inference', () => {
           return respond(200, { id: params.id, name: body.name })
         },
       },
+      head: {
+        validate: { response: { 202: schema<undefined>() } },
+        handler: ({ respond }) => respond(202, undefined),
+      },
+      trace: {
+        validate: { response: { 200: schema<{ trace: string }>() } },
+        handler: () => ({ trace: 'ok' }),
+      },
     })
 
     expectTypeOf(handler.__endpoint_method_handler_returns__.get.id).toEqualTypeOf<number>()
@@ -52,6 +60,10 @@ describe('defineRouteHandler multi-method inference', () => {
     expectTypeOf(handler.__endpoint_method_handler_returns__.put.body).toEqualTypeOf<{
       id: number
       name: string
+    }>()
+    expectTypeOf(handler.__endpoint_method_handler_returns__.head.status).toEqualTypeOf<202>()
+    expectTypeOf(handler.__endpoint_method_handler_returns__.trace).toEqualTypeOf<{
+      trace: string
     }>()
   })
 

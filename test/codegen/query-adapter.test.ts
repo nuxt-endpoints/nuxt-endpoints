@@ -23,6 +23,9 @@ describe('generateEndpointQueryTypes', () => {
     expect(content).toContain(
       "import type { EndpointInfiniteQueryOptionsClient, EndpointMutationOptionsClient, EndpointQueryOptionsClient } from './runtime/tanstack-query'",
     )
+    expect(content).toContain(
+      "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",
+    )
   })
 })
 

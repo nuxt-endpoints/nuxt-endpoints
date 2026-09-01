@@ -485,6 +485,9 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(queryClient).toContain('export const endpointMutationOptions')
       expect(queryClient).toContain('captureFetcher')
       expect(queryTypes).toContain('$EndpointQueryOptions')
+      expect(queryTypes).toContain(
+        "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",
+      )
       expect(queryTypes).toContain("operation: 'getUser'")
       expect(queryTypes).toContain("operation: 'createUser'")
       expect(queryTypes).toContain("operation: 'getDynamic'")
@@ -654,11 +657,7 @@ type Assert<VALUE extends true> = VALUE
 type Agrees<LEFT, RIGHT> =
   Equal<LEFT, ReadableStream<Uint8Array>> extends true
     ? true
-    : [LEFT] extends [RIGHT]
-      ? [RIGHT] extends [LEFT]
-        ? true
-        : false
-      : false
+    : Equal<LEFT, RIGHT>
 
 ${assertions}
 `
