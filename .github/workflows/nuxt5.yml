@@ -1,0 +1,71 @@
+name: Nuxt 5 prototype
+
+on:
+  push:
+    branches:
+      - nuxt5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuxt5-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Fork integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Nuxt Endpoints
+        uses: actions/checkout@v7
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 22.19.0
+          cache: false
+          run-install: false
+
+      - name: Checkout pinned route-contract prototypes
+        run: |
+          mkdir -p ../upstream
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/fetchdts.git ../upstream/fetchdts
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/h3.git ../upstream/h3
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/nitro.git ../upstream/nitro
+          git -C ../upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          git -C ../upstream/h3 fetch --depth 1 origin 3e2212a962b53acf0608e3d8495cd087ff09d4c1
+          git -C ../upstream/nitro fetch --depth 1 origin 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+          git -C ../upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          git -C ../upstream/h3 checkout --detach 3e2212a962b53acf0608e3d8495cd087ff09d4c1
+          git -C ../upstream/nitro checkout --detach 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+          test "$(git -C ../upstream/fetchdts rev-parse HEAD)" = de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          test "$(git -C ../upstream/h3 rev-parse HEAD)" = 3e2212a962b53acf0608e3d8495cd087ff09d4c1
+          test "$(git -C ../upstream/nitro rev-parse HEAD)" = 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+
+      - name: Build fetchdts prototype
+        working-directory: ../upstream/fetchdts
+        run: vp install --frozen-lockfile && vp run build
+
+      - name: Build H3 prototype
+        working-directory: ../upstream/h3
+        run: vp install --frozen-lockfile && vp run build
+
+      - name: Build Nitro prototype
+        working-directory: ../upstream/nitro
+        run: vp install --frozen-lockfile && vp run build
+
+      - name: Install Nuxt Endpoints
+        run: vp install --frozen-lockfile
+
+      - name: Prepare module development files
+        run: vp run dev:prepare
+
+      - name: Check Nuxt 5 integration
+        run: vp run check
+
+      - name: Build Nuxt Endpoints
+        run: vp run build

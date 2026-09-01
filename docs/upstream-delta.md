@@ -1,7 +1,15 @@
 # Upstream delta
 
-This document belongs to the `upstream-integration` branch. `main` remains the
-stable Nuxt 4 / Nitro 2 / h3 v1 implementation and is not tracked here.
+This document belongs to the public [`nuxt5`](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/nuxt5)
+branch. `main` remains the stable Nuxt 4 / Nitro 2 / H3 v1 implementation and
+is not tracked here.
+
+The matching route-contract prototypes are published from the
+`nuxt-endpoints` organization: [H3](https://github.com/nuxt-endpoints/h3/tree/prototype/route-contracts),
+[Nitro](https://github.com/nuxt-endpoints/nitro/tree/prototype/route-contracts),
+and [fetchdts](https://github.com/nuxt-endpoints/fetchdts/tree/prototype/route-contracts).
+This repository links those three sibling worktrees; the Nuxt 5 workflow checks
+out and builds their pinned commits before checking Nuxt Endpoints.
 
 The branch is an integration experiment, not a port. The question it answers is
 not "does Nuxt Endpoints run on Nuxt 5" but "how much of Nuxt Endpoints does the
@@ -92,7 +100,7 @@ official classification.
 |   9 | Status-aware endpoint request API                                  | Nuxt         |    C     | A in NE: awaited `$endpoint(...)`                                    |
 |  10 | Raw status/body/header transport                                   | ofetch       |    A     | unchanged; NE uses `.raw()`                                          |
 |  11 | OpenAPI projection from the full contract                          | NE consumer  |    C     | A                                                                    |
-|  12 | Vue Query projection from operations                               | NE consumer  |    C     | A                                                                    |
+|  12 | Vue Query projection from endpoint request objects                 | NE consumer  |    C     | A                                                                    |
 |  13 | Build-safe idempotency metadata separated from runtime policy      | NE extension |    C     | A                                                                    |
 |  14 | Full request/status-response contract validation runtime           | H3           |    B     | A: Standard Schema runtime in unified handler                        |
 
