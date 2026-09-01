@@ -147,7 +147,7 @@ function resolveEndpointContract(
   const member = handler.__endpoint_contracts__[definition.method]
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method in its defineEndpointMethods() group. Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
+      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method entry in its defineRouteHandler(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
     )
   }
   return member

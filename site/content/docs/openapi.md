@@ -55,7 +55,7 @@ Both are optional. With neither, the document is exactly what the route contract
 
 ## Generated from route contracts
 
-Request schemas, response schemas, summaries, route paths, and optional operation IDs are collected from discovered endpoint definitions. When `operation` is omitted, a stable operationId is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
+Request schemas, response schemas, summaries and route paths are collected from the route contracts Nitro reports. Each operationId is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
 
 A [media response](/docs/endpoints#non-json-responses) appears like any other status. Its content keys are the declared `media` — one entry per type when it declares several — and each schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload, or one chunk of it, in more detail. A validated status labelled with a `+json` profile is keyed by that profile instead of `application/json`.
 
@@ -80,6 +80,6 @@ Some responses the runtime produces itself, without the handler being involved, 
 
 Each is derived from the contract alone, so the document lists exactly what that endpoint's configuration makes reachable. Declaring one of those statuses yourself does not hide the generated shape — the two are merged as a `oneOf`, so the document keeps describing both.
 
-The schemas describe the default bodies. An endpoint or application that replaces them through [`onValidationError`](/docs/endpoints#hooks) is describing its own shapes, and should declare those statuses in the contract.
+The schemas describe the default bodies. An application that replaces them through [`onValidationError`](/docs/endpoints#hooks) is describing its own shapes, and should declare those statuses in the contract.
 
 Two body shapes appear here, and the rule behind them is: **follow the specification where one exists, otherwise match the platform.** The idempotency statuses use `application/problem+json` because the IETF `Idempotency-Key` draft specifies Problem Details for them. The validation, 415, and 406 bodies are ours to shape, so they use `{ statusCode, statusMessage, data }` — the same shape h3 serializes a `createError` into, which is what the rest of a Nuxt application's errors already look like. One error handler covers your endpoints and your plain routes alike.

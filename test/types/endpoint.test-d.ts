@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler, respond } from '../../src/runtime'
-import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../../src/runtime'
+import { defineEndpoint, defineEndpointHandler, respond } from '../internal-runtime'
+import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../internal-runtime'
 import type { H3Event } from 'h3'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
@@ -12,7 +12,7 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 
 describe('defineEndpoint handler types', () => {
   it('preserves idempotency metadata literals and validated callback context', () => {
-    const storage = {} as import('../../src/runtime').IdempotencyStorage
+    const storage = {} as import('../internal-runtime').IdempotencyStorage
     const base = defineEndpoint({
       body: schema<{ amount: string }, { amount: number }>(),
     })
@@ -53,7 +53,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('allows storage, scope, and authorization to be omitted individually', () => {
-    const storage = {} as import('../../src/runtime').IdempotencyStorage
+    const storage = {} as import('../internal-runtime').IdempotencyStorage
     const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
 
     // Every runtime option may come from the central policy instead, so any
@@ -73,7 +73,7 @@ describe('defineEndpoint handler types', () => {
     const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
 
     endpoint.idempotency({
-      storage: () => ({}) as import('../../src/runtime').IdempotencyStorage,
+      storage: () => ({}) as import('../internal-runtime').IdempotencyStorage,
       scope: () => 'public',
       // @ts-expect-error authorization must be 'middleware' or a callback.
       authorization: 'not-middleware',
@@ -90,7 +90,7 @@ describe('defineEndpoint handler types', () => {
       },
     })
 
-    const broadlyTyped: import('../../src/runtime').EndpointDefinition = {}
+    const broadlyTyped: import('../internal-runtime').EndpointDefinition = {}
     defineEndpoint(broadlyTyped)
   })
 

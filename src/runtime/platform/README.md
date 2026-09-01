@@ -13,7 +13,7 @@ question about the platform.
 
 ```mermaid
 flowchart TB
-    contract["contract layer<br/>defineEndpoint · client types · OpenAPI · idempotency"]
+    contract["contract layer<br/>defineRouteHandler · client types · OpenAPI · idempotency"]
     subgraph seam["src/runtime/platform"]
         direction LR
         request["request.ts<br/>read the request"]

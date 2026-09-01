@@ -3,16 +3,16 @@ title: Low-level HTTP
 description: Handle files, streams, redirects, proxies, raw Responses, and 204 routes.
 ---
 
-Nuxt Endpoints is strongest for JSON REST APIs. Use `responses` when the route returns typed JSON bodies.
+Nuxt Endpoints is strongest for JSON REST APIs. Use `validate.response` when the route returns typed JSON bodies.
 
-For lower-level HTTP behavior, omit `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
+For lower-level HTTP behavior, omit `validate.response`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
 
 Response type checking only applies when a route opts into a response contract. If a route needs to return a redirect, a proxy response, or another native `Response` that should not be modelled as a status at all, leave the response contract out and handle the client side as raw HTTP.
 
 Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and event streams all have a [first-class declaration](/docs/endpoints#non-json-responses) that keeps them in the contract without pretending their payload is validated.
 
 ```ts
-export default defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: (event) => {
     return new Response(`raw response for ${event.validated.params.id}`)
@@ -36,10 +36,12 @@ A download is a media response like any other, so it can stay in the contract:
 
 ```ts
 // server/api/files/[id].get.ts
-export default defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.string() }),
-  responses: {
-    200: { media: 'application/pdf', description: 'Invoice PDF' },
+  validate: {
+    response: {
+      200: { media: 'application/pdf', description: 'Invoice PDF' },
+    },
   },
   handler: async (event) => {
     const file = await loadFile(event.validated.params.id)
@@ -52,7 +54,8 @@ export default defineEndpoint({
 ```
 
 ```ts
-const result = await $endpoint('downloadFile', {
+const result = await $endpoint('/api/files/:id', {
+  method: 'get',
   params: { id: 'invoice-1' },
   responseType: 'blob',
 })
@@ -63,7 +66,7 @@ When the content type varies per file and cannot be declared, drop the response 
 
 ```ts
 // server/api/files/[id].get.ts
-export default defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: async (event) => {
     const file = await loadFile(event.validated.params.id)
@@ -125,7 +128,7 @@ const uploaded = await $fetch<{ id: string }>('/api/uploads', {
 })
 ```
 
-This route is outside the generated endpoint client until multipart request contracts become first-class.
+This route declares no contract, so it stays outside the generated endpoint client and the OpenAPI document.
 
 ## Streaming and SSE
 
@@ -136,9 +139,11 @@ body so callers receive the live stream.
 
 ```ts
 // server/api/events.get.ts
-export default defineEndpoint({
-  responses: {
-    200: { media: 'text/event-stream' },
+export default defineRouteHandler({
+  validate: {
+    response: {
+      200: { media: 'text/event-stream' },
+    },
   },
   handler: (event) => {
     const stream = new ReadableStream({
@@ -153,7 +158,7 @@ export default defineEndpoint({
 ```
 
 ```ts
-const result = await $endpoint('streamEvents')
+const result = await $endpoint('/api/events', { method: 'get' })
 const reader = result.body.getReader()
 ```
 
@@ -181,8 +186,10 @@ For API redirects, return a native redirect response. Browser fetch follows redi
 
 ```ts
 // server/api/auth/callback.get.ts
-export default defineEndpoint({
-  query: z.object({ next: z.string().optional() }),
+export default defineRouteHandler({
+  validate: {
+    query: z.object({ next: z.string().optional() }),
+  },
   handler: (event) => {
     return new Response(null, {
       status: 302,
@@ -213,7 +220,7 @@ Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `
 
 ```ts
 // server/api/proxy/[id].get.ts
-export default defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: async (event) => {
     return await fetch(`https://api.example.com/files/${event.validated.params.id}`)
@@ -236,7 +243,7 @@ Use raw `Response` returns when the route owns status, headers, cookies, or a bo
 
 ```ts
 // server/api/report.get.ts
-export default defineEndpoint({
+export default defineRouteHandler({
   handler: () => {
     return new Response('created', {
       status: 201,
@@ -256,13 +263,15 @@ const text = await response.text()
 
 ## 204 No Content
 
-For no-content JSON API routes, keep the response contract. Declare `204` and return it with `respond`.
+For no-content JSON API routes, keep the response contract. Declare `204` and return it with `event.respond`.
 
 ```ts
 // server/api/sessions/current.delete.ts
-export default defineEndpoint({
-  responses: {
-    204: z.undefined(),
+export default defineRouteHandler({
+  validate: {
+    response: {
+      204: z.undefined(),
+    },
   },
   handler: (event) => {
     clearSession()

@@ -7,7 +7,7 @@ In a few minutes you will have a Nuxt route that validates its input at runtime,
 
 ## Compatibility
 
-Nuxt Endpoints currently targets Nuxt 4.5+ with Nitro 2 and H3 1. Nuxt 5, Nitro 3, and H3 2 support is not claimed until those combinations are covered by the package test matrix. This is a support statement, not a claim that newer combinations are known to fail.
+Nuxt Endpoints targets Nuxt 5 with Nitro 3 and h3 v2. It currently resolves forks of h3, Nitro, and fetchdts that carry route-contract work not yet released upstream, so this is an integration branch rather than a support claim for published packages. The Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch.
 
 This section is the single source for the supported platform line; other pages link here instead of restating it.
 
@@ -39,16 +39,18 @@ npm install effect
 
 ## Your first endpoint
 
-Create an ordinary Nuxt server route and default-export a `defineEndpoint()` call with a `handler` property:
+Create an ordinary Nuxt server route and default-export a `defineRouteHandler()` call:
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineEndpoint({
+export default defineRouteHandler({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
+  validate: {
+    response: { 200: z.object({ id: z.number(), name: z.string() }) },
+  },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Tom' } // params.id is a number — validated and coerced
   },
@@ -90,10 +92,7 @@ export default defineNuxtConfig({
       title: 'Example API',
       version: '1.0.0',
     },
-    client: {
-      result: true,
-      raw: true,
-    },
+    client: { raw: true },
   },
 })
 ```
@@ -114,4 +113,4 @@ No generated factory or module option is required. See [Vue Query](/docs/tanstac
 - `#endpoints`: helper types for paths, methods, calls, status-aware typed results, and raw Web Responses.
 - `/_endpoints/schema`: the default OpenAPI 3.1 document route when OpenAPI generation is enabled.
 
-Adding the module changes nothing by itself: only routes that export an endpoint definition are affected. Existing routes keep working unchanged — see [Incremental Adoption](/docs/incremental-adoption).
+Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected. Existing routes keep working unchanged — see [Incremental Adoption](/docs/incremental-adoption).

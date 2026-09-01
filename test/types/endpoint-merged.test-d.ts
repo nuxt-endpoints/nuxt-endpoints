@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint } from '../../src/runtime'
-import type { EndpointClientOptions, StandardSchemaLike } from '../../src/runtime'
+import { defineEndpoint } from '../internal-runtime'
+import type { EndpointClientOptions, StandardSchemaLike } from '../internal-runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 

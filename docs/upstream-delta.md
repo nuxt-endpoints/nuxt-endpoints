@@ -42,7 +42,8 @@ export default defineRouteHandler({
       404: NotFound,
     },
   },
-  handler: ({ params, query }) => {
+  handler: (event) => {
+    const { params, query } = event.validated
     // ...
   },
 })

@@ -20,16 +20,19 @@ Effect Schema can be passed directly to endpoint definitions. Runtime parsing us
 ```ts
 import { Schema } from 'effect'
 
-defineEndpoint({
+defineRouteHandler({
   params: Schema.Struct({
     id: Schema.NumberFromString,
   }),
-  responses: {
-    200: Schema.Struct({
-      id: Schema.Number,
-      name: Schema.String,
-    }),
+  validate: {
+    response: {
+      200: Schema.Struct({
+        id: Schema.Number,
+        name: Schema.String,
+      }),
+    },
   },
+  handler: (event) => ({ id: event.validated.params.id, name: 'Tom' }),
 })
 ```
 
@@ -44,10 +47,13 @@ import * as v from 'valibot'
 
 const Id = v.pipe(v.string(), v.transform(Number), v.number())
 
-defineEndpoint({
-  body: v.object({ id: Id }), // OpenAPI request schema: string
-  responses: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
+defineRouteHandler({
+  validate: {
+    body: v.object({ id: Id }), // OpenAPI request schema: string
+    response: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
+  },
+  handler: (event) => ({ id: event.validated.body.id }),
 })
 ```
 
-Response validation uses the validator output on the server. Generated clients then apply the JSON wire mapping used by the supported Nitro line. A response output containing `Date`, for example, is validated as `Date` but exposed to clients as `string`. Request inputs, server outputs, and client wire values are distinct boundaries.
+Response validation uses the validator output on the server. Generated clients then apply Nitro's JSON wire mapping. A response output containing `Date`, for example, is validated as `Date` but exposed to clients as `string`. Request inputs, server outputs, and client wire values are distinct boundaries.

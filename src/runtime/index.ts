@@ -88,7 +88,6 @@ export type {
   MemoryIdempotencyStorageOptions,
 } from './idempotency'
 export { createMemoryIdempotencyStorage } from './idempotency'
-export { defineEndpoint, defineEndpointHandler } from './endpoint'
 export { defineRouteHandler } from './route-handler'
 export type {
   EndpointDefinitionFromRoute,
@@ -110,26 +109,11 @@ export type {
   EndpointValidationSource,
 } from './validation-error'
 export type {
-  DefinedEndpoint,
-  EndpointEventHandler,
-  EndpointHandlerSuccessBody,
   EndpointIdempotencyContext,
   EndpointIdempotencyOptions,
   EndpointIdempotencyRuntimeMarker,
-  EndpointRouteIdentity,
-  EndpointRuntimeOptions,
   IdempotencyProblem,
 } from './endpoint'
-export { defineEndpointMethods, defineEndpointMethodHandlers } from './endpoint-methods'
-export type {
-  DeclarableEndpointMethod,
-  EndpointMethodHandlersMap,
-  EndpointMethodMember,
-  EndpointMethodsDefinition,
-  EndpointMethodsEventHandler,
-  EndpointMethodsMap,
-  EndpointMethodsSuccessBody,
-} from './endpoint-methods'
 export { defineIdempotencyPolicy } from './idempotency-policy'
 export type { EndpointIdempotencyPolicy } from './idempotency-policy'
 export { createOpenApiDocument } from './openapi'

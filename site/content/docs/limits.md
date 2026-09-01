@@ -11,13 +11,13 @@ See [Compatibility](/docs/getting-started#compatibility) for the currently suppo
 
 ## Known constraints
 
-### Endpoint discovery evaluates contract-defining modules
+### Endpoint discovery reads a compiled contract, not the route module
 
-During Nuxt and Nitro type generation, the module that defines each endpoint contract is imported and its metadata is read. For a co-located contract that is the route file itself, so keep route top-level code lightweight. Routes that import their contract from a [separate contract file](/docs/endpoints#separate-contract-files) are not evaluated — only the contract module is. Routes that define no endpoint are never evaluated.
+Contracts come from Nitro's build-time contract macro and its `getRouteContracts()` provider. The macro keeps the contract expression and only the imports and immutable bindings that expression reaches, so handler-only code and its imports are never run during the build. What the contract expression itself references — schema modules, shared metadata — is evaluated, so keep those side-effect free.
 
 ### Endpoint discovery fails closed
 
-If route module evaluation fails, or a route calls `defineEndpoint` without exposing endpoint metadata through its evaluated exports, generation stops with an actionable error. Partial contracts are not reconstructed from source parsing because that could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes remain unaffected.
+The macro accepts only a direct default-exported `defineRouteHandler({...})` call with an object literal. Spreads, computed properties, and mutable bindings at that boundary fail with a source diagnostic instead of yielding a partial contract, because a partial contract could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes are ignored rather than rejected.
 
 ### Catch-all and optional-parameter routes cannot declare endpoints
 
@@ -29,7 +29,7 @@ Request bodies accept [media-type maps](/docs/endpoints#media-type-request-bodie
 
 Everything non-JSON goes through the single [media response](/docs/endpoints#non-json-responses) door. It carries its own media type, reaches OpenAPI, and can offer [several representations negotiated from `Accept`](/docs/endpoints#several-representations-of-one-status) — but nothing about its payload is validated, and its chunks are not typed. Use [Low-level HTTP](/docs/low-level-http) for redirects, proxies, and native Web Responses that should not be modelled as a status at all.
 
-Contracted JSON responses use the supported Nitro line's wire-type mapping. Native `Response`, files, and custom response parsers are outside the generated JSON body type.
+Contracted JSON responses use Nitro's wire-type mapping. Native `Response`, files, and custom response parsers are outside the generated JSON body type.
 
 ### Schema conversion depends on converter support
 
@@ -37,7 +37,7 @@ Unsupported Zod or Valibot constructs fail according to their converter librarie
 
 ## Planned work
 
-- Work with Nuxt and Nitro on stable build-time route metadata.
+- Land the route-contract work in h3, Nitro, and fetchdts upstream.
 - Add first-class endpoint metadata for OpenAPI-specific fields.
 - Add better component and reference controls for shared schemas.
-- Add Nuxt 5, Nitro 3, and H3 2 coverage after their integration APIs stabilize.
+- Claim released-package support once those integration APIs ship and the test matrix covers them.

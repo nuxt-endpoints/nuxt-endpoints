@@ -234,16 +234,31 @@ returns the existing adapter; trusted scope and authorization still run on
 every request.
 
 ```ts
+// server/endpoints/runtime.ts
 const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
 
-export const endpoint = defineEndpoint({
-  body: GrantPointsBody,
-  responses: { 201: GrantPointsResult },
-}).idempotency({
-  required: true,
-  storage: () => idempotencyStorage,
-  scope: ({ event }) => event.context.tenant.id,
-  authorization: ({ event }) => requirePermission(event, 'points:grant'),
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => idempotencyStorage,
+    scope: ({ event }) => event.context.tenant.id,
+    authorization: ({ event }) => requirePermission(event, 'points:grant'),
+  },
+})
+```
+
+```ts
+// server/api/points/grants.post.ts
+export default defineRouteHandler({
+  validate: {
+    body: GrantPointsBody,
+    response: { 201: GrantPointsResult },
+  },
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
+  },
+  handler: (event) => event.respond(201, grantPoints(event.validated.body)),
 })
 ```
 

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type {
   defineEndpoint as DefineEndpoint,
   defineEndpointHandler as DefineEndpointHandler,
-} from '../src/runtime'
+} from './internal-runtime'
 
 // '../src/runtime' is imported dynamically in `beforeAll` (rather than
 // statically at the top, as endpoint.test.ts also does) to keep this test in
@@ -15,7 +15,7 @@ let defineEndpoint: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
 beforeAll(async () => {
-  ;({ defineEndpoint, defineEndpointHandler } = await import('../src/runtime'))
+  ;({ defineEndpoint, defineEndpointHandler } = await import('./internal-runtime'))
 })
 
 vi.mock('h3', async (importOriginal) => {

@@ -29,7 +29,7 @@ export default defineEndpointRuntime({
 - `authorization` (required): either a callback run on every request, including replays, or the literal `'middleware'` asserting that Nitro middleware already made the full authorization decision. There is no implicit default; authentication alone is not that assertion.
 - `leaseTtlMs` / `replayTtlMs` (optional): application-wide TTL defaults.
 
-The policy file is server runtime code: it is bundled into the Nitro server and never evaluated during build-time discovery, so it can hold real infrastructure connections. It cannot live in `nuxt.config.ts` because module options must be serializable and cannot carry these functions into the server bundle. To use a different path, set `endpoints: { runtime: { path: 'server/policies/endpoints.ts' } }`.
+The policy file is server runtime code: it is bundled into the Nitro server and is not part of any route contract, so no build step evaluates it and it can hold real infrastructure connections. It cannot live in `nuxt.config.ts` because module options must be serializable and cannot carry these functions into the server bundle. To use a different path, set `endpoints: { runtime: { path: 'server/policies/endpoints.ts' } }`.
 
 The convention path is looked up in every root that can contribute server routes: the project `server/` directory, extended Nuxt layers, and custom Nitro `scanDirs`. The first match wins, project first.
 
@@ -40,14 +40,17 @@ With a central policy in place, an endpoint declares only its contract-side meta
 ```ts
 import { z } from 'zod'
 
-export default defineEndpoint({
-  body: z.object({ userId: z.string(), amount: z.number().int().positive() }),
-  responses: {
-    201: z.object({ balance: z.number() }),
+export default defineRouteHandler({
+  validate: {
+    body: z.object({ userId: z.string(), amount: z.number().int().positive() }),
+    response: {
+      201: z.object({ balance: z.number() }),
+    },
   },
   idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
     required: true,
-    replayStatuses: [201],
   },
   handler: (event) => {
     const { body } = event.validated
@@ -56,59 +59,31 @@ export default defineEndpoint({
 })
 ```
 
-The same options are also available as `.idempotency(options)`, an immutable method on a `defineEndpoint(...)` contract declared without a `handler`: it returns a new endpoint and does not mutate the original. Both forms run the same code, so pick the one that fits the file.
+All three keys are written out. The slot is the serializable half of the feature, and the build reads it as a whole: a slot missing any of them is not recognized as idempotency metadata at all, so the endpoint would be generated as an ordinary route.
 
-Because these arguments are serializable metadata, the declaration also stays safe inside a [separate contract file](/docs/endpoints#separate-contract-files), where the contract keeps the two-call form and `.idempotency()` composes onto it.
+Because it is serializable metadata, the declaration also survives the contract macro unchanged, and the schemas it sits next to can still come from a [separate contract file](/docs/endpoints#separate-contract-files).
 
-An endpoint can override any runtime option for route-specific needs — authorization is the most common case:
+## Options
 
-```ts
-export const endpoint = defineEndpoint({ ... }).idempotency({
-  required: true,
-  authorization: ({ event }) => requirePermission(event, 'points:grant'),
-})
-```
+Contract-side, on the route:
 
-Endpoints can also keep supplying everything locally, with no policy file — the original fully-explicit form is unchanged:
+- `enabled` (required, always `true`): marks the slot as idempotency metadata.
+- `headerName` (required): the header carrying the key. Matching is case-insensitive.
+- `required` (required): whether the header is mandatory. Reflected in the generated client type.
 
-```ts
-defineEndpoint({ ... }).idempotency({
-  storage: () => storage,
-  scope: ({ event }) => event.context.tenantId,
-  authorization: 'middleware',
-  required: true,
-})
-```
+Request-time, in the central policy:
 
-## Options and resolution order
-
-Each runtime option resolves per item: **endpoint → central policy → library default** (where one exists).
-
-Contract-side, endpoint-only:
-
-- `headerName` (optional, default `Idempotency-Key`): overrides the header name. Matching is case-insensitive.
-- `required` (optional, default `false`): whether the header is mandatory. Reflected in the generated client type.
-- `replayStatuses` (optional): extra declared statuses to record for replay. Successful `2xx` responses are recorded by default.
-- `fingerprint` (**required when the endpoint declares no `body`**, optional otherwise): projects the request into the stored fingerprint. The default projection covers what the handler can observe, which is what decides whether two requests are the same request: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because the values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request. Provide this when behavior depends on something the projection does not include, such as a header carrying currency or API version.
-
-Runtime, policy-defaulted and endpoint-overridable:
-
-- `storage`, `scope`, `authorization`: as described under Central policy. One of the two layers must provide each of them.
+- `storage`, `scope`, `authorization`: as described above. The policy must provide all three.
 - `leaseTtlMs` (default `60000`): in-flight lease duration. Size it for the maximum expected handler duration.
 - `replayTtlMs` (default `86400000`): how long a completed response remains replayable.
 
-An endpoint with no `body` contract must supply `fingerprint` explicitly, because the default projection has no validated body to cover and cannot tell two cases apart: an operation that genuinely takes no input, where the key alone identifies it, and a handler that reads an undeclared body itself, where the default would give two different payloads the same fingerprint and replay the first response to the second. Rather than guess, the endpoint states what identifies the request:
+The split is what keeps the two halves honest: the route contract reaches generated clients and OpenAPI, so it carries no functions and no infrastructure, while the policy holds the callbacks and never leaves the server. Declaring `storage`, `scope`, or `authorization` on a route is rejected by TypeScript and again when the route module is loaded.
 
-```ts
-defineEndpoint({ params: z.object({ id: z.string() }) }).idempotency({
-  required: true,
-  fingerprint: ({ params }) => ({ params }),
-})
-```
+Request identity is the request the handler can observe: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because those values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request.
 
-The route template and method are already part of the storage key, but a path _parameter_ is not — so `params` is what distinguishes one resource from another under the same key. For an operation that truly takes no input, `fingerprint: () => ({})` says so.
+An idempotent endpoint therefore has to declare a `body` contract. Without one, request identity would rest on a body the runtime never parsed, and two different payloads under one key would look identical — so the endpoint is rejected when its module is loaded rather than replaying the first response to the second.
 
-If an idempotent endpoint ends up without `storage`, `scope`, or `authorization` after merging, the build fails when no policy file exists, and server startup fails when the merged configuration is still incomplete — an idempotent endpoint never silently runs unprotected.
+If a policy is missing `storage`, `scope`, or `authorization` — or there is no policy file at all — server startup fails and names what is missing. An idempotent endpoint never silently runs unprotected.
 
 ## HTTP behavior
 
@@ -127,7 +102,8 @@ The generated client accepts a typed `idempotencyKey` request option, separate f
 When `required: true`, omitting the option generates a UUID when the `$endpoint(...)` request object is created. For an optional endpoint, pass `idempotencyKey: true` to request the same automatic behavior. An explicit string always wins and is useful when a logical operation must survive a page reload, process restart, or queue handoff.
 
 ```ts
-await $endpoint('grantPoints', {
+await $endpoint('/api/points/grants', {
+  method: 'post',
   body: { userId: 'u_1', amount: 10 },
 })
 ```
@@ -135,7 +111,8 @@ await $endpoint('grantPoints', {
 The generated key belongs to the request object, not to an individual fetch attempt. Directly awaiting the object is memoized, while a TanStack mutation retry performs a fresh HTTP attempt with the same key:
 
 ```ts
-const request = $endpoint('grantPoints', {
+const request = $endpoint('/api/points/grants', {
+  method: 'post',
   body: { userId: 'u_1', amount: 10 },
 })
 

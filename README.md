@@ -21,12 +21,14 @@ Describe the HTTP contract once, next to the handler, with the schema library yo
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineEndpoint({
+export default defineRouteHandler({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
+  validate: {
+    response: {
+      200: z.object({ id: z.number(), name: z.string() }),
+      404: z.object({ message: z.string() }),
+    },
   },
   handler: (event) => {
     const { params } = event.validated
@@ -68,15 +70,15 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
 - ✅ Lazy `$endpoint` request objects: status unions, `.raw()`, `.queryOptions()`, `.mutationOptions()`
 - ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
-- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the query factories forward the request the way `useFetch` does
+- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the request Query options forward the request the way `useFetch` does
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
-- ✅ Optional named operations (`$endpoint.getUser(...)`) and importable types from `#endpoints`
-- ✅ Generated TanStack/Vue Query adapter: `useQuery` / `useMutation` / `useInfiniteQuery` option factories from named endpoints, with optional Nuxt SSR setup
+- ✅ Importable path, method, request, and result helper types from `#endpoints`
+- ✅ TanStack/Vue Query integration through `.queryOptions()` and `.mutationOptions()`, with optional Nuxt SSR setup
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 
 ## Quick Start
 
-Requires Nuxt 4.5 or newer — see [Compatibility](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started#compatibility) for the supported platform line.
+Requires Nuxt 5 with Nitro 3 and h3 v2 — see [Compatibility](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started#compatibility) for the supported platform line.
 
 ```bash
 npx nuxt module add nuxt-endpoints
@@ -90,7 +92,7 @@ npm install zod
 # or: npm install effect
 ```
 
-That's it. Adding the module changes nothing by itself: only routes that export an endpoint definition are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
 
 Module options (OpenAPI route, optional client methods, the Vue Query adapter) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 
@@ -102,7 +104,7 @@ Guides:
 - [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — status-aware and raw response shapes
-- [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — generated TanStack Vue Query option factories and SSR setup
+- [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — request-object Query options and SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics
 - [Idempotency](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/idempotency) — optional `Idempotency-Key` replay protection

@@ -38,20 +38,19 @@ server. HTTP clients receive the JSON representation of that value. These are
 not always the same TypeScript type.
 
 ```ts
-const ResponseBody = z.object({
-  createdAt: z.date(),
+export default defineRouteHandler({
+  validate: {
+    response: { 200: z.object({ createdAt: z.date() }) },
+  },
+  handler: () => ({ createdAt: new Date() }), // server/schema output: Date
 })
-
-export default defineEndpointHandler(endpoint, () => ({
-  createdAt: new Date(), // server/schema output: Date
-}))
 
 const result = await $endpoint('/api/items/:id', { method: 'get', params: { id: '1' } })
 result.body.createdAt // client/wire value: string
 ```
 
-On the Nitro 2 support line, [`EndpointWireValue`](../src/runtime/wire.ts) is a
-small compatibility adapter over Nitro's `Simplify<Serialize<T>>`. It is used
+[`EndpointWireValue`](../src/runtime/platform/wire.ts) isolates Nitro's
+`Simplify<Serialize<T>>` behind one alias in the platform seam. It is used
 by every JSON client response surface:
 
 - awaited `$endpoint` status bodies;

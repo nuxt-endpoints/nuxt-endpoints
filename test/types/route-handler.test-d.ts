@@ -138,6 +138,35 @@ describe('defineRouteHandler multi-method inference', () => {
       // @ts-expect-error method entries are route contracts too.
       post: withRuntimeMethod,
     })
+
+    const withFingerprint = { ...metadata, fingerprint: () => 'key' }
+    const withReplayStatuses = { ...metadata, replayStatuses: [201] }
+    const withLeaseTtl = { ...metadata, leaseTtlMs: 1000 }
+    const withReplayTtl = { ...metadata, replayTtlMs: 1000 }
+
+    defineRouteHandler({
+      // @ts-expect-error fingerprint is resolved by the runtime, not declared in the contract.
+      idempotency: withFingerprint,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error replayStatuses is resolved by the runtime, not declared in the contract.
+      idempotency: withReplayStatuses,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error leaseTtlMs is resolved by the runtime, not declared in the contract.
+      idempotency: withLeaseTtl,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error replayTtlMs is resolved by the runtime, not declared in the contract.
+      idempotency: withReplayTtl,
+      handler: () => ({ ok: true }),
+    })
   })
 
   it('uses the same one-argument shape as H3', () => {

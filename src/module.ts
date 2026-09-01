@@ -46,13 +46,10 @@ export type EndpointsRuntimeModuleOptions = {
 
 const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
 
-const endpointServerAutoImports = [
-  'defineEndpoint',
-  'defineEndpointHandler',
-  'defineRouteHandler',
-  'defineEndpointMethods',
-  'defineEndpointMethodHandlers',
-] as const
+// Only the canonical identifier is auto-imported. Nitro's contract macro
+// recognizes no other name, so a route authored through anything else would be
+// served without its contract ever reaching the build.
+const endpointServerAutoImports = ['defineRouteHandler'] as const
 
 export type EndpointsOpenApiModuleOptions = {
   enabled?: boolean
@@ -318,6 +315,9 @@ export function contributeEndpointRouteTypes(
   runtimePath: string,
 ): void {
   const runtimeImport = toImportPath(runtimePath)
+  // `EndpointHandlerSuccessBody` stays out of the public runtime surface, so the
+  // generated declaration names its module directly rather than the barrel.
+  const endpointImport = `${runtimeImport}/endpoint`
 
   for (const handler of handlers) {
     const routeImport = toImportPath(handler.handler)
@@ -325,7 +325,7 @@ export function contributeEndpointRouteTypes(
     const method = handler.method.toLowerCase() as NitroRouteMethod
     const definition = `import('${runtimeImport}').EndpointDefinitionFromRoute<${routeDefinition}, '${method}'>`
     const handlerReturn = `import('${runtimeImport}').EndpointHandlerReturnFromRoute<${routeDefinition}, '${method}'>`
-    const successResponse = `Simplify<Serialize<import('${runtimeImport}').EndpointHandlerSuccessBody<${definition}, ${handlerReturn}>>>`
+    const successResponse = `Simplify<Serialize<import('${endpointImport}').EndpointHandlerSuccessBody<${definition}, ${handlerReturn}>>>`
 
     types.routes[handler.route] ??= {}
     if (handler.methodGroup) {
@@ -396,7 +396,7 @@ export async function composeHandlers(
     if (isEndpointGroupDetection(detection)) {
       if (handler.method) {
         throw new Error(
-          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a defineEndpointMethods() group on a method-suffixed file (.${handler.method}.ts). Method groups belong on a method-suffix-free route file — its other declared methods would otherwise be unreachable. Move the defineEndpointMethods()/defineEndpointMethodHandlers() declaration to a bare route file, or declare a single endpoint with defineEndpoint()/defineEndpointHandler() instead.`,
+          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineRouteHandler() on a method-suffixed file (.${handler.method}.ts). Method entries belong on a method-suffix-free route file — its other declared methods would otherwise be unreachable. Move the declaration to a bare route file, or declare a single method.`,
         )
       }
       for (const [method, memberDetection] of Object.entries(detection.methods)) {
@@ -407,7 +407,7 @@ export async function composeHandlers(
 
     if (!handler.method) {
       throw new Error(
-        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares an endpoint but its file has no method suffix. Rename it to <name>.<method>.ts, or declare multiple methods with defineEndpointMethods().`,
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineRouteHandler() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
       )
     }
 

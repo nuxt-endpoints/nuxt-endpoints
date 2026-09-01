@@ -1,8 +1,8 @@
 import { createApp, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointRuntime } from '../src/runtime'
-import type { EndpointRuntime } from '../src/runtime'
+import { defineEndpoint, defineEndpointRuntime } from './internal-runtime'
+import type { EndpointRuntime } from './internal-runtime'
 
 async function request(handler: unknown, url: string, init?: RequestInit): Promise<Response> {
   const app = createApp()

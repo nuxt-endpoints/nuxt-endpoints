@@ -20,41 +20,46 @@ The code this document describes is `src/runtime/platform/` — its
 [README](../src/runtime/platform/README.md) maps the files, grades what core
 is expected to absorb, and links back here for the per-call tables.
 
-## Current support boundary
+## The boundary this analysis started from
 
-The current package baseline is Nitro 2 and H3 1. The `nitropack` dependency is
-intentionally limited to `^2.10.0` until the runtime behavior described below
-has been verified against Nitro 3.
+Every measurement below was taken while the package baseline was still Nitro 2
+and H3 1, with `nitropack` pinned to `^2.10.0`. That is the starting point the
+migration was planned against, not this branch: the `nuxt5` branch now runs on
+Nitro 3 and h3 v2, and the `main` branch keeps the Nitro 2 / H3 1 line. The
+tables are kept because they record what each call cost to move.
 
-The preparation already in the codebase is intended to keep the endpoint API
-stable while version-sensitive Nitro and H3 integration is replaced behind
-small adapters.
+The preparation described here was intended to keep the endpoint API stable
+while version-sensitive Nitro and H3 integration was replaced behind small
+adapters. That held: the authoring shape did not change with the majors.
 
 ## Stable endpoint contract
 
-`defineEndpointHandler` continues to receive an endpoint context and may return
-a plain value. H3 v2 does not require endpoint authors to change handlers into
-Web-standard `(request: Request) => Response` functions.
+The route handler still receives an event and may return a plain value. H3 v2
+does not require endpoint authors to change handlers into Web-standard
+`(request: Request) => Response` functions.
 
-The handler context exposes both HTTP integration levels:
+The handler argument exposes both HTTP integration levels:
 
-- `event` is the native H3 event and remains the escape hatch for Nitro
-  middleware context and runtime-specific features.
-- `request` is a normalized Web `Request` for portable access to the URL,
-  method, headers, and abort signal.
-- `body` remains the contract-validated body value and is the canonical way to
-  consume an endpoint request body. Code must not assume that the raw
-  `request` body can be consumed again after endpoint parsing.
+- the event itself is the native H3 event, and remains the escape hatch for
+  Nitro middleware context and runtime-specific features.
+- `event.req` is the Web `Request` for portable access to the URL, method,
+  headers, and abort signal.
+- `event.validated.body` is the contract-validated body value and is the
+  canonical way to consume an endpoint request body. Code must not assume that
+  the raw `event.req` body can be consumed again after endpoint parsing.
 
 ```ts
-export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
-  const requestId = request.headers.get('x-request-id')
+export default defineRouteHandler({
+  validate: { body: RequestBody },
+  handler: (event) => {
+    const requestId = event.req.headers.get('x-request-id')
 
-  return {
-    accountId: event.context.user.accountId,
-    requestId,
-    value: body.value,
-  }
+    return {
+      accountId: event.context.user.accountId,
+      requestId,
+      value: event.validated.body.value,
+    }
+  },
 })
 ```
 
@@ -72,8 +77,8 @@ export default defineEndpointHandler(endpoint, ({ event, request, body }) => {
 | Client JSON wire types     | [`src/runtime/platform/wire.ts`](../src/runtime/platform/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`.                                                                                                                                                                                                 |
 | Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                                                                                                                                                                                                                                              |
 
-The current Nitro 2/H3 1 implementation is covered by unit, type, build, and
-Nuxt end-to-end tests.
+That Nitro 2/H3 1 implementation was covered by unit, type, build, and Nuxt
+end-to-end tests, which is what made the majors safe to move.
 
 ## H3 v1 to v2 adapter map
 
@@ -194,7 +199,7 @@ a separate `@nuxt/nitro-server` package, which is not yet stable.
 
 ## Nuxt 5 typed-fetch boundary
 
-Nuxt Endpoints does not use Nitro 2 `InternalApi` as the source of request contracts or status-specific responses. It uses endpoint metadata for that richer surface and verifies that the successful JSON wire projection agrees with `InternalApi`.
+Nuxt Endpoints does not use Nitro's `InternalApi` as the source of request contracts or status-specific responses. It uses endpoint metadata for that richer surface and verifies that the successful JSON wire projection agrees with `InternalApi`.
 
 For Nuxt 5, the preferred path is to contribute endpoint metadata to Nuxt's `fetchdts`-based schema through a public module extension API. If no such hook is exposed, the module keeps its contract schema and may consume `fetchdts` utilities internally. See [Type Generation, Wire Responses, and Nuxt 5](./type-generation.md) for the current flow and acceptance conditions.
 

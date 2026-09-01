@@ -4,8 +4,8 @@ import {
   createMemoryIdempotencyStorage,
   defineEndpoint,
   defineEndpointHandler,
-} from '../src/runtime'
-import type { EndpointEventHandler, StandardSchemaLike } from '../src/runtime'
+} from './internal-runtime'
+import type { EndpointEventHandler, StandardSchemaLike } from './internal-runtime'
 
 vi.mock('h3', async (importOriginal) => ({
   ...(await importOriginal<typeof import('h3')>()),

@@ -15,7 +15,7 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
+Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. A route is addressed by its path and method; there is no second, named form of the same call.
 
 ## 4. Response handling is explicit
 
