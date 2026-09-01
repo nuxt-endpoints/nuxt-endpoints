@@ -48,7 +48,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointsHtml).toContain('Guided scenarios')
       expect(endpointsHtml).toContain('Server')
       expect(endpointsHtml).toContain('Runtime exchange')
-      expect(endpointsHtml).toContain('$endpoint.createUser')
+      expect(endpointsHtml).toContain('$endpoint(&#39;/api/users&#39;)')
       expect(endpointsHtml).toContain('Choose what you want to verify')
       expect(endpointsHtml).toContain('What to confirm')
       expect(endpointsHtml).toContain('x-client-version')
@@ -57,7 +57,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(html).toContain('Ada Lovelace')
       expect(html).toContain('Grace Hopper')
       expect(html).toContain('nuxt-endpoints-vue-query')
-      expect(html).toContain('listSqliteUsers')
+      expect(html).toContain('\\u002Fapi\\u002Fsqlite\\u002Fusers')
     })
 
     it('demonstrates typed headers and declared HTTP response statuses', async () => {
@@ -197,14 +197,14 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         await page.close()
       })
 
-      it('keeps the selected operation, guidance, form, and result together', async () => {
+      it('keeps the selected request, guidance, form, and result together', async () => {
         const page = await createPage('/endpoints')
         const inspector = page.getByRole('region', { name: 'HTTP contract inspector' })
         const tryItYourself = page.getByRole('region', {
           name: 'Choose what you want to verify',
         })
-        const exercise = page.getByRole('article', { name: 'Operation form' })
-        const output = page.getByRole('article', { name: 'Operation result' })
+        const exercise = page.getByRole('article', { name: 'Request form' })
+        const output = page.getByRole('article', { name: 'Request result' })
         const sectionStyles = async (locator: typeof inspector) =>
           locator.evaluate((element) => {
             const style = getComputedStyle(element)
@@ -239,10 +239,10 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
           'Valibot transforms the query string',
         )
         await expect(output.locator('pre').textContent()).resolves.toContain(
-          'Run the selected operation',
+          'Run the selected request',
         )
 
-        await page.getByRole('button', { name: /\$endpoint\.createUser/ }).click()
+        await page.getByRole('button', { name: /\$endpoint\('\/api\/users'\)/ }).click()
         await page.getByLabel('Name').fill('')
         await page.getByLabel('Age').fill('-1')
         await page.getByRole('button', { name: 'Create user' }).click()
@@ -255,7 +255,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
         await expect(output.locator('pre').textContent()).resolves.toContain('"status": 201')
 
-        await page.getByRole('button', { name: /\$endpoint\.searchUsers/ }).click()
+        await page.getByRole('button', { name: /api\/users\/search/ }).click()
         await page.getByLabel('Query').fill('ja')
         await page.getByLabel('Limit').fill('1')
         await page.getByRole('button', { name: 'Search users' }).click()
