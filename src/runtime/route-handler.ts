@@ -29,10 +29,18 @@ type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
   response?: RESPONSES
 }
 
+// The contract carries the portable declaration; everything the request-time
+// implementation needs is resolved from the runtime file and the central policy.
+// Naming these keys keeps them from riding through the contract's `const`
+// capture and being dropped without a diagnostic.
 type RouteContractIdempotency = {
   storage?: never
   scope?: never
   authorization?: never
+  fingerprint?: never
+  leaseTtlMs?: never
+  replayTtlMs?: never
+  replayStatuses?: never
 }
 
 export type EndpointRouteEvent<DEFINITION extends EndpointDefinition = EndpointDefinition> =
