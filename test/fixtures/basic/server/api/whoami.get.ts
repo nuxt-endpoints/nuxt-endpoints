@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { defineRouteHandler } from '../../../../../src/runtime'
 
 export default defineRouteHandler({
-  operation: 'whoami',
   validate: {
     response: {
       200: z.object({

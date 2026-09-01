@@ -19,9 +19,7 @@ import { camelCase } from 'scule'
 import {
   generateEndpointClient,
   generateEndpointHandlerManifest,
-  generateEndpointQueryClient,
   generateEndpointQueryPlugin,
-  generateEndpointQueryTypes,
   generateEndpointTypes,
   toImportPath,
 } from './codegen'
@@ -30,7 +28,6 @@ import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
 import { isMediaResponseContract } from './runtime/response'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
-import { mutationHttpMethodList, queryHttpMethodList } from './runtime/tanstack-query'
 import { inspectValidatorInputObject } from './runtime/validator'
 
 export type EndpointsModuleOptions = {
@@ -49,11 +46,6 @@ export type EndpointsRuntimeModuleOptions = {
 
 const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
 
-// Set form of the query/mutation HTTP method lists, for O(1) membership
-// checks against a handler's (plain string) method below.
-const queryHttpMethods = new Set<string>(queryHttpMethodList)
-const mutationHttpMethods = new Set<string>(mutationHttpMethodList)
-
 const endpointServerAutoImports = [
   'defineEndpoint',
   'defineEndpointHandler',
@@ -70,13 +62,12 @@ export type EndpointsOpenApiModuleOptions = {
 }
 
 export type EndpointsClientModuleOptions = {
-  result?: boolean
   raw?: boolean
-  query?: boolean | EndpointsQueryClientModuleOptions
+  query?: false | EndpointsQueryClientModuleOptions
 }
 
 export type EndpointsQueryClientModuleOptions = {
-  setup?: 'external' | 'auto'
+  setup: 'auto'
   staleTime?: number
 }
 
@@ -88,7 +79,6 @@ type ResolvedEndpointsModuleOptions = {
     version: string
   }
   client: {
-    result: boolean
     raw: boolean
     query: boolean
     querySetup: 'external' | 'auto'
@@ -99,15 +89,11 @@ type ResolvedEndpointsModuleOptions = {
 // The definition fields a discovery-evaluated module's carrier exposes.
 // Derived (rather than hand-declared) so a shape change to `EndpointDefinition`
 // surfaces here as a compile error instead of silently going unread.
-type EndpointCarrierDefinition = Pick<
-  EndpointDefinition,
-  'operation' | 'idempotency' | 'headers' | 'responses'
->
+type EndpointCarrierDefinition = Pick<EndpointDefinition, 'idempotency' | 'headers' | 'responses'>
 
 // Detection result for one declared method (single endpoint, or one member
 // of a defineEndpointMethods() group).
 type EndpointMethodDetection = {
-  operation?: string
   idempotency?: EndpointIdempotencyMetadata
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
@@ -181,8 +167,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const resolve = (...paths: string[]) => resolver.resolve(...paths)
     const typeFile = resolve(nuxt.options.buildDir, `types/${moduleName}.d.ts`)
     const runtimeFile = resolve(nuxt.options.buildDir, `${moduleName}.ts`)
-    const queryTypeFile = resolve(nuxt.options.buildDir, 'types/endpoints-query.d.ts')
-    const queryRuntimeFile = resolve(nuxt.options.buildDir, 'endpoints-query.ts')
     const resolvedOptions = resolveModuleOptions(options, nuxt.options.dev)
     const logger = useLogger('nuxt-endpoints')
     let endpointHandlerManifest: EndpointRouteHandler[] | undefined
@@ -196,13 +180,8 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     let runtimePathResolved = options.runtime?.path !== undefined
 
     if (resolvedOptions.client.query && !isTanstackVueQueryResolvable(nuxt.options.rootDir)) {
-      if (resolvedOptions.client.querySetup === 'auto') {
-        throw new Error(
-          '[nuxt-endpoints] endpoints.client.query.setup is "auto" but "@tanstack/vue-query" could not be resolved. Install it, or use the external setup mode.',
-        )
-      }
-      logger.warn(
-        'endpoints.client.query is enabled but "@tanstack/vue-query" could not be resolved. Install it as a dependency to use the generated useQuery/useMutation options.',
+      throw new Error(
+        '[nuxt-endpoints] endpoints.client.query.setup is "auto" but "@tanstack/vue-query" could not be resolved. Install it, or remove automatic setup.',
       )
     }
 
@@ -282,8 +261,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
           indexRouteContracts(await nitro.getRouteContracts()),
-          resolvedOptions.client.query,
-          (message) => logger.warn(message),
         )
         endpointHandlerManifest = handlers
         if (nitroTypes) {
@@ -294,13 +271,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           runtimeFile,
           generateEndpointClient(resolve, handlers, resolvedOptions),
         )
-        if (resolvedOptions.client.query) {
-          await writeGenerated(queryTypeFile, generateEndpointQueryTypes(resolve, handlers))
-          await writeGenerated(
-            queryRuntimeFile,
-            generateEndpointQueryClient(resolve, queryTypeFile, handlers),
-          )
-        }
       }
 
       await generateArtifacts()
@@ -324,26 +294,17 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     addImports([
       { from: runtimeFile, name: '$endpoint' },
       { from: runtimeFile, name: 'useEndpoint' },
-      ...(resolvedOptions.client.result ? [{ from: runtimeFile, name: 'useEndpointResult' }] : []),
-      { from: typeFile, type: true, name: '$EndpointResponse' },
-      { from: typeFile, type: true, name: '$EndpointResult' },
-      { from: typeFile, type: true, name: '$EndpointRawResponse' },
       { from: typeFile, type: true, name: '$EndpointPathResponse' },
       { from: typeFile, type: true, name: '$EndpointPathCall' },
-      { from: typeFile, type: true, name: '$EndpointPathResult' },
       { from: typeFile, type: true, name: '$EndpointPathRawResponse' },
       { from: typeFile, type: true, name: '$UseEndpoint' },
       { from: typeFile, type: true, name: '$UseEndpointPathCall' },
-      { from: typeFile, type: true, name: '$UseEndpointResult' },
-      { from: typeFile, type: true, name: '$UseEndpointResultPathCall' },
-      { from: typeFile, type: true, name: 'EndpointOperation' },
       { from: typeFile, type: true, name: 'EndpointPath' },
       { from: typeFile, type: true, name: 'EndpointMethod' },
     ])
 
     nuxt.options.alias = {
       ...nuxt.options.alias,
-      ...(resolvedOptions.client.query ? { '#endpoints/query': queryRuntimeFile } : {}),
       '#endpoints': typeFile,
     }
   },
@@ -385,15 +346,12 @@ export function contributeEndpointRouteTypes(
 export async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],
   routeContracts: ReadonlyMap<string, EndpointDetection>,
-  queryClientEnabled: boolean,
-  warn: (message: string) => void,
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
-  const operations = new Map<string, string>()
 
   // Applies the checks a single detected method has always gone through
   // (catch-all/optional route rejection, idempotency-gap-without-policy
-  // rejection, duplicate operation rejection, query/mutation method warning)
+  // rejection and idempotency metadata extraction)
   // and pushes the resulting EndpointRouteHandler. Used once per single
   // endpoint and once per declared method of a defineEndpointMethods() group,
   // so every existing check keeps applying per method without being
@@ -412,39 +370,12 @@ export async function composeHandlers(
       )
     }
 
-    const { operation, idempotency, mediaResponse } = detection
-    const existingHandlerPath = operation ? operations.get(operation) : undefined
-    if (operation && existingHandlerPath) {
-      throw new Error(
-        `Duplicate endpoint operation "${operation}": ${existingHandlerPath} and ${handler.handler}`,
-      )
-    }
-    if (operation) {
-      operations.set(operation, handler.handler)
-    }
-
-    if (
-      operation &&
-      queryClientEnabled &&
-      !queryHttpMethods.has(method) &&
-      !mutationHttpMethods.has(method)
-    ) {
-      warn(
-        `Operation "${operation}" uses method "${method}", which is not a query (${queryHttpMethodList.join(', ')}) or mutation (${mutationHttpMethodList.join(', ')}) method. No Vue Query option factory is generated for it.`,
-      )
-    }
-
-    if (operation && mediaResponse && queryClientEnabled && queryHttpMethods.has(method)) {
-      warn(
-        `Operation "${operation}" declares a media response, so its body is never parsed. Its Vue Query option factory is still generated, but an unread stream cannot be cached or serialized into the Nuxt payload - call it with $endpoint(...).raw() instead.`,
-      )
-    }
+    const { idempotency, mediaResponse } = detection
 
     endpointHandlers.push({
       ...handler,
       route,
       method,
-      ...(operation ? { operation } : {}),
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
@@ -509,14 +440,12 @@ export function indexRouteContracts(
 }
 
 function getEndpointFromProviderContract(definition: EndpointDefinition): EndpointMethodDetection {
-  const operation = typeof definition.operation === 'string' ? definition.operation : undefined
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
   if (idempotency && definition.headers) {
     assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
   }
   return {
-    ...(operation ? { operation } : {}),
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
   }
@@ -561,7 +490,7 @@ async function writeGenerated(filePath: string, content: string): Promise<void> 
 // routes, but it cannot describe their contracts: `defineRouteMeta()` is a
 // build-time AST macro whose argument is read as JSON literals only, so a
 // schema built from Zod, Valibot, or Effect Schema can never reach it, and an
-// operation without one carries just a path, a method, and a `200` description.
+// an uncontracted route carries just a path, a method, and a `200` description.
 // Two documents at two routes is legal, so it warns; two documents at one
 // route is not, because whichever handler Nitro registered last silently wins.
 //
@@ -670,7 +599,6 @@ export function resolveModuleOptions(
       version: '0.1.0',
     },
     client: {
-      result: true,
       raw: true,
       query: false,
       querySetup: 'external',
@@ -722,10 +650,9 @@ export function resolveModuleOptions(
   }
 }
 
-// Exported for focused unit testing of the `client.query` boolean/object
-// normalization in isolation from `resolveModuleOptions`.
+// Exported for focused unit testing of optional automatic Query setup.
 export function resolveQueryClientOption(
-  query: boolean | EndpointsQueryClientModuleOptions | undefined,
+  query: false | EndpointsQueryClientModuleOptions | undefined,
 ): {
   query: boolean
   querySetup: 'external' | 'auto'
@@ -735,13 +662,18 @@ export function resolveQueryClientOption(
     return { query: false, querySetup: 'external', queryStaleTime: 60_000 }
   }
 
-  if (query === true) {
-    return { query: true, querySetup: 'external', queryStaleTime: 60_000 }
+  if (query === (true as unknown)) {
+    throw new TypeError(
+      'endpoints.client.query: true was removed because endpoint requests expose Query options directly. Remove it, or use { setup: "auto" } for automatic Vue Query setup.',
+    )
+  }
+  if (query.setup !== 'auto') {
+    throw new TypeError('endpoints.client.query only supports { setup: "auto", staleTime? }.')
   }
 
   return {
     query: true,
-    querySetup: query.setup ?? 'external',
+    querySetup: 'auto',
     queryStaleTime: query.staleTime ?? 60_000,
   }
 }

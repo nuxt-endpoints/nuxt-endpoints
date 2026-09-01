@@ -1,6 +1,6 @@
 ---
 title: Generated Client
-description: Call server routes by typed path, method, or operation name.
+description: Call server routes by typed path and method.
 ---
 
 Nuxt Endpoints generates `$endpoint` and `#endpoints` types from discovered endpoint definitions.
@@ -59,11 +59,11 @@ shared server-state caching, retries, invalidation, or optimistic updates.
 Each client mirrors the Nuxt primitive it stands in for, and Nuxt treats those
 two primitives differently:
 
-| Client                                      | Incoming cookies and headers during SSR | Mirrors    |
-| ------------------------------------------- | --------------------------------------- | ---------- |
-| `useEndpoint`                               | Forwarded                               | `useFetch` |
-| [Vue Query](/docs/tanstack-query) factories | Forwarded                               | `useFetch` |
-| `$endpoint`                                 | Not forwarded                           | `$fetch`   |
+| Client                                            | Incoming cookies and headers during SSR | Mirrors    |
+| ------------------------------------------------- | --------------------------------------- | ---------- |
+| `useEndpoint`                                     | Forwarded                               | `useFetch` |
+| [Vue Query](/docs/tanstack-query) request options | Forwarded                               | `useFetch` |
+| `$endpoint`                                       | Not forwarded                           | `$fetch`   |
 
 `useFetch` swaps plain `$fetch` for `useRequestFetch()` when the path is
 relative, so a session cookie reaches the internal route. `useEndpoint`
@@ -88,50 +88,19 @@ const { data: user } = await useEndpoint('/api/users/:id', {
 None of this applies on the client, where there is no incoming request to
 forward and every client issues the same browser `fetch`.
 
-Add `operation` only when you also want a named call target.
-
-```ts
-export const endpoint = defineEndpoint({
-  operation: 'getUser',
-  params: UserParams,
-  responses: { 200: User },
-})
-
-await $endpoint('getUser', { params: { id: '123' } })
-await $endpoint.getUser({ params: { id: '123' } })
-```
-
-The async-data composables also accept operation names. Path calls use `method`; operation calls
-already know their method.
-
-```ts
-await useEndpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '123' },
-})
-
-await useEndpoint('getUser', {
-  params: { id: '123' },
-})
-```
-
 See [Responses](/docs/responses) for status-aware typed results and raw Web Response calls.
 
 ## Generated helper types
 
-Import helper types from `#endpoints` when shared app code needs to reference an operation, request call, or response body without manually duplicating types.
+Import helper types from `#endpoints` when shared app code needs to reference a path, request call, or response without duplicating types.
 
 ```ts
 import type {
-  $EndpointCall,
   $EndpointPathCall,
   $EndpointPathResponse,
-  $EndpointRawResponse,
-  $EndpointResult,
-  $EndpointResponse,
-  $UseEndpointResultPathCall,
+  $EndpointPathRawResponse,
+  $UseEndpointPathCall,
   EndpointMethod,
-  EndpointOperation,
   EndpointPath,
 } from '#endpoints'
 
@@ -139,12 +108,6 @@ type Path = EndpointPath
 type GetUserMethod = EndpointMethod<'/api/users/:id'>
 type User = $EndpointPathResponse<'/api/users/:id', 'get'>
 type UserCall = $EndpointPathCall<'/api/users/:id', 'get'>
-
-// Operation helpers are available when the route declares operation: 'getUser'.
-type Operation = EndpointOperation
-type UserOperationResponse = $EndpointResponse<'getUser'>
-type UserOperationCall = $EndpointCall<'getUser'>
-type UserOperationResult = $EndpointResult<'getUser'>
-type UserOperationRawResponse = $EndpointRawResponse<'getUser'>
-type UserResultState = $UseEndpointResultPathCall<'/api/users/:id', 'get'>
+type UserRawResponse = $EndpointPathRawResponse<'/api/users/:id', 'get'>
+type UserState = $UseEndpointPathCall<'/api/users/:id', 'get'>
 ```

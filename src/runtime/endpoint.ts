@@ -518,7 +518,6 @@ type InferredStatusHandlerSuccessBody<VALUE> =
  * keeping it idempotency-free is what stops that constraint being circular.
  */
 export type AssembledEndpointContract<
-  OPERATION extends string | undefined,
   PARAMS extends ValidatorSchema | undefined,
   QUERY extends ValidatorSchema | undefined,
   HEADERS extends ValidatorSchema | undefined,
@@ -528,7 +527,6 @@ export type AssembledEndpointContract<
   DESCRIPTION extends string | undefined,
   TAGS extends string[] | undefined,
 > = {
-  operation: OPERATION
   params: PARAMS
   query: QUERY
   headers: HEADERS
@@ -556,7 +554,6 @@ export type IdempotencyMetadataFromOptions<IDEMPOTENCY> = IDEMPOTENCY extends un
     >
 
 export type AssembledEndpointDefinition<
-  OPERATION extends string | undefined,
   PARAMS extends ValidatorSchema | undefined,
   QUERY extends ValidatorSchema | undefined,
   HEADERS extends ValidatorSchema | undefined,
@@ -567,7 +564,6 @@ export type AssembledEndpointDefinition<
   TAGS extends string[] | undefined,
   IDEMPOTENCY = undefined,
 > = AssembledEndpointContract<
-  OPERATION,
   PARAMS,
   QUERY,
   HEADERS,
@@ -608,7 +604,6 @@ export type AssembledEndpointDefinition<
 // The idempotent shape leads: a call that writes `idempotency` is rejected by
 // the plain shape's excess property check and falls through to this one.
 export function defineEndpoint<
-  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -620,7 +615,6 @@ export function defineEndpoint<
   const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
   const REQUIRED extends boolean = false,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
-    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
@@ -636,30 +630,10 @@ export function defineEndpoint<
   >,
 >(
   definition: Partial<
-    AssembledEndpointContract<
-      OPERATION,
-      PARAMS,
-      QUERY,
-      HEADERS,
-      BODY,
-      RESPONSES,
-      SUMMARY,
-      DESCRIPTION,
-      TAGS
-    >
+    AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
     idempotency: EndpointIdempotencyOptions<
-      AssembledEndpointContract<
-        OPERATION,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
+      AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
     > & {
       headerName?: HEADER_NAME
       required?: REQUIRED
@@ -672,7 +646,6 @@ export function defineEndpoint<
   HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
 >
 export function defineEndpoint<
-  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -682,7 +655,6 @@ export function defineEndpoint<
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
-    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
@@ -698,17 +670,7 @@ export function defineEndpoint<
   >,
 >(
   definition: Partial<
-    AssembledEndpointContract<
-      OPERATION,
-      PARAMS,
-      QUERY,
-      HEADERS,
-      BODY,
-      RESPONSES,
-      SUMMARY,
-      DESCRIPTION,
-      TAGS
-    >
+    AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
     handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
   },
@@ -750,7 +712,6 @@ export function defineEndpoint<const DEFINITION extends EndpointDefinition & { h
 // ("does not exist in type") rather than to a member inside it; a real mistake
 // elsewhere in an idempotent merged call is still reported on its own terms.
 export function defineEndpoint<
-  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -762,7 +723,6 @@ export function defineEndpoint<
   const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
   const REQUIRED extends boolean = false,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
-    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
@@ -778,30 +738,10 @@ export function defineEndpoint<
   >,
 >(
   definition: Partial<
-    AssembledEndpointContract<
-      OPERATION,
-      PARAMS,
-      QUERY,
-      HEADERS,
-      BODY,
-      RESPONSES,
-      SUMMARY,
-      DESCRIPTION,
-      TAGS
-    >
+    AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
     idempotency: EndpointIdempotencyOptions<
-      AssembledEndpointContract<
-        OPERATION,
-        PARAMS,
-        QUERY,
-        HEADERS,
-        BODY,
-        RESPONSES,
-        SUMMARY,
-        DESCRIPTION,
-        TAGS
-      >
+      AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
     > & {
       headerName?: HEADER_NAME
       required?: REQUIRED
@@ -814,7 +754,6 @@ export function defineEndpoint<
   HasEndpointResponses<DEFINITION> extends true ? ACTUAL_RETURN : WidenCapturedReturn<ACTUAL_RETURN>
 >
 export function defineEndpoint<
-  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -824,7 +763,6 @@ export function defineEndpoint<
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
-    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
@@ -840,17 +778,7 @@ export function defineEndpoint<
   >,
 >(
   definition: Partial<
-    AssembledEndpointContract<
-      OPERATION,
-      PARAMS,
-      QUERY,
-      HEADERS,
-      BODY,
-      RESPONSES,
-      SUMMARY,
-      DESCRIPTION,
-      TAGS
-    >
+    AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
     handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
   },

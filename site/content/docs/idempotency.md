@@ -41,7 +41,6 @@ With a central policy in place, an endpoint declares only its contract-side meta
 import { z } from 'zod'
 
 export default defineEndpoint({
-  operation: 'grantPoints',
   body: z.object({ userId: z.string(), amount: z.number().int().positive() }),
   responses: {
     201: z.object({ balance: z.number() }),
@@ -101,7 +100,7 @@ Runtime, policy-defaulted and endpoint-overridable:
 An endpoint with no `body` contract must supply `fingerprint` explicitly, because the default projection has no validated body to cover and cannot tell two cases apart: an operation that genuinely takes no input, where the key alone identifies it, and a handler that reads an undeclared body itself, where the default would give two different payloads the same fingerprint and replay the first response to the second. Rather than guess, the endpoint states what identifies the request:
 
 ```ts
-defineEndpoint({ operation: 'publishItem', params: z.object({ id: z.string() }) }).idempotency({
+defineEndpoint({ params: z.object({ id: z.string() }) }).idempotency({
   required: true,
   fingerprint: ({ params }) => ({ params }),
 })

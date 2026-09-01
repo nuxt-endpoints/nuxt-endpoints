@@ -11,13 +11,17 @@ type HasGeneratedContract = [GeneratedContract] extends [never] ? false : true
 const hasPublicRoutes: true = null as unknown as HasPublicRoutes
 const hasPublicContract: true = null as unknown as HasPublicContract
 const hasGeneratedContract: true = null as unknown as HasGeneratedContract
-const publicOperation: 'createUser' = null as unknown as PublicContract['operation']
-const generatedOperation: 'createUser' = null as unknown as GeneratedContract['operation']
+const publicHasResponses: true = null as unknown as 'responses' extends keyof PublicContract
+  ? true
+  : false
+const generatedHasResponses: true = null as unknown as 'responses' extends keyof GeneratedContract
+  ? true
+  : false
 
 export {
-  generatedOperation,
+  generatedHasResponses,
   hasGeneratedContract,
   hasPublicContract,
   hasPublicRoutes,
-  publicOperation,
+  publicHasResponses,
 }

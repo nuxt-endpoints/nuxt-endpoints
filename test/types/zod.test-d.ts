@@ -6,9 +6,7 @@ import type { EndpointClient } from '../../src/runtime'
 type Client = EndpointClient<{
   path: '/api/users/:id'
   method: 'get'
-  operation: 'getUser'
   definition: {
-    operation: 'getUser'
     params: z.ZodObject<{ id: z.ZodString }>
     responses: { 200: z.ZodObject<{ id: z.ZodNumber; name: z.ZodString }> }
   }
@@ -34,7 +32,6 @@ describe('Zod support', () => {
 
   it('infers handler context from Zod outputs', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: z.object({ id: z.coerce.number() }),
       query: z.object({ include: z.string().optional() }),
       responses: {
@@ -55,7 +52,6 @@ describe('Zod support', () => {
 
   it('rejects invalid Zod response returns', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: z.object({
           id: z.number(),
@@ -71,10 +67,10 @@ describe('Zod support', () => {
   })
 
   it('types client options and responses from Zod contracts', () => {
-    const user = client('getUser', { params: { id: '1' } })
+    const user = client('/api/users/:id', { method: 'get', params: { id: '1' } })
 
     // @ts-expect-error params.id must match the Zod input.
-    client('getUser', { params: { id: 1 } })
+    client('/api/users/:id', { method: 'get', params: { id: 1 } })
 
     expectTypeOf<Awaited<typeof user>>().toEqualTypeOf<{
       status: 200

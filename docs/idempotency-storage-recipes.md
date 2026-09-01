@@ -237,7 +237,6 @@ every request.
 const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
 
 export const endpoint = defineEndpoint({
-  operation: 'grantPoints',
   body: GrantPointsBody,
   responses: { 201: GrantPointsResult },
 }).idempotency({

@@ -47,10 +47,6 @@
     "./runtime": {
       "types": "./dist/runtime/index.d.ts",
       "import": "./dist/runtime/index.js"
-    },
-    "./query": {
-      "types": "./dist/runtime/tanstack-query.d.ts",
-      "import": "./dist/runtime/tanstack-query.js"
     }
   },
   "publishConfig": {

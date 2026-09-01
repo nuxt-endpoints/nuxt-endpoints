@@ -117,8 +117,8 @@ The storage lookup identity is a composite value:
 endpoint identity + trusted scope + client idempotency key
 ```
 
-Endpoint identity uses the actual HTTP method and normalized route identity,
-not only an optional operation name. This prevents two endpoints from sharing a
+Endpoint identity uses the actual HTTP method and normalized route identity.
+This prevents two endpoints from sharing a
 record accidentally. The Nuxt module must inject this route template and method
 into the runtime handler whenever idempotency is enabled, independently of
 whether OpenAPI generation is enabled. The raw request URL is not a substitute
@@ -258,7 +258,6 @@ surface.
 
 ```ts
 export const endpoint = defineEndpoint({
-  operation: 'grantPoints',
   body: GrantPointsBody,
   responses: {
     201: GrantPointsResult,
@@ -390,7 +389,7 @@ stable `code` and `detail` distinguish the idempotency-specific condition.
 
 The helper's `400`, `409`, and `422` failures are framework-managed request
 failures, like schema-validation `400` responses. They are deliberately not
-merged into the declared `.result()` union in the first version. OpenAPI lists
+merged into the declared awaited result union. OpenAPI lists
 their `application/problem+json` representation while preserving any declared
 application response with the same status and a different media type.
 

@@ -24,7 +24,6 @@ describe('Valibot support', () => {
 
   it('types handler context from Valibot outputs', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: Params,
       query: Query,
       responses: { 200: UserResponse },
@@ -40,7 +39,6 @@ describe('Valibot support', () => {
 
   it('rejects invalid Valibot response returns', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: { 200: UserResponse },
     })
 

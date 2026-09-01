@@ -14,7 +14,6 @@ without hiding the broader roadmap.
 | Document                                                        | Responsibility                                                                                                                 |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions                           |
-| [TanStack Query adapter](./tanstack-query-adapter.md)           | Query/Mutation factories, key design, error modes, SSR integration, test matrix, and the eight adapter decisions               |
 | [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                                       |
 | [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                                         |
 | [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
@@ -165,7 +164,6 @@ const authenticatedEndpoint = createEndpointBuilder()
   .use(tenantMiddleware) // adds { tenant: Tenant }
 
 export const endpoint = authenticatedEndpoint.define({
-  operation: 'getProject',
   params: ProjectParams,
   response: Project,
 })
@@ -247,7 +245,7 @@ demand- or externally-driven:
 - Waiting/polling on in-flight requests instead of an immediate `409` — only
   on real retry-UX demand.
 - Merging helper-generated `400`/`409`/`422` problems into the typed
-  `.result()` union — on demand for typed handling of those failures.
+  awaited status union — for typed handling of those failures.
 
 The first two would rework the claim/complete execution path inside
 `DefinedEndpoint.handler()`; that is the moment to also extract that path into
@@ -256,7 +254,7 @@ its own module (see Deferred internal refactorings).
 ## Operation-aware observability
 
 Named operations provide stable labels for tracing and metrics. Shared
-infrastructure should expose operation name, route, method, duration, result
+infrastructure should expose route, method, duration, result
 status, and transport failure without forcing every application to wrap
 `$endpoint` manually.
 
@@ -277,7 +275,7 @@ Recommendation: implement only after endpoint and adapter APIs stabilize.
 
 A future tab could show:
 
-- discovered path, method, and operation name;
+- discovered path and method;
 - request and response contract summaries;
 - runtime response-validation status;
 - generated client features and enabled adapters;
@@ -575,5 +573,5 @@ Reviewers should answer:
 7. Which proposed item blocks current adoption, and which can remain a
    backward-compatible later extension?
 
-Adapter-specific reviewers should separately evaluate the eight decisions in
-the [TanStack Query adapter document](./tanstack-query-adapter.md).
+Vue Query integration now uses `.queryOptions()` and `.mutationOptions()` on
+the endpoint request itself; the public guide documents the supported boundary.

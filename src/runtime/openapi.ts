@@ -140,7 +140,7 @@ export function createOpenApiDocument(
   const operations = new Set<string>()
 
   for (const endpoint of endpoints) {
-    const operationId = endpoint.definition.operation || fallbackOperationId(endpoint)
+    const operationId = fallbackOperationId(endpoint)
     if (operations.has(operationId)) {
       throw new Error(`Duplicate endpoint operation: ${operationId}`)
     }

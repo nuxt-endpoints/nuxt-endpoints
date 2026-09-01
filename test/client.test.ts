@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEndpointClient, createUseEndpoint, createUseEndpointResult } from '../src/runtime'
+import { createEndpointClient, createUseEndpoint } from '../src/runtime'
 
 const fetchMock = vi.fn()
 const fetchRawMock = vi.fn()
@@ -29,9 +29,7 @@ describe('createEndpointClient', () => {
   it('replaces path params and forwards fetch options', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
 
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-    ])
+    const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
 
     await client('/api/users/:id', {
       method: 'get',
@@ -44,44 +42,8 @@ describe('createEndpointClient', () => {
       method: 'get',
     })
 
-    await client('getUser', {
-      params: { id: 456 },
-    })
-
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/users/456', {
-      method: 'get',
-    })
-
-    await (
-      client as typeof client & {
-        getUser: (options: Record<string, unknown>) => PromiseLike<unknown>
-      }
-    ).getUser({
-      params: { id: 789 },
-    })
-
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/users/789', {
-      method: 'get',
-    })
-  })
-
-  it('allows operation names that match HTTP methods', async () => {
-    fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
-
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'get' },
-    ])
-
     await client('/api/users/:id', {
       method: 'get',
-      params: { id: 123 },
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/users/123', {
-      method: 'get',
-    })
-
-    await client('get', {
       params: { id: 456 },
     })
 
@@ -90,7 +52,7 @@ describe('createEndpointClient', () => {
     })
   })
 
-  it('returns typed status data through result calls', async () => {
+  it('returns typed status data when awaited', async () => {
     const headers = new Headers({ 'x-request-id': 'req-1' })
     fetchRawMock.mockResolvedValue({
       status: 404,
@@ -99,15 +61,13 @@ describe('createEndpointClient', () => {
       _data: { message: 'Not found' },
     })
 
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-    ])
+    const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
 
     const response = await client('/api/users/:id', {
       method: 'get',
       params: { id: 404 },
       query: { include: 'profile' },
-    }).result()
+    })
 
     expect(fetchRawMock).toHaveBeenCalledWith('/api/users/404', {
       query: { include: 'profile' },
@@ -131,9 +91,7 @@ describe('createEndpointClient', () => {
       _data: { id: 123, name: 'Tom' },
     })
 
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-    ])
+    const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
 
     const response = await client('/api/users/:id', {
       method: 'get',
@@ -153,26 +111,12 @@ describe('createEndpointClient', () => {
     })
   })
 
-  it('omits optional client methods when disabled', () => {
-    const client = createEndpointClient(
-      {
-        getUser: { path: '/api/users/:id', method: 'get' },
-      },
-      { features: { result: false, raw: false } },
-    )
-
-    const call = client('getUser', { params: { id: 123 } })
-
-    expect(call.result).toBeUndefined()
-    expect(call.raw).toBeUndefined()
-  })
-
   it('throws when a path parameter is missing', () => {
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-    ])
+    const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
 
-    expect(() => client('getUser', { params: {} })).toThrow(/Missing path parameter "id"/)
+    expect(() => client('/api/users/:id', { method: 'get', params: {} })).toThrow(
+      /Missing path parameter "id"/,
+    )
   })
 
   it('maps idempotencyKey to the generated route header without leaking the option', async () => {
@@ -181,12 +125,15 @@ describe('createEndpointClient', () => {
       {
         path: '/api/items',
         method: 'post',
-        operation: 'createItem',
         idempotency: { headerName: 'X-Request-Key', required: true },
       },
     ])
 
-    await client('createItem', { idempotencyKey: 'request-1', body: { amount: 100 } })
+    await client('/api/items', {
+      method: 'post',
+      idempotencyKey: 'request-1',
+      body: { amount: 100 },
+    })
 
     expect(fetchMock).toHaveBeenCalledWith('/api/items', {
       body: { amount: 100 },
@@ -201,12 +148,11 @@ describe('createEndpointClient', () => {
       {
         path: '/api/items',
         method: 'post',
-        operation: 'createItem',
         idempotency: { headerName: 'Idempotency-Key', required: true },
       },
     ])
 
-    const request = client('createItem', { body: { amount: 100 } })
+    const request = client('/api/items', { method: 'post', body: { amount: 100 } })
     await request
     await request
 
@@ -223,12 +169,11 @@ describe('createEndpointClient', () => {
       {
         path: '/api/check',
         method: 'post',
-        operation: 'check',
         idempotency: { headerName: 'Idempotency-Key', required: false },
       },
     ])
 
-    await client('check', { idempotencyKey: true })
+    await client('/api/check', { method: 'post', idempotencyKey: true })
 
     const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>
     expect(headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i)
@@ -236,10 +181,8 @@ describe('createEndpointClient', () => {
 
   it('connects one request object to queryOptions', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
-    const client = createEndpointClient([
-      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-    ])
-    const request = client('getUser', { params: { id: 123 } })
+    const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
+    const request = client('/api/users/:id', { method: 'get', params: { id: 123 } })
     const options = request.queryOptions()
 
     expect(options.queryKey).toEqual([
@@ -262,11 +205,10 @@ describe('createEndpointClient', () => {
       {
         path: '/api/items',
         method: 'post',
-        operation: 'createItem',
         idempotency: { headerName: 'Idempotency-Key', required: true },
       },
     ])
-    const request = client('createItem', { body: { amount: 100 } })
+    const request = client('/api/items', { method: 'post', body: { amount: 100 } })
     const options = request.mutationOptions()
 
     await options.mutationFn()
@@ -287,20 +229,22 @@ describe('createEndpointClient', () => {
       {
         path: '/api/items',
         method: 'post',
-        operation: 'createItem',
         idempotency: { headerName: 'Idempotency-Key', required: true },
       },
     ])
 
-    expect(() => requiredClient('createItem', { idempotencyKey: '' })).toThrow(/non-empty string/i)
-    expect(() => requiredClient('createItem', { idempotencyKey: 'one,two' })).toThrow(
-      /without commas/i,
-    )
-    expect(() => requiredClient('createItem', { idempotencyKey: 'line\nbreak' })).toThrow(
-      /control characters/i,
+    expect(() => requiredClient('/api/items', { method: 'post', idempotencyKey: '' })).toThrow(
+      /non-empty string/i,
     )
     expect(() =>
-      requiredClient('createItem', {
+      requiredClient('/api/items', { method: 'post', idempotencyKey: 'one,two' }),
+    ).toThrow(/without commas/i)
+    expect(() =>
+      requiredClient('/api/items', { method: 'post', idempotencyKey: 'line\nbreak' }),
+    ).toThrow(/control characters/i)
+    expect(() =>
+      requiredClient('/api/items', {
+        method: 'post',
         idempotencyKey: 'request-1',
         headers: { 'IDEMPOTENCY-KEY': 'request-1' },
       }),
@@ -314,12 +258,12 @@ describe('createEndpointClient', () => {
       {
         path: '/api/items',
         method: 'post',
-        operation: 'createItem',
         idempotency: { headerName: 'Idempotency-Key', required: true },
       },
     ])
 
-    await client('createItem', {
+    await client('/api/items', {
+      method: 'post',
       idempotencyKey: 'request-1',
       headers: new Headers({ 'x-trace': 'trace-1' }),
     })
@@ -329,7 +273,8 @@ describe('createEndpointClient', () => {
     expect(sentHeaders.get('x-trace')).toBe('trace-1')
 
     expect(() =>
-      client('createItem', {
+      client('/api/items', {
+        method: 'post',
         idempotencyKey: 'request-2',
         headers: [['IDEMPOTENCY-KEY', 'duplicate']],
       }),
@@ -342,13 +287,12 @@ describe('createEndpointClient', () => {
       {
         path: '/api/check',
         method: 'post',
-        operation: 'check',
         idempotency: { headerName: 'Idempotency-Key', required: false },
       },
     ])
 
-    await client('check')
-    await client('check', { idempotencyKey: 'request-1' })
+    await client('/api/check', { method: 'post' })
+    await client('/api/check', { method: 'post', idempotencyKey: 'request-1' })
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/check', { method: 'post' })
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/check', {
@@ -360,13 +304,15 @@ describe('createEndpointClient', () => {
   describe('mediaType body options', () => {
     it('does not set a content-type header for a multipart/form-data mediaType', async () => {
       fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/upload', method: 'post', operation: 'uploadFile' },
-      ])
+      const client = createEndpointClient([{ path: '/api/upload', method: 'post' }])
       const formData = new FormData()
       formData.append('name', 'Tom')
 
-      await client('uploadFile', { mediaType: 'multipart/form-data', body: formData })
+      await client('/api/upload', {
+        method: 'post',
+        mediaType: 'multipart/form-data',
+        body: formData,
+      })
 
       expect(fetchMock).toHaveBeenCalledWith('/api/upload', {
         body: formData,
@@ -381,12 +327,11 @@ describe('createEndpointClient', () => {
       // depending on the request being built by a real fetch - which a Nuxt
       // server-side call to a local route is not.
       fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
+      const client = createEndpointClient([{ path: '/api/notes', method: 'post' }])
       const params = new URLSearchParams({ note: 'hi' })
 
-      await client('createNote', {
+      await client('/api/notes', {
+        method: 'post',
         mediaType: 'application/x-www-form-urlencoded',
         body: params,
       })
@@ -400,11 +345,10 @@ describe('createEndpointClient', () => {
 
     it('keeps a caller-supplied content-type for a urlencoded body', async () => {
       fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
+      const client = createEndpointClient([{ path: '/api/notes', method: 'post' }])
 
-      await client('createNote', {
+      await client('/api/notes', {
+        method: 'post',
         mediaType: 'application/x-www-form-urlencoded',
         body: new URLSearchParams({ note: 'hi' }),
         headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
@@ -417,11 +361,13 @@ describe('createEndpointClient', () => {
 
     it('does not leak the mediaType option to the fetcher', async () => {
       fetchMock.mockResolvedValue({ ok: true })
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
+      const client = createEndpointClient([{ path: '/api/notes', method: 'post' }])
 
-      await client('createNote', { mediaType: 'application/json', body: { note: 'hi' } })
+      await client('/api/notes', {
+        method: 'post',
+        mediaType: 'application/json',
+        body: { note: 'hi' },
+      })
 
       const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
       expect(calledOptions).not.toHaveProperty('mediaType')
@@ -433,12 +379,10 @@ describe('createEndpointClient', () => {
     })
 
     it('throws when mediaType is not a string', () => {
-      const client = createEndpointClient([
-        { path: '/api/notes', method: 'post', operation: 'createNote' },
-      ])
+      const client = createEndpointClient([{ path: '/api/notes', method: 'post' }])
 
       expect(() =>
-        client('createNote', { mediaType: 123 as unknown as string, body: 'x' }),
+        client('/api/notes', { method: 'post', mediaType: 123 as unknown as string, body: 'x' }),
       ).toThrow(/mediaType option must be a string/)
     })
   })
@@ -447,10 +391,10 @@ describe('createEndpointClient', () => {
     it('sets responseType: stream in the fetcher options for a media response route', async () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
-      await client('exportUsers')
+      await client('/api/export', { method: 'get' })
 
       expect(fetchMock).toHaveBeenCalledWith('/api/export', {
         method: 'get',
@@ -460,11 +404,9 @@ describe('createEndpointClient', () => {
 
     it('does not set responseType for a route without a media response', async () => {
       fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
-      const client = createEndpointClient([
-        { path: '/api/users/:id', method: 'get', operation: 'getUser' },
-      ])
+      const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
 
-      await client('getUser', { params: { id: 123 } })
+      await client('/api/users/:id', { method: 'get', params: { id: 123 } })
 
       const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
       expect(calledOptions).not.toHaveProperty('responseType')
@@ -473,10 +415,10 @@ describe('createEndpointClient', () => {
     it('preserves an explicit caller responseType over the stream default', async () => {
       fetchMock.mockResolvedValue(new Blob())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
-      await client('exportUsers', { responseType: 'blob' })
+      await client('/api/export', { method: 'get', responseType: 'blob' })
 
       expect(fetchMock).toHaveBeenCalledWith('/api/export', {
         method: 'get',
@@ -487,10 +429,10 @@ describe('createEndpointClient', () => {
     it('sends the accept option as the accept header without leaking it to the fetcher', async () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
-      await client('exportUsers', { accept: 'application/json' })
+      await client('/api/export', { method: 'get', accept: 'application/json' })
 
       const calledOptions = fetchMock.mock.calls[0]![1] as Record<string, unknown>
       expect(calledOptions).not.toHaveProperty('accept')
@@ -504,10 +446,11 @@ describe('createEndpointClient', () => {
     it('lets a caller-set Accept header win over the accept option', async () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
-      await client('exportUsers', {
+      await client('/api/export', {
+        method: 'get',
         accept: 'application/json',
         headers: { Accept: 'text/csv' },
       } as never)
@@ -522,16 +465,16 @@ describe('createEndpointClient', () => {
     it('rejects an accept option that is not a non-empty string', () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
       // Rejected rather than ignored, like its sibling selectors: a dropped
       // `accept` comes back as the wrong representation, which is harder to
       // trace than a throw.
-      expect(() => client('exportUsers', { accept: 123 })).toThrow(
+      expect(() => client('/api/export', { method: 'get', accept: 123 })).toThrow(
         /accept option must be a non-empty string/,
       )
-      expect(() => client('exportUsers', { accept: '  ' })).toThrow(
+      expect(() => client('/api/export', { method: 'get', accept: '  ' })).toThrow(
         /accept option must be a non-empty string/,
       )
       expect(fetchMock).not.toHaveBeenCalled()
@@ -543,13 +486,13 @@ describe('createEndpointClient', () => {
         {
           path: '/api/export',
           method: 'post',
-          operation: 'createExport',
           mediaResponse: true,
           idempotency: { headerName: 'Idempotency-Key', required: true },
         },
       ])
 
-      await client('createExport', {
+      await client('/api/export', {
+        method: 'post',
         accept: 'application/json',
         idempotencyKey: 'request-1',
         headers: new Headers({ authorization: 'Bearer token' }),
@@ -567,10 +510,11 @@ describe('createEndpointClient', () => {
     it('keeps every caller header when they arrive as a tuple list', async () => {
       fetchMock.mockResolvedValue(new ReadableStream())
       const client = createEndpointClient([
-        { path: '/api/export', method: 'get', operation: 'exportUsers', mediaResponse: true },
+        { path: '/api/export', method: 'get', mediaResponse: true },
       ])
 
-      await client('exportUsers', {
+      await client('/api/export', {
+        method: 'get',
         accept: 'application/json',
         headers: [['authorization', 'Bearer token']],
       } as never)
@@ -600,7 +544,7 @@ describe('createEndpointClient', () => {
       },
     )
     const useEndpoint = createUseEndpoint(
-      [{ path: '/api/users/:id', method: 'get', operation: 'getUser' }],
+      [{ path: '/api/users/:id', method: 'get' }],
       useAsyncDataMock,
     )
 
@@ -622,23 +566,20 @@ describe('createEndpointClient', () => {
       signal,
     })
 
-    const operationState = useEndpoint('getUser', {
+    const secondState = useEndpoint('/api/users/:id', {
+      method: 'get',
       params: { id: 456 },
       lazy: true,
     }) as UseAsyncDataStub
 
-    expect(operationState.key).toBe('$endpoint:get:/api/users/:id:{"params":{"id":456}}')
-    expect(operationState.options).toEqual({ lazy: true })
-    await operationState.run(signal)
+    expect(secondState.key).toBe('$endpoint:get:/api/users/:id:{"params":{"id":456}}')
+    expect(secondState.options).toEqual({ lazy: true })
+    await secondState.run(signal)
 
     expect(fetchMock).toHaveBeenLastCalledWith('/api/users/456', {
       method: 'get',
       signal,
     })
-
-    expect(() => {
-      useEndpoint('getUser', { method: 'get', params: { id: 123 } })
-    }).toThrow('Endpoint operation calls do not take a method: getUser')
   })
 
   it('generates stable useAsyncData keys for endpoint calls', () => {
@@ -672,7 +613,7 @@ describe('createEndpointClient', () => {
     expect(state.options).toEqual({ watch: [] })
   })
 
-  it('wraps typed result calls with serializable useAsyncData state', async () => {
+  it('returns serializable status data from useEndpoint', async () => {
     fetchRawMock.mockResolvedValue({
       status: 404,
       ok: false,
@@ -695,18 +636,18 @@ describe('createEndpointClient', () => {
         }
       },
     )
-    const useEndpointResult = createUseEndpointResult(
-      [{ path: '/api/users/:id', method: 'get', operation: 'getUser' }],
+    const useEndpoint = createUseEndpoint(
+      [{ path: '/api/users/:id', method: 'get' }],
       useAsyncDataMock,
     )
 
-    const state = useEndpointResult('/api/users/:id', {
+    const state = useEndpoint('/api/users/:id', {
       method: 'get',
       params: { id: 404 },
       lazy: true,
     }) as UseAsyncDataStub
 
-    expect(state.key).toBe('$endpoint-result:get:/api/users/:id:{"params":{"id":404}}')
+    expect(state.key).toBe('$endpoint:get:/api/users/:id:{"params":{"id":404}}')
     expect(state.options).toEqual({ lazy: true })
     await expect(state.run()).resolves.toEqual({
       status: 404,
@@ -718,16 +659,6 @@ describe('createEndpointClient', () => {
       ignoreResponseError: true,
       signal: expect.any(AbortSignal),
     })
-
-    const operationState = useEndpointResult('getUser', {
-      params: { id: 404 },
-    }) as UseAsyncDataStub
-
-    await expect(operationState.run()).resolves.toEqual({
-      status: 404,
-      ok: false,
-      body: { message: 'Not found' },
-    })
   })
 
   // `useFetch` swaps plain `$fetch` for `useRequestFetch()` on relative paths
@@ -735,7 +666,7 @@ describe('createEndpointClient', () => {
   // composables that stand in for it capture the same request-aware fetcher;
   // `$endpoint` stands in for `$fetch` and deliberately does not.
   describe('request-aware fetcher capture', () => {
-    const routes = [{ path: '/api/users/:id', method: 'get', operation: 'getUser' }] as const
+    const routes = [{ path: '/api/users/:id', method: 'get' }] as const
 
     function createUseAsyncDataStub() {
       return vi.fn(
@@ -769,7 +700,10 @@ describe('createEndpointClient', () => {
         captureFetcher: () => createFetcher(capturedData),
       })
 
-      const state = useEndpoint('getUser', { params: { id: 5 } }) as UseAsyncDataStub
+      const state = useEndpoint('/api/users/:id', {
+        method: 'get',
+        params: { id: 5 },
+      }) as UseAsyncDataStub
       await state.run()
 
       expect(capturedData).toHaveBeenCalledWith('/api/users/5', {
@@ -777,25 +711,6 @@ describe('createEndpointClient', () => {
         signal: expect.any(AbortSignal),
       })
       expect(fetchMock).not.toHaveBeenCalled()
-    })
-
-    it('captures for useEndpointResult too', async () => {
-      const capturedRaw = vi.fn().mockResolvedValue({
-        status: 200,
-        ok: true,
-        headers: new Headers(),
-        _data: { id: 7 },
-      })
-      const useEndpointResult = createUseEndpointResult(routes, createUseAsyncDataStub(), {
-        features: { result: true, raw: true },
-        captureFetcher: () => Object.assign(vi.fn(), { raw: capturedRaw }) as never,
-      })
-
-      const state = useEndpointResult('getUser', { params: { id: 7 } }) as UseAsyncDataStub
-      await state.run()
-
-      expect(capturedRaw).toHaveBeenCalled()
-      expect(fetchRawMock).not.toHaveBeenCalled()
     })
 
     it('prefers an explicit fetcher over captureFetcher', async () => {
@@ -806,7 +721,10 @@ describe('createEndpointClient', () => {
         captureFetcher: () => createFetcher(captureData),
       })
 
-      const state = useEndpoint('getUser', { params: { id: 1 } }) as UseAsyncDataStub
+      const state = useEndpoint('/api/users/:id', {
+        method: 'get',
+        params: { id: 1 },
+      }) as UseAsyncDataStub
       await state.run()
 
       expect(explicitData).toHaveBeenCalled()
@@ -822,7 +740,10 @@ describe('createEndpointClient', () => {
         captureFetcher: () => undefined,
       })
 
-      const state = useEndpoint('getUser', { params: { id: 3 } }) as UseAsyncDataStub
+      const state = useEndpoint('/api/users/:id', {
+        method: 'get',
+        params: { id: 3 },
+      }) as UseAsyncDataStub
       await state.run()
 
       expect(fetchMock).toHaveBeenCalledWith('/api/users/3', {
@@ -842,27 +763,38 @@ describe('createEndpointClient', () => {
         captureFetcher: () => current,
       })
 
-      await (useEndpoint('getUser', { params: { id: 1 } }) as UseAsyncDataStub).run()
+      await (
+        useEndpoint('/api/users/:id', { method: 'get', params: { id: 1 } }) as UseAsyncDataStub
+      ).run()
       current = createFetcher(secondData)
-      await (useEndpoint('getUser', { params: { id: 2 } }) as UseAsyncDataStub).run()
+      await (
+        useEndpoint('/api/users/:id', { method: 'get', params: { id: 2 } }) as UseAsyncDataStub
+      ).run()
 
       expect(firstData).toHaveBeenCalledTimes(1)
       expect(secondData).toHaveBeenCalledTimes(1)
     })
 
-    it('leaves $endpoint on plain $fetch', async () => {
+    it('leaves direct $endpoint awaits on $fetch and captures its query function', async () => {
       fetchMock.mockResolvedValue({ id: 9 })
-      const captured = vi.fn()
+      const captured = vi.fn().mockResolvedValue({ id: 10 })
       const client = createEndpointClient(routes, {
         captureFetcher: () => createFetcher(captured),
-      } as never)
+      })
 
-      await client('getUser', { params: { id: 9 } })
+      const direct = client('/api/users/:id', { method: 'get', params: { id: 9 } })
+      await direct
 
       expect(fetchMock).toHaveBeenCalledWith('/api/users/9', {
         method: 'get',
       })
       expect(captured).not.toHaveBeenCalled()
+
+      await direct.queryOptions().queryFn({ signal: new AbortController().signal })
+      expect(captured).toHaveBeenCalledWith('/api/users/9', {
+        method: 'get',
+        signal: expect.any(AbortSignal),
+      })
     })
   })
 })

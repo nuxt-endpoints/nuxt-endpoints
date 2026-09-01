@@ -7,7 +7,6 @@ const PlaygroundUser = z.object({
 })
 
 export default defineRouteHandler({
-  operation: 'listSqliteUsers',
   summary: 'List users persisted in the playground SQLite database',
   validate: {
     response: {

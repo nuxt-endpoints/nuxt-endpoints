@@ -37,7 +37,6 @@ A download is a media response like any other, so it can stay in the contract:
 ```ts
 // server/api/files/[id].get.ts
 export default defineEndpoint({
-  operation: 'downloadFile',
   params: z.object({ id: z.string() }),
   responses: {
     200: { media: 'application/pdf', description: 'Invoice PDF' },
@@ -138,7 +137,6 @@ body so callers receive the live stream.
 ```ts
 // server/api/events.get.ts
 export default defineEndpoint({
-  operation: 'streamEvents',
   responses: {
     200: { media: 'text/event-stream' },
   },

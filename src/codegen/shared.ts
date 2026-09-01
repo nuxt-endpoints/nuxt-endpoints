@@ -1,13 +1,10 @@
 import type { EndpointRouteHandler } from './types'
 
 // The runtime-facing route config shape embedded (as a `JSON.stringify`'d `as
-// const` literal) in both the plain client (`endpoints.ts`) and the query
-// adapter client (`endpoints-query.ts`). Factored out so the two generators
-// build it identically rather than duplicating the same `.map()`.
+// const` literal) in the generated client (`endpoints.ts`).
 export type EndpointRouteConfigEntry = {
   path: string
   method: string
-  operation?: string
   idempotency?: { headerName: string; required: boolean }
   mediaResponse?: true
 }
@@ -18,7 +15,6 @@ export function toEndpointRouteConfigEntries(
   return handlers.map((handler) => ({
     path: handler.route,
     method: handler.method,
-    ...(handler.operation ? { operation: handler.operation } : {}),
     ...(handler.idempotency
       ? {
           idempotency: {

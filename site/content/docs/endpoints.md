@@ -50,7 +50,6 @@ Add `operation` when you also want a named call target or a hand-picked OpenAPI 
 
 ```ts
 export default defineEndpoint({
-  operation: 'getUser',
   params: UserParams,
   responses: { 200: User },
   handler: (event) => findUser(event.validated.params.id),
@@ -77,12 +76,10 @@ statuses, media-type bodies, and idempotency all work per method:
 // server/api/users/[id].ts — no method suffix
 export const endpoints = defineEndpointMethods({
   get: defineEndpoint({
-    operation: 'getUser',
     params: z.object({ id: z.coerce.number() }),
     responses: { 200: User },
   }),
   put: defineEndpoint({
-    operation: 'updateUser',
     params: z.object({ id: z.coerce.number() }),
     body: UpdateUser,
     responses: { 200: User, 404: NotFound },
@@ -131,7 +128,6 @@ the supported types.
 
 ```ts
 export default defineEndpoint({
-  operation: 'createUser',
   body: {
     'application/json': z.object({ name: z.string() }),
     'multipart/form-data': z.object({
@@ -389,7 +385,6 @@ A validated response body is always sent as JSON — that is what having a schem
 
 ```ts
 export default defineEndpoint({
-  operation: 'exportUsers',
   query: z.object({ delimiter: z.string().optional() }),
   responses: {
     200: { media: 'text/csv', description: 'CSV export' },
@@ -442,7 +437,6 @@ Give `media` an array and the status has more than one representation. The runti
 
 ```ts
 export default defineEndpoint({
-  operation: 'exportUsers',
   responses: {
     200: { media: ['text/csv', 'application/json'], description: 'User export' },
     404: ErrorBody,
@@ -558,7 +552,6 @@ export default defineNuxtConfig({
 ```ts
 // server/custom-routes/report.get.ts — outside every scanned directory
 export default defineEndpoint({
-  operation: 'getCustomReport',
   query: z.object({ id: z.string() }),
   responses: {
     200: z.object({ id: z.string(), source: z.literal('custom-route') }),
@@ -589,7 +582,6 @@ import { defineEndpoint } from 'nuxt-endpoints/runtime'
 import { z } from 'zod'
 
 export const getUserEndpoint = defineEndpoint({
-  operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: { 200: z.object({ id: z.number(), name: z.string() }) },
 })

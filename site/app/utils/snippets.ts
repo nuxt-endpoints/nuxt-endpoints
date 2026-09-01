@@ -113,7 +113,6 @@ if (result.status === 200) console.log(result.body.name)`,
       { text: '. Path-based calls still work.' },
     ],
     serverCode: `export default defineEndpoint({
-  operation: 'getUser', // names the client call & operationId
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
@@ -132,7 +131,7 @@ if (result.status === 200) console.log(result.body.name)`,
       serverCode: [2],
       clientCode: [1],
     },
-    serverEffect: '`operation: "getUser"` does not replace the path contract.',
+    serverEffect: 'The generated client uses the route path and HTTP method directly.',
     clientEffect: '`$endpoint.getUser(...)` calls the operation target.',
     runtimeEffect: 'OpenAPI can use `getUser` as the operationId.',
   },
@@ -145,7 +144,6 @@ if (result.status === 200) console.log(result.body.name)`,
       { text: ' for the matching response body.' },
     ],
     serverCode: `export default defineEndpoint({
-  operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
@@ -177,7 +175,6 @@ if (result.status === 200) console.log(result.body.name)`,
       { text: ' for Nuxt-style state.' },
     ],
     serverCode: `export default defineEndpoint({
-  operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),
@@ -188,7 +185,8 @@ if (result.status === 200) console.log(result.body.name)`,
     return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `const { data: result, pending, error, refresh } = await useEndpoint('getUser', {
+    clientCode: `const { data: result, pending, error, refresh } = await useEndpoint('/api/users/:id', {
+  method: 'get',
   params: { id: '123' },
 })`,
     highlightLines: {
@@ -208,7 +206,6 @@ if (result.status === 200) console.log(result.body.name)`,
       { text: '. Vue Query owns the cache while the endpoint contract owns the types.' },
     ],
     serverCode: `export default defineEndpoint({
-  operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   responses: {
     200: z.object({ id: z.number(), name: z.string() }),

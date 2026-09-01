@@ -1,6 +1,5 @@
 import type {
   EndpointClientOptions,
-  EndpointClientOptionsAreOptional,
   EndpointDefinition,
   EndpointResponsesContract,
   EndpointMediaResponseStream,
@@ -22,37 +21,27 @@ import type { EndpointWireValue } from './platform'
 export type EndpointRouteEntry = {
   path: string
   method: HttpMethod
-  operation?: string
   definition: EndpointDefinition
   handlerReturn?: unknown
 }
 
 export type EndpointClientFeatureOptions = {
-  result: boolean
   raw: boolean
 }
 
 export type DefaultEndpointClientFeatures = {
-  result: true
   raw: true
 }
 
 export type EndpointClient<
   ROUTES extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = EndpointPathCaller<ROUTES, FEATURES> &
-  EndpointOperationCaller<ROUTES, FEATURES> &
-  EndpointOperationAliases<ROUTES, FEATURES>
+> = EndpointPathCaller<ROUTES, FEATURES>
 
 export type UseEndpointClient<
   ROUTES extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
 > = UseEndpointCaller<ROUTES, FEATURES>
-
-export type UseEndpointResultClient<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = FEATURES['result'] extends true ? UseEndpointResultCaller<ROUTES, FEATURES> : never
 
 export type EndpointPathCaller<
   ROUTES extends EndpointRouteEntry,
@@ -66,29 +55,10 @@ export type EndpointPathCaller<
   options: EndpointPathClientOptions<ROUTE, METHOD>,
 ) => EndpointCall<ROUTE, FEATURES>
 
-export type EndpointOperationCaller<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <
-  const OPERATION extends EndpointOperation<ROUTES>,
-  ROUTE extends Extract<ROUTES, { operation: OPERATION }>,
->(
-  ...args: EndpointOperationCallArgs<OPERATION, ROUTE>
-) => EndpointCall<ROUTE, FEATURES>
-
-export type EndpointOperationAliases<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = {
-  [OPERATION in EndpointOperation<ROUTES> as EndpointOperationAliasKey<OPERATION>]: (
-    ...args: EndpointOperationAliasCallArgs<Extract<ROUTES, { operation: OPERATION }>>
-  ) => EndpointCall<Extract<ROUTES, { operation: OPERATION }>, FEATURES>
-}
-
 export type UseEndpointCaller<
   ROUTES extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = UseEndpointPathCaller<ROUTES, FEATURES> & UseEndpointOperationCaller<ROUTES, FEATURES>
+> = UseEndpointPathCaller<ROUTES, FEATURES>
 
 export type UseEndpointPathCaller<
   ROUTES extends EndpointRouteEntry,
@@ -106,61 +76,7 @@ export type UseEndpointPathCaller<
   },
 ) => EndpointAsyncData<DATA | DEFAULT>
 
-export type UseEndpointResultCaller<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = UseEndpointResultPathCaller<ROUTES, FEATURES> &
-  UseEndpointResultOperationCaller<ROUTES, FEATURES>
-
-export type UseEndpointOperationCaller<
-  ROUTES extends EndpointRouteEntry,
-  _FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <
-  const OPERATION extends EndpointOperation<ROUTES>,
-  ROUTE extends Extract<ROUTES, { operation: OPERATION }>,
-  DATA = EndpointResultData<ROUTE>,
-  DEFAULT = undefined,
->(
-  ...args: UseEndpointOperationArgs<OPERATION, ROUTE, EndpointResultData<ROUTE>, DATA, DEFAULT>
-) => EndpointAsyncData<DATA | DEFAULT>
-
-export type UseEndpointResultPathCaller<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <
-  const PATH extends EndpointPath<ROUTES>,
-  const METHOD extends EndpointRouteMethod<ROUTES, PATH>,
-  ROUTE extends Extract<ROUTES, { path: PATH; method: METHOD }>,
-  DATA = EndpointResultData<ROUTE>,
-  DEFAULT = undefined,
->(
-  path: PATH,
-  options: UseEndpointResultClientOptions<ROUTE, FEATURES, DATA, DEFAULT> & {
-    method: METHOD
-  },
-) => EndpointAsyncData<DATA | DEFAULT>
-
-export type UseEndpointResultOperationCaller<
-  ROUTES extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <
-  const OPERATION extends EndpointOperation<ROUTES>,
-  ROUTE extends Extract<ROUTES, { operation: OPERATION }>,
-  DATA = EndpointResultData<ROUTE>,
-  DEFAULT = undefined,
->(
-  ...args: UseEndpointResultOperationArgs<OPERATION, ROUTE, FEATURES, DATA, DEFAULT>
-) => EndpointAsyncData<DATA | DEFAULT>
-
 export type EndpointPath<ROUTES extends EndpointRouteEntry> = ROUTES['path']
-
-export type EndpointOperation<ROUTES extends EndpointRouteEntry> = ROUTES extends {
-  operation: infer OPERATION extends string
-}
-  ? OPERATION extends `/${string}`
-    ? never
-    : OPERATION
-  : never
 
 export type EndpointRouteMethod<
   ROUTES extends EndpointRouteEntry,
@@ -174,12 +90,6 @@ export type EndpointPathCall<
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
 > = EndpointCall<Extract<ROUTES, { path: PATH; method: METHOD }>, FEATURES>
 
-export type EndpointOperationCall<
-  ROUTES extends EndpointRouteEntry,
-  OPERATION extends EndpointOperation<ROUTES>,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = EndpointCall<Extract<ROUTES, { operation: OPERATION }>, FEATURES>
-
 export type EndpointPathClientOptions<
   ROUTE extends EndpointRouteEntry,
   METHOD extends ROUTE['method'],
@@ -187,35 +97,6 @@ export type EndpointPathClientOptions<
   EndpointClientOptions<ROUTE['definition']> extends void
     ? { method: METHOD }
     : EndpointClientOptions<ROUTE['definition']> & { method: METHOD }
-
-export type EndpointOperationCallArgs<OPERATION extends string, ROUTE extends EndpointRouteEntry> =
-  EndpointClientOptionsAreOptional<ROUTE['definition']> extends true
-    ? [
-        operation: OPERATION,
-        options?: EndpointClientOptions<ROUTE['definition']> extends void
-          ? undefined
-          : EndpointClientOptions<ROUTE['definition']>,
-      ]
-    : [operation: OPERATION, options: EndpointClientOptions<ROUTE['definition']>]
-
-export type EndpointOperationAliasCallArgs<ROUTE extends EndpointRouteEntry> =
-  EndpointClientOptionsAreOptional<ROUTE['definition']> extends true
-    ? [
-        options?: EndpointClientOptions<ROUTE['definition']> extends void
-          ? undefined
-          : EndpointClientOptions<ROUTE['definition']>,
-      ]
-    : [options: EndpointClientOptions<ROUTE['definition']>]
-
-export type EndpointOperationRequestOptions<
-  ROUTES extends EndpointRouteEntry,
-  OPERATION extends EndpointOperation<ROUTES>,
-> = EndpointClientOptions<Extract<ROUTES, { operation: OPERATION }>['definition']>
-
-export type EndpointOperationAliasKey<OPERATION extends string> =
-  OPERATION extends EndpointOperationAliasReservedKey ? never : OPERATION
-
-type EndpointOperationAliasReservedKey = (typeof reservedEndpointOperationAliasList)[number]
 
 export type UseEndpointClientMethod<
   ROUTE extends EndpointRouteEntry,
@@ -237,61 +118,11 @@ export type UseEndpointClientOptions<
     ? UseEndpointOptions<RESULT, DATA, DEFAULT>
     : EndpointClientOptions<ROUTE['definition']> & UseEndpointOptions<RESULT, DATA, DEFAULT>
 
-export type UseEndpointOperationArgs<
-  OPERATION extends string,
-  ROUTE extends EndpointRouteEntry,
-  RESULT,
-  DATA = RESULT,
-  DEFAULT = undefined,
-> =
-  EndpointClientOptionsAreOptional<ROUTE['definition']> extends true
-    ? [operation: OPERATION, options?: UseEndpointClientOptions<ROUTE, RESULT, DATA, DEFAULT>]
-    : [operation: OPERATION, options: UseEndpointClientOptions<ROUTE, RESULT, DATA, DEFAULT>]
-
-export type UseEndpointResultClientMethod<
-  ROUTE extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = FEATURES['result'] extends true
-  ? <DATA = EndpointResultData<ROUTE>, DEFAULT = undefined>(
-      path: ROUTE['path'],
-      options: UseEndpointResultClientOptions<ROUTE, FEATURES, DATA, DEFAULT> & {
-        method: ROUTE['method']
-      },
-    ) => EndpointAsyncData<DATA | DEFAULT>
-  : never
-
-export type UseEndpointResultClientOptions<
-  ROUTE extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-  DATA = EndpointResultData<ROUTE>,
-  DEFAULT = undefined,
-> = FEATURES['result'] extends true
-  ? UseEndpointClientOptions<ROUTE, EndpointResultData<ROUTE>, DATA, DEFAULT>
-  : never
-
-export type UseEndpointResultOperationArgs<
-  OPERATION extends string,
-  ROUTE extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-  DATA = EndpointResultData<ROUTE>,
-  DEFAULT = undefined,
-> =
-  EndpointClientOptionsAreOptional<ROUTE['definition']> extends true
-    ? [
-        operation: OPERATION,
-        options?: UseEndpointResultClientOptions<ROUTE, FEATURES, DATA, DEFAULT>,
-      ]
-    : [
-        operation: OPERATION,
-        options: UseEndpointResultClientOptions<ROUTE, FEATURES, DATA, DEFAULT>,
-      ]
-
 export type EndpointCall<
   ROUTE extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
 > = PromiseLike<EndpointResult<ROUTE>> &
   Pick<Promise<EndpointResult<ROUTE>>, 'catch' | 'finally'> &
-  EndpointResultCallFeature<ROUTE, FEATURES> &
   EndpointRawCallFeature<ROUTE, FEATURES> &
   EndpointQueryCallFeature<ROUTE> &
   EndpointMutationCallFeature<ROUTE>
@@ -318,15 +149,6 @@ type EndpointMutationCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['meth
   | 'post'
   | 'put'
   ? { mutationOptions: () => EndpointCallMutationOptions<ROUTE> }
-  : {}
-
-type EndpointResultCallFeature<
-  ROUTE extends EndpointRouteEntry,
-  FEATURES extends EndpointClientFeatureOptions,
-> = FEATURES['result'] extends true
-  ? {
-      result: () => Promise<EndpointResult<ROUTE>>
-    }
   : {}
 
 type EndpointRawCallFeature<
@@ -606,15 +428,14 @@ export type EndpointClientRuntimeOptions = {
    * route the way `useFetch` does. Called per composable call rather than
    * once at module scope, because the fetcher belongs to the request.
    *
-   * Only the `useEndpoint` family passes this. `$endpoint` deliberately stays
-   * on plain `$fetch`, matching Nuxt's own asymmetry between `$fetch` and
-   * `useFetch`.
+   * `useEndpoint` uses it for its request. `$endpoint` keeps direct awaits on
+   * plain `$fetch`, but request `.queryOptions()` / `.mutationOptions()` use
+   * the captured fetcher so TanStack SSR forwards the incoming request.
    */
   captureFetcher?: () => EndpointFetcherRuntime | undefined
 }
 
 export type EndpointCallRuntime = {
-  data: () => Promise<unknown>
   result: () => Promise<EndpointResultRuntime>
   raw: () => Promise<Response>
   request: EndpointRequestFunctions
@@ -623,7 +444,6 @@ export type EndpointCallRuntime = {
 export type EndpointRequestRuntime<VALUE> = (signal?: AbortSignal) => Promise<VALUE>
 
 export type EndpointRequestFunctions = {
-  data: EndpointRequestRuntime<unknown>
   result: EndpointRequestRuntime<EndpointResultRuntime>
   raw: EndpointRequestRuntime<Response>
   options: Record<string, unknown>
@@ -645,7 +465,6 @@ export type EndpointResultDataRuntime = Omit<EndpointResultRuntime, 'headers'>
 export type EndpointClientRouteConfig = {
   path: string
   method: HttpMethod
-  operation?: string
   idempotency?: {
     headerName: string
     required: boolean
@@ -658,9 +477,7 @@ export type EndpointClientRouteConfig = {
   mediaResponse?: true
 }
 
-export type EndpointClientRouteConfigInput =
-  | readonly EndpointClientRouteConfig[]
-  | Record<string, Omit<EndpointClientRouteConfig, 'operation'>>
+export type EndpointClientRouteConfigInput = readonly EndpointClientRouteConfig[]
 
 export type EndpointClientRuntimeValue = (
   request: string,
@@ -668,11 +485,6 @@ export type EndpointClientRuntimeValue = (
 ) => EndpointCallRuntimeValue
 
 export type UseEndpointClientRuntimeValue = (
-  path: string,
-  options?: Record<string, unknown>,
-) => unknown
-
-export type UseEndpointResultClientRuntimeValue = (
   path: string,
   options?: Record<string, unknown>,
 ) => unknown
@@ -694,10 +506,9 @@ export function createEndpointClient(
   const fetcher = options.fetcher
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
-
-    return createEndpointCall(route, endpointOptions, features, fetcher)
+    const queryFetcher = fetcher ?? options.captureFetcher?.()
+    return createEndpointCall(route, endpointOptions, features, fetcher, queryFetcher)
   }) as EndpointClientRuntimeValue
-  attachEndpointOperationAliases(client, routes, features, fetcher)
 
   return client
 }
@@ -712,39 +523,14 @@ export function createUseEndpoint(
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
     const fetcher = options.fetcher ?? options.captureFetcher?.()
-    return createUseEndpointCall(
-      route,
-      endpointOptions,
-      useAsyncData,
-      features,
-      fetcher,
-      'result',
-      'data',
-    )
+    return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher)
   }) as UseEndpointClientRuntimeValue
-
-  return client
-}
-
-export function createUseEndpointResult(
-  routesInput: EndpointClientRouteConfigInput,
-  useAsyncData: UseAsyncDataRuntime,
-  options: EndpointClientRuntimeOptions = {},
-) {
-  const features = resolveClientFeatures(options.features)
-  const routes = normalizeRoutes(routesInput)
-  const client = ((request: string, callOptions = {}) => {
-    const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
-    const fetcher = options.fetcher ?? options.captureFetcher?.()
-    return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'result')
-  }) as UseEndpointResultClientRuntimeValue
 
   return client
 }
 
 type EndpointCallRuntimeValue = PromiseLike<unknown> &
   Pick<Promise<unknown>, 'catch' | 'finally'> & {
-    result: () => Promise<EndpointResultRuntime>
     raw: () => Promise<Response>
     queryOptions: () => {
       queryKey: readonly unknown[]
@@ -761,66 +547,7 @@ type EndpointCallRuntimeValue = PromiseLike<unknown> &
 export function normalizeRoutes(
   routesInput: EndpointClientRouteConfigInput,
 ): EndpointClientRouteConfig[] {
-  if (Array.isArray(routesInput)) {
-    return [...routesInput]
-  }
-
-  return Object.entries(routesInput).map(([operation, route]) => {
-    return { ...route, operation }
-  })
-}
-
-function attachEndpointOperationAliases(
-  client: EndpointClientRuntimeValue,
-  routes: EndpointClientRouteConfig[],
-  features: EndpointClientFeatureOptions,
-  fetcher: EndpointFetcherRuntime | undefined,
-) {
-  for (const route of routes) {
-    if (!route.operation || isReservedEndpointOperationAlias(route.operation)) {
-      continue
-    }
-
-    Object.defineProperty(client, route.operation, {
-      configurable: true,
-      enumerable: true,
-      value(callOptions: Record<string, unknown> = {}) {
-        const resolved = resolveEndpointRoute(routes, route.operation as string, callOptions)
-        return createEndpointCall(resolved.route, resolved.endpointOptions, features, fetcher)
-      },
-    })
-  }
-}
-
-// Single source for both the runtime guard below and the compile-time
-// `EndpointOperationAliasReservedKey` union, so a name skipped at runtime can
-// never be offered as a typed `$endpoint.<operation>()` alias (and vice versa).
-const reservedEndpointOperationAliasList = [
-  '__proto__',
-  'arguments',
-  'caller',
-  'catch',
-  'constructor',
-  'finally',
-  'length',
-  'name',
-  'prototype',
-  'then',
-  'apply',
-  'bind',
-  'call',
-  'hasOwnProperty',
-  'isPrototypeOf',
-  'propertyIsEnumerable',
-  'toLocaleString',
-  'toString',
-  'valueOf',
-] as const
-
-const reservedEndpointOperationAliases = new Set<string>(reservedEndpointOperationAliasList)
-
-export function isReservedEndpointOperationAlias(operation: string) {
-  return reservedEndpointOperationAliases.has(operation)
+  return [...routesInput]
 }
 
 function resolveEndpointRoute(
@@ -829,23 +556,6 @@ function resolveEndpointRoute(
   options: Record<string, unknown>,
 ) {
   const { method, ...endpointOptions } = options
-
-  if (!request.startsWith('/')) {
-    if (method !== undefined) {
-      throw new Error(`Endpoint operation calls do not take a method: ${request}`)
-    }
-
-    const route = routes.find((route) => route.operation === request)
-
-    if (!route) {
-      throw new Error(`Unknown endpoint operation: ${request}`)
-    }
-
-    return {
-      route,
-      endpointOptions,
-    }
-  }
 
   if (typeof method !== 'string') {
     throw new Error(`Endpoint path calls require a method: ${request}`)
@@ -882,16 +592,6 @@ export function createEndpointRequest(
   const path = replaceParams(route.path, params)
   const fetcher = runtimeOptions.fetcher
 
-  const data: EndpointRequestRuntime<unknown> = (signal) => {
-    return resolveEndpointFetcher(fetcher)(
-      path,
-      withAbortSignal(signal, {
-        ...fetchOptions,
-        method: route.method,
-      }),
-    )
-  }
-
   const result: EndpointRequestRuntime<EndpointResultRuntime> = (signal) => {
     return fetchResult(
       path,
@@ -916,7 +616,7 @@ export function createEndpointRequest(
     )
   }
 
-  return { data, result, raw, options: resolvedOptions }
+  return { result, raw, options: resolvedOptions }
 }
 
 function resolveIdempotencyClientOptions(
@@ -1148,18 +848,16 @@ function createEndpointCall(
   options: Record<string, unknown>,
   features: EndpointClientFeatureOptions,
   fetcher?: EndpointFetcherRuntime,
+  queryFetcher: EndpointFetcherRuntime | undefined = fetcher,
 ): EndpointCallRuntimeValue {
-  let dataPromise: Promise<unknown> | undefined
   let resultPromise: Promise<EndpointResultRuntime> | undefined
   let rawPromise: Promise<Response> | undefined
 
   const request = createEndpointRequest(route, options, { fetcher })
-
-  const data = () => {
-    dataPromise ||= request.data()
-
-    return dataPromise
-  }
+  const queryRequest =
+    queryFetcher === fetcher
+      ? request
+      : createEndpointRequest(route, request.options, { fetcher: queryFetcher })
 
   const result = () => {
     resultPromise ||= request.result()
@@ -1174,7 +872,6 @@ function createEndpointCall(
   }
 
   const callRuntime: EndpointCallRuntime = {
-    data,
     result,
     raw,
     request,
@@ -1197,9 +894,6 @@ function createEndpointCall(
   } as unknown as EndpointCallRuntimeValue
   call[endpointCallRuntimeSymbol] = callRuntime
 
-  if (features.result) {
-    call.result = result
-  }
   if (features.raw) {
     call.raw = raw
   }
@@ -1207,13 +901,13 @@ function createEndpointCall(
     call.queryOptions = () => ({
       queryKey: createRequestQueryKey(route, request.options),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        request.result(signal).then(toEndpointResultData),
+        queryRequest.result(signal).then(toEndpointResultData),
     })
   }
   if (['delete', 'patch', 'post', 'put'].includes(route.method)) {
     call.mutationOptions = () => ({
       mutationKey: createRequestQueryKey(route, request.options),
-      mutationFn: () => request.result().then(toEndpointResultData),
+      mutationFn: () => queryRequest.result().then(toEndpointResultData),
     })
   }
 
@@ -1239,25 +933,15 @@ function createUseEndpointCall(
   useAsyncData: UseAsyncDataRuntime,
   features: EndpointClientFeatureOptions,
   fetcher: EndpointFetcherRuntime | undefined,
-  requestMode: UseEndpointKeyKind,
-  keyKind: UseEndpointKeyKind = requestMode,
 ) {
-  const { endpointOptions, asyncDataOptions, key } = splitUseEndpointOptions(
-    route,
-    options,
-    keyKind,
-  )
+  const { endpointOptions, asyncDataOptions, key } = splitUseEndpointOptions(route, options)
   const call = createEndpointCall(route, endpointOptions, features, fetcher)
   const runtime = call[endpointCallRuntimeSymbol]
 
   return useAsyncData(
     key,
     (_nuxtApp, options) => {
-      if (requestMode === 'result') {
-        return runtime.request.result(options?.signal).then(toEndpointResultData)
-      }
-
-      return runtime.request.data(options?.signal)
+      return runtime.request.result(options?.signal).then(toEndpointResultData)
     },
     asyncDataOptions,
   )
@@ -1266,7 +950,6 @@ function createUseEndpointCall(
 function splitUseEndpointOptions(
   route: EndpointClientRouteConfig,
   options: Record<string, unknown>,
-  keyKind: UseEndpointKeyKind,
 ): {
   endpointOptions: Record<string, unknown>
   asyncDataOptions: Record<string, unknown>
@@ -1308,7 +991,7 @@ function splitUseEndpointOptions(
     key:
       typeof key === 'string' && key.length > 0
         ? key
-        : createUseEndpointKey(route, endpointOptions, keyKind),
+        : createUseEndpointKey(route, endpointOptions),
   }
 }
 
@@ -1319,16 +1002,11 @@ function compactOptions(options: Record<string, unknown>): Record<string, unknow
 function createUseEndpointKey(
   route: EndpointClientRouteConfig,
   endpointOptions: Record<string, unknown>,
-  keyKind: UseEndpointKeyKind,
 ): string {
   const requestKey = stableStringify(endpointOptions)
   const suffix = requestKey ? `:${requestKey}` : ''
-  const prefix = keyKind === 'data' ? '$endpoint' : `$endpoint-${keyKind}`
-
-  return `${prefix}:${route.method}:${route.path}${suffix}`
+  return `$endpoint:${route.method}:${route.path}${suffix}`
 }
-
-type UseEndpointKeyKind = 'data' | 'result'
 
 function toEndpointResultData(result: EndpointResultRuntime): EndpointResultDataRuntime {
   return {
@@ -1371,7 +1049,6 @@ function resolveClientFeatures(
   features: Partial<EndpointClientFeatureOptions> | undefined,
 ): EndpointClientFeatureOptions {
   return {
-    result: features?.result ?? true,
     raw: features?.raw ?? true,
   }
 }

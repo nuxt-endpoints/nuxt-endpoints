@@ -45,7 +45,7 @@ This branch tests the future boundary directly:
 - H3 owns the route-contract shape and shared request/response validation.
 - Nitro recognizes the H3 macro, provides the registry, and generates types.
 - fetchdts resolves fields without owning status-aware semantics.
-- NE keeps `.result()`, OpenAPI, idempotency, Effect, and Query integration.
+- NE keeps status-aware endpoint requests, OpenAPI, idempotency, Effect, and Query integration.
 
 `request.ts` now contains transport adaptation only: preserving repeated query
 values, normalizing H3's query container to a plain record, and reading

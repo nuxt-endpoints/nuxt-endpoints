@@ -230,7 +230,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         type: 'http',
         scheme: 'bearer',
       })
-      expect(schema.paths['/api/users/{id}'].get.operationId).toBe('getUser')
+      expect(schema.paths['/api/users/{id}'].get.operationId).toBe('getApiUsersById')
       // `extend` runs last, on the merged document.
       expect(schema.security).toEqual([{ bearerAuth: [] }])
     })
@@ -313,7 +313,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
 
       expect(schema.paths['/api/separated']).toBeDefined()
-      expect(schema.paths['/api/separated'].get.operationId).toBe('getSeparated')
+      expect(schema.paths['/api/separated'].get.operationId).toBe('getApiSeparated')
     })
 
     it('serves an endpoint whose contract is a sibling .endpoint-contract file', async () => {
@@ -327,7 +327,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
 
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
-      expect(schema.paths['/api/sibling'].get.operationId).toBe('getSibling')
+      expect(schema.paths['/api/sibling'].get.operationId).toBe('getApiSibling')
     })
 
     it('does not register sibling contract files as Nitro routes', async () => {
@@ -362,8 +362,8 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
     it('documents every group member as its own OpenAPI operation', async () => {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
 
-      expect(schema.paths['/api/multi'].get.operationId).toBe('getMulti')
-      expect(schema.paths['/api/multi'].put.operationId).toBe('putMulti')
+      expect(schema.paths['/api/multi'].get.operationId).toBe('getApiMulti')
+      expect(schema.paths['/api/multi'].put.operationId).toBe('putApiMulti')
     })
 
     it('injects route metadata and replays idempotent endpoint responses', async () => {
@@ -415,15 +415,13 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(response.status).toBe(400)
     })
 
-    it('includes idempotency metadata in generated clients and OpenAPI', async () => {
+    it('includes idempotency metadata in the generated client and OpenAPI', async () => {
       const buildDir = getBuildDir(useTestContext)
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
-      const queryClient = await readFile(join(buildDir, 'endpoints-query.ts'), 'utf8')
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
 
       expect(endpointClient).toContain('"headerName": "Idempotency-Key"')
       expect(endpointClient).toContain('"required": true')
-      expect(queryClient).toContain('"headerName": "Idempotency-Key"')
       expect(schema.paths['/api/idempotent'].post.parameters).toContainEqual(
         expect.objectContaining({
           name: 'Idempotency-Key',
@@ -449,22 +447,19 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         'utf8',
       )
 
-      expect(endpointTypes).toContain("operation: 'getUser'")
-      expect(endpointTypes).toContain("operation: 'createUser'")
-      expect(endpointTypes).toContain("operation: 'getDynamic'")
-      expect(endpointTypes).toContain("operation: 'getSerialized'")
+      expect(endpointTypes).toContain("path: '/api/users/:id'")
+      expect(endpointTypes).toContain("method: 'get'")
       expect(endpointTypes).toContain("path: '/api/search'")
       expect(endpointTypes).toContain('export type $UseEndpoint')
-      expect(endpointTypes).toContain('export type $UseEndpointResult')
+      expect(endpointTypes).not.toContain('$UseEndpointResult')
       expect(endpointClient).toContain(
         "import { createUseAsyncData } from '#app/composables/asyncData'",
       )
       expect(endpointClient).toContain('export const __useEndpointAsyncData = createUseAsyncData()')
       expect(endpointClient).toContain('export const useEndpoint')
-      expect(endpointClient).toContain('export const useEndpointResult')
+      expect(endpointClient).not.toContain('useEndpointResult')
       expect(endpointTypes).not.toContain('plain')
       expect(endpointTypes).toContain('EndpointClient<EndpointRouteEntry, EndpointClientFeatures>')
-      expect(endpointTypes).toContain('result: true')
       expect(endpointTypes).toContain('raw: true')
       expect(nitroRoutes).toContain('interface InternalApi')
       expect(nitroRoutes).toContain("'/api/users/:id'")
@@ -476,21 +471,13 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(nitroRouteSchema).toContain('interface InternalRouteSchema extends NitroRouteSchema')
     })
 
-    it('generates TanStack Query client artifacts when endpoints.client.query is enabled', async () => {
+    it('uses endpoint request Query options without generated Query factories', async () => {
       const buildDir = getBuildDir(useTestContext)
-      const queryClient = await readFile(join(buildDir, 'endpoints-query.ts'), 'utf8')
-      const queryTypes = await readFile(join(buildDir, 'types/endpoints-query.d.ts'), 'utf8')
+      const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
 
-      expect(queryClient).toContain('export const endpointQueryOptions')
-      expect(queryClient).toContain('export const endpointMutationOptions')
-      expect(queryClient).toContain('captureFetcher')
-      expect(queryTypes).toContain('$EndpointQueryOptions')
-      expect(queryTypes).toContain(
-        "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",
-      )
-      expect(queryTypes).toContain("operation: 'getUser'")
-      expect(queryTypes).toContain("operation: 'createUser'")
-      expect(queryTypes).toContain("operation: 'getDynamic'")
+      expect(endpointClient).toContain('captureFetcher')
+      await expect(access(join(buildDir, 'endpoints-query.ts'))).rejects.toThrow()
+      await expect(access(join(buildDir, 'types/endpoints-query.d.ts'))).rejects.toThrow()
     })
 
     it('agrees with the generated Nitro InternalApi for every route', async () => {
@@ -631,7 +618,7 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
   const assertions = routes
     .map(
       ({ path, method }, index) =>
-        `type RouteAgreement${index} = Assert<Agrees<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
+        `type RouteAgreement${index} = Assert<Agrees<SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
     )
     .join('\n')
 
@@ -647,6 +634,9 @@ type Equal<LEFT, RIGHT> =
       : false
     : false
 type Assert<VALUE extends true> = VALUE
+type SuccessBody<RESULT> = Extract<RESULT, { ok: true }> extends { body: infer BODY }
+  ? BODY
+  : never
 
 // A route that declares a stream response is exempt, and deliberately so.
 // InternalApi describes what a parsing $fetch would produce for that route,

@@ -28,12 +28,12 @@ describe('Nitro route contract provider', () => {
     const contracts = indexRouteContracts([
       {
         ...handler,
-        contract: { operation: 'listUsers', responses: {} },
+        contract: { responses: {} },
       },
     ])
 
-    await expect(composeHandlers([handler], contracts, false, () => {})).resolves.toMatchObject([
-      { route: '/api/users', method: 'get', operation: 'listUsers' },
+    await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+      { route: '/api/users', method: 'get' },
     ])
   })
 
@@ -157,7 +157,6 @@ describe('media response detection', () => {
         method: 'get',
         route: '/api/export',
         contract: {
-          operation: 'exportUsers',
           responses: {
             200: { media: 'text/csv' },
             404: { message: 'not used at build time' } as never,
@@ -166,7 +165,7 @@ describe('media response detection', () => {
       },
     ]).get('/server/api/export.get.ts\0get')
 
-    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
+    expect(detection).toEqual({ mediaResponse: true })
   })
 
   it('reports mediaResponse: true for a carrier declaring a media response via a bare response', () => {
@@ -175,11 +174,11 @@ describe('media response detection', () => {
         handler: '/server/api/export.get.ts',
         method: 'get',
         route: '/api/export',
-        contract: { operation: 'exportUsers', responses: { 200: { media: 'text/csv' } } },
+        contract: { responses: { 200: { media: 'text/csv' } } },
       },
     ]).get('/server/api/export.get.ts\0get')
 
-    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
+    expect(detection).toEqual({ mediaResponse: true })
   })
 
   it('reports no stream key when the carrier declares only validated responses', () => {
@@ -189,7 +188,6 @@ describe('media response detection', () => {
         method: 'get',
         route: '/api/users',
         contract: {
-          operation: 'getUser',
           responses: {
             200: { message: 'validated' } as never,
           },
@@ -197,7 +195,7 @@ describe('media response detection', () => {
       },
     ]).get('/server/api/users.get.ts\0get')
 
-    expect(detection).toEqual({ operation: 'getUser' })
+    expect(detection).toEqual({})
   })
 })
 
@@ -258,7 +256,6 @@ describe('resolveModuleOptions', () => {
 
   it('resolves client defaults when no client options are provided', () => {
     expect(resolveModuleOptions({}, false).client).toEqual({
-      result: true,
       raw: true,
       query: false,
       querySetup: 'external',
@@ -274,25 +271,24 @@ describe('resolveQueryClientOption', () => {
     expect(resolveQueryClientOption(false)).toEqual(disabled)
   })
 
-  it('enables the query client with defaults when query is true', () => {
-    expect(resolveQueryClientOption(true)).toEqual({
-      query: true,
-      querySetup: 'external',
-      queryStaleTime: 60_000,
-    })
-  })
-
-  it('applies an object override, defaulting fields it does not set', () => {
+  it('applies automatic setup and defaults staleTime', () => {
     expect(resolveQueryClientOption({ setup: 'auto' })).toEqual({
       query: true,
       querySetup: 'auto',
       queryStaleTime: 60_000,
     })
-    expect(resolveQueryClientOption({ staleTime: 1_000 })).toEqual({
+    expect(resolveQueryClientOption({ setup: 'auto', staleTime: 1_000 })).toEqual({
       query: true,
-      querySetup: 'external',
+      querySetup: 'auto',
       queryStaleTime: 1_000,
     })
+  })
+
+  it('rejects removed factory-era Query configuration at runtime', () => {
+    expect(() => resolveQueryClientOption(true as never)).toThrow(/query: true was removed/)
+    expect(() => resolveQueryClientOption({ staleTime: 1_000 } as never)).toThrow(
+      /only supports.*setup.*auto/,
+    )
   })
 })
 

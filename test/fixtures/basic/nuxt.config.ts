@@ -8,9 +8,7 @@ export default defineNuxtConfig({
   modules: [NuxtEndpoints],
   endpoints: {
     openApi: true,
-    client: {
-      query: true,
-    },
+    client: {},
   },
   compatibilityDate: '2024-08-24',
   future: {

@@ -56,7 +56,6 @@ const files = await existingFiles([
   join(buildDir, 'types/nitro-route-schema.d.ts'),
   join(buildDir, 'types/nitro/nitro-route-schema.d.ts'),
   join(buildDir, 'types/endpoints.d.ts'),
-  join(buildDir, 'types/endpoints-query.d.ts'),
   join(fixtureRoot, 'schema-provider-typecheck.ts'),
   join(fixtureRoot, 'typecheck.ts'),
 ])
@@ -81,7 +80,6 @@ await writeFile(
         paths: {
           '#app/composables/asyncData': [join(nuxtRoot, 'dist/app/composables/asyncData.d.ts')],
           '#endpoints': ['./types/endpoints.d.ts'],
-          '#endpoints/query': ['./types/endpoints-query.d.ts'],
         },
       },
       files,

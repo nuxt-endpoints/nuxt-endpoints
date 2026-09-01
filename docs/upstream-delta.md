@@ -26,7 +26,6 @@ both runtime behavior and build-time metadata:
 
 ```ts
 export default defineRouteHandler({
-  operation: 'getUser',
   params: UserParams,
   validate: {
     query: UserQuery,
@@ -64,7 +63,7 @@ and opaque `contract` and `handlerReturn` expressions to
 `NitroTypes.routeMetadata`. Nitro compiles both maps into one fetchdts schema,
 augments `InternalRouteSchema`, and still generates the ordinary `InternalApi`.
 Nuxt 5 receives the latter through `@nuxt/nitro-server`, while NE resolves the
-opaque fields with `TypedFetchMetadataField` for `.result()`.
+opaque fields with `TypedFetchMetadataField` for status-aware endpoint results.
 
 The first provider slice retained `jiti` as a compatibility fallback. That
 migration is complete: `src/discovery.ts`, its dedicated tests, and NE's direct
@@ -90,7 +89,7 @@ official classification.
 |   6 | Build-time route/handler/method/contract provider                  | Nitro        |    B     | A: `getRouteContracts()`                                             |
 |   7 | Typed-fetch metadata extension preserved by compilation/resolution | fetchdts     |    C     | A and connected: generic `compileRoutes` / `TypedFetchMetadataField` |
 |   8 | Ordinary success-body typed `$fetch`                               | Nuxt/Nitro   |    A     | A: provider → `InternalApi` → Nuxt `ServerRoutes`                    |
-|   9 | Status-aware result API separate from ordinary `$fetch`            | Nuxt         |    C     | A in NE: `.result()`                                                 |
+|   9 | Status-aware endpoint request API                                  | Nuxt         |    C     | A in NE: awaited `$endpoint(...)`                                    |
 |  10 | Raw status/body/header transport                                   | ofetch       |    A     | unchanged; NE uses `.raw()`                                          |
 |  11 | OpenAPI projection from the full contract                          | NE consumer  |    C     | A                                                                    |
 |  12 | Vue Query projection from operations                               | NE consumer  |    C     | A                                                                    |
@@ -240,7 +239,7 @@ therefore carries the schemas:
 ```
 own keys               [ 'fetch', 'validate', 'meta', 'handler' ]
 handler.validate.body === Body   true
-handler.meta                     { operation: 'probe' }
+handler.meta                     {}
 ```
 
 The schema objects are held by identity, so `InferInput` _is_ derivable from
@@ -317,9 +316,9 @@ fetchdts resolves a _concrete request URL_ such as `/api/users/123` into one
 fetch metadata object. Nuxt Endpoints deliberately accepts the _route template_
 `/api/users/:id` plus a separately typed `{ params: { id } }`, because the
 parameter names feed runtime substitution and OpenAPI. `RouteTree` erases those
-names. Our `EndpointRouteEntry` union additionally carries operation names, the
+names. Our `EndpointRouteEntry` union additionally carries the
 full contract definition, handler return inference, per-status responses, raw
-response types, and `.result()` discrimination; projecting that union into a
+response types and awaited status discrimination; projecting that union into a
 second route tree would add a parallel source of truth without deleting the
 union or `path-template.ts`.
 

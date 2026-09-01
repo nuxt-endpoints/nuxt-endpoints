@@ -12,7 +12,7 @@ contracts, generates client types, and stays aligned with Nitro 3 and Nuxt 5.
 Nuxt Endpoints does not use `InternalApi` as the source of its complete client
 contract. `InternalApi` contains route methods and serialized success returns,
 but it does not represent validated params, query, headers, request bodies,
-status-specific error bodies, operation names, idempotency, or OpenAPI
+status-specific error bodies, idempotency, or OpenAPI
 metadata.
 
 The current build flow is:
@@ -25,7 +25,7 @@ The current build flow is:
    scans or Jiti-evaluates route files.
 4. Nitro generates `InternalRouteSchema`; NE contributes opaque `contract` and
    `handlerReturn` fields through Nitro's type-generation input.
-5. The endpoint client and Query adapter read those fields through
+5. The endpoint client reads those fields through
    `TypedFetchMetadataField`.
 
 The runtime handler keeps `~routeDef` for TypeScript inference, but build-time
@@ -46,20 +46,19 @@ export default defineEndpointHandler(endpoint, () => ({
   createdAt: new Date(), // server/schema output: Date
 }))
 
-const body = await $endpoint('getItem')
-body.createdAt // client/wire value: string
+const result = await $endpoint('/api/items/:id', { method: 'get', params: { id: '1' } })
+result.body.createdAt // client/wire value: string
 ```
 
 On the Nitro 2 support line, [`EndpointWireValue`](../src/runtime/wire.ts) is a
 small compatibility adapter over Nitro's `Simplify<Serialize<T>>`. It is used
 by every JSON client response surface:
 
-- the default awaited success body;
-- `.result()` and `useEndpointResult` status bodies;
+- awaited `$endpoint` status bodies;
 - `.raw().json()`;
 - `useEndpoint`;
 - Effect result values;
-- TanStack Query data and result modes.
+- TanStack Query request options.
 
 Runtime response validation still runs against the server/schema output before
 the HTTP framework serializes it. Native `Response`, streams, files, redirects,
@@ -81,7 +80,7 @@ omitted non-JSON properties, declared status bodies, and inferred handler
 returns.
 
 Status-specific non-2xx bodies intentionally remain a Nuxt Endpoints feature.
-They are exposed by `.result()` and `.raw()` and are not merged into
+They are exposed by awaiting `$endpoint(...)` and by `.raw()`, and are not merged into
 `InternalApi`'s successful handler-return projection.
 
 ## Discovery failure policy
@@ -113,8 +112,7 @@ The implemented prototype integration is:
 3. Add opaque NE fields to Nitro's generated fetch schema.
 4. Keep status-specific results, runtime validation, OpenAPI, idempotency,
    Effect, and TanStack Query at the Nuxt Endpoints layer.
-5. Keep ordinary `$fetch` success-body behavior and expose status-aware results
-   through the separate `.result()` API.
+5. Make awaited `$endpoint` requests status-aware while keeping `.raw()` for native responses.
 
 ## Nuxt 5 acceptance conditions
 

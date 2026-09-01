@@ -180,7 +180,7 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
   }
 
   it('merges the runtime file document patch and runs extend last', async () => {
-    const endpoint = defineEndpoint({ operation: 'getItem' }).handler(() => ({ ok: true }))
+    const endpoint = defineEndpoint({}).handler(() => ({ ok: true }))
     const runtime: EndpointRuntime = {
       openApi: {
         document: { servers: [{ url: 'https://api.example.test' }] },
@@ -199,11 +199,11 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
     expect(document?.servers).toEqual([{ url: 'https://api.example.test' }])
     expect(document?.security).toEqual([{ bearerAuth: [] }])
     // The patch must not displace what the contracts generated.
-    expect(document?.paths['/api/items']?.get?.operationId).toBe('getItem')
+    expect(document?.paths['/api/items']?.get?.operationId).toBe('getApiItems')
   })
 
   it('generates the document unchanged when the runtime file declares no openApi', async () => {
-    const endpoint = defineEndpoint({ operation: 'getItem' }).handler(() => ({ ok: true }))
+    const endpoint = defineEndpoint({}).handler(() => ({ ok: true }))
 
     const document = await initializeEndpointHandlers(
       [route('/api/items', 'get', endpoint)],
@@ -211,7 +211,7 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
     )
 
     expect(document?.servers).toBeUndefined()
-    expect(document?.paths['/api/items']?.get?.operationId).toBe('getItem')
+    expect(document?.paths['/api/items']?.get?.operationId).toBe('getApiItems')
   })
 })
 
@@ -244,8 +244,8 @@ function route(path: string, method: string, handler: object) {
 describe('method-group startup handling', () => {
   it('collects every declared method of a defineEndpointMethods() group', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ operation: 'getMulti' }),
-      put: defineEndpoint({ operation: 'putMulti' }),
+      get: defineEndpoint({}),
+      put: defineEndpoint({}),
     })
     const dispatcher = defineEndpointMethodHandlers(endpoints, {
       get: () => ({ ok: true }),
@@ -257,18 +257,14 @@ describe('method-group startup handling', () => {
       route('/api/multi', 'put', dispatcher),
     ])
 
-    expect(extracted).toHaveLength(2)
-    expect(extracted.map((endpoint) => endpoint.definition.operation)).toEqual([
-      'getMulti',
-      'putMulti',
-    ])
+    expect(extracted.map(({ method }) => method)).toEqual(['get', 'put'])
   })
 
   it('applies idempotency runtime-gap validation per group member independently', async () => {
     const storage = createMemoryIdempotencyStorage()
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ operation: 'getMulti' }),
-      post: defineEndpoint({ operation: 'postMulti' }).idempotency({
+      get: defineEndpoint({}),
+      post: defineEndpoint({}).idempotency({
         fingerprint: () => ({}),
         storage: () => storage,
         scope: () => 'public',
@@ -290,8 +286,8 @@ describe('method-group startup handling', () => {
 
   it('fails startup when an idempotent group member is missing runtime options', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ operation: 'getMulti' }),
-      post: defineEndpoint({ operation: 'postMulti' }).idempotency({
+      get: defineEndpoint({}),
+      post: defineEndpoint({}).idempotency({
         fingerprint: () => ({}),
         scope: () => 'public',
       }),
@@ -311,7 +307,7 @@ describe('method-group startup handling', () => {
 
   it('fails startup when a manifest entry declares a method absent from its group', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ operation: 'getMulti' }),
+      get: defineEndpoint({}),
     })
     const dispatcher = defineEndpointMethodHandlers(endpoints, {
       get: () => ({ ok: true }),

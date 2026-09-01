@@ -3,9 +3,9 @@
 // `useRequestFetch()` on relative paths during SSR. This page fails without
 // that capture: the internal route reads no session cookie and renders
 // `anonymous`.
-const { data } = await useEndpoint('whoami')
+const { data } = await useEndpoint('/api/whoami', { method: 'get' })
 </script>
 
 <template>
-  <div>endpoint-whoami: {{ data?.user }}</div>
+  <div>endpoint-whoami: {{ data?.body.user }}</div>
 </template>

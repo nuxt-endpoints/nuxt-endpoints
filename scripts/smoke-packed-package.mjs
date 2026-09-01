@@ -58,7 +58,6 @@ try {
     `import { z } from 'zod'
 
 export const endpoint = defineEndpoint({
-  operation: 'echoMessage',
   body: z.object({ message: z.string() }),
   responses: {
     201: z.object({ message: z.string() }),
@@ -77,7 +76,7 @@ export default defineEndpointHandler(endpoint, ({ body, respond }) => {
   const endpointTypes = await readFile(join(smokeRoot, '.nuxt/types/endpoints.d.ts'), 'utf8')
   const serverImports = await readFile(join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'), 'utf8')
 
-  assertIncludes(endpointTypes, "operation: 'echoMessage'", 'generated endpoint operation')
+  assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
   assertIncludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
   assertIncludes(serverImports, 'defineEndpointHandler', 'defineEndpointHandler server auto-import')
   assertSymbolExcludes(serverImports, 'createResponse', 'createResponse server auto-import')
