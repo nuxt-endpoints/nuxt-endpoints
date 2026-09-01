@@ -81,4 +81,13 @@ describe('defineRouteHandler multi-method inference', () => {
       },
     })
   })
+
+  it('rejects a root validate in the method group form', () => {
+    defineRouteHandler({
+      params: schema<{ id: number }>(),
+      // @ts-expect-error request validation is per method, so a root validate never applies.
+      validate: { headers: schema<{ authorization: string }>() },
+      get: { handler: ({ params }) => ({ id: params.id }) },
+    })
+  })
 })
