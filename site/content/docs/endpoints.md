@@ -90,6 +90,13 @@ form in a bare file such as `users.ts`. Mixing a multi-method definition with
 a method-suffixed filename fails generation because the remaining methods
 would be unreachable.
 
+The declarable methods are `get`, `post`, `put`, `patch` and `delete`. `HEAD`
+is answered by the `get` entry with the body dropped, and `OPTIONS` answers
+`204` with an `Allow` header listing the declared methods, so neither is
+declared directly. `CONNECT` and `TRACE` are not routed. The Nuxt 5 line
+accepts all nine as explicit entries, so a route that declares one of them is
+the single case that does not port back to this line unchanged.
+
 ## Handler event
 
 The handler receives the native H3 event, extended with the endpoint contract:

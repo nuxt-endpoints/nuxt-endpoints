@@ -142,4 +142,18 @@ describe('defineRouteHandler multi-method inference', () => {
     // @ts-expect-error defineRouteHandler has the same one-argument shape as H3.
     defineRouteHandler({ handler: () => ({ ok: true }) }, {})
   })
+
+  it('rejects the methods this line derives or does not route', () => {
+    const get = { handler: () => ({ ok: true }) }
+    const derived = { handler: () => null }
+
+    // @ts-expect-error HEAD is derived from the get entry.
+    defineRouteHandler({ get, head: derived })
+    // @ts-expect-error OPTIONS is answered from the declared methods.
+    defineRouteHandler({ get, options: derived })
+    // @ts-expect-error CONNECT is not routed on this support line.
+    defineRouteHandler({ get, connect: derived })
+    // @ts-expect-error TRACE is not routed on this support line.
+    defineRouteHandler({ get, trace: derived })
+  })
 })

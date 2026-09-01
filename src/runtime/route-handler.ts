@@ -332,6 +332,14 @@ export function defineRouteHandler<
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
     delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
+    /** Derived from the `get` entry with the body dropped. */
+    head?: never
+    /** Answered as `204` with an `Allow` header for the declared methods. */
+    options?: never
+    /** Not routed on this support line. */
+    connect?: never
+    /** Not routed on this support line. */
+    trace?: never
   },
 ): EndpointRouteMethodsEventHandler<
   Definition & {
