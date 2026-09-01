@@ -4,8 +4,8 @@ import {
   defineEndpoint,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
-} from '../src/runtime'
-import type { EndpointRuntime } from '../src/runtime'
+} from './internal-runtime'
+import type { EndpointRuntime } from './internal-runtime'
 
 vi.mock('#nuxt-endpoints/options', () => ({
   default: {
@@ -318,7 +318,7 @@ describe('method-group startup handling', () => {
     })
 
     await expect(extractEndpoints([route('/api/multi', 'delete', dispatcher)])).rejects.toThrow(
-      /has no matching method in its defineEndpointMethods\(\) group/,
+      /has no matching member in its multi-method defineRouteHandler\(\)/,
     )
   })
 })

@@ -86,10 +86,11 @@ forward and every client issues the same browser `fetch`.
 Add `operation` only when you also want a named call target.
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'getUser',
   params: UserParams,
-  responses: { 200: User },
+  validate: { response: { 200: User } },
+  handler: ({ params }) => findUser(params.id),
 })
 
 await $endpoint('getUser', { params: { id: '123' } })

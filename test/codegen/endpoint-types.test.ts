@@ -56,10 +56,10 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union).toContain("method: 'get'")
     expect(union).toContain("operation: 'listUsers'")
     expect(union).toContain(
-      "definition: typeof import('/server/api/users.get.ts').default['__endpoint_contract__']['definition']",
+      "definition: EndpointDefinitionFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef']>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/users.get.ts').default['__endpoint_handler_return__']",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef']>",
     )
   })
 
@@ -75,23 +75,23 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union.split('\n')).toHaveLength(2)
   })
 
-  it('accesses a method-group entry through __endpoint_contracts__/__endpoint_method_handler_returns__ keyed by method', () => {
+  it('projects each method-group entry from the canonical route definition', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
-      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['get']['definition']",
+      "definition: EndpointDefinitionFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'get'>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['get']",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'get'>",
     )
     expect(union).toContain(
-      "definition: typeof import('/server/api/multi.ts').default['__endpoint_contracts__']['put']['definition']",
+      "definition: EndpointDefinitionFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'put'>",
     )
     expect(union).toContain(
-      "handlerReturn: typeof import('/server/api/multi.ts').default['__endpoint_method_handler_returns__']['put']",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'put'>",
     )
-    expect(union).not.toContain("'__endpoint_contract__'")
-    expect(union).not.toContain('__endpoint_handler_return__')
+    expect(union).not.toContain('__endpoint_contract')
+    expect(union).not.toContain('__endpoint_handler_return')
   })
 
   it('keeps the single-endpoint accessor shape unchanged when methodGroup is not set', () => {
@@ -113,7 +113,7 @@ describe('generateEndpointTypes', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
     expect(content).toContain(
-      "import type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from './runtime'",
+      "import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from './runtime'",
     )
   })
 

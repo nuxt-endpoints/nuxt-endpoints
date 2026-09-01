@@ -3,16 +3,17 @@
 // cannot also pick it up. Discovery reads Nitro's explicitly configured
 // handlers alongside its scanned ones, so this is an ordinary endpoint.
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'getCustomReport',
-  query: z.object({ id: z.string() }),
-  responses: {
-    200: z.object({ id: z.string(), source: z.literal('custom-route') }),
+  validate: {
+    query: z.object({ id: z.string() }),
+    response: {
+      200: z.object({ id: z.string(), source: z.literal('custom-route') }),
+    },
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ query, respond }) => {
-  return respond(200, { id: query.id, source: 'custom-route' })
+  handler: ({ query, respond }) => {
+    return respond(200, { id: query.id, source: 'custom-route' })
+  },
 })

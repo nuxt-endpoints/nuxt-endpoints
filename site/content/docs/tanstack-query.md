@@ -33,13 +33,16 @@ This generates `#endpoints/query`. `query: true` uses the conservative `external
 All generated factories require a supported HTTP method and a non-reserved operation name because operation names become stable query and mutation keys. Names such as `then` and `constructor` are skipped because they conflict with callable client properties:
 
 ```ts
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'getUser',
   params: UserParams,
-  responses: {
-    200: User,
-    404: NotFound,
+  validate: {
+    response: {
+      200: User,
+      404: NotFound,
+    },
   },
+  handler: ({ params, respond }) => findUser(params.id) ?? respond(404, notFound()),
 })
 ```
 

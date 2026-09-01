@@ -6,17 +6,15 @@ const PlaygroundUser = z.object({
   createdAt: z.string(),
 })
 
-export default defineEndpoint({
+export default defineRouteHandler({
   operation: 'listSqliteUsers',
   summary: 'List users persisted in the playground SQLite database',
-  responses: {
-    200: z.object({
-      items: z.array(PlaygroundUser),
-    }),
+  validate: {
+    response: {
+      200: z.object({
+        items: z.array(PlaygroundUser),
+      }),
+    },
   },
-  handler: () => {
-    return {
-      items: listPlaygroundUsers(),
-    }
-  },
+  handler: () => ({ items: listPlaygroundUsers() }),
 })

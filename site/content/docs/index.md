@@ -17,12 +17,14 @@ One route file declares the contract and the handler:
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineEndpoint({
+export default defineRouteHandler({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
+  validate: {
+    response: {
+      200: z.object({ id: z.number(), name: z.string() }),
+      404: z.object({ message: z.string() }),
+    },
   },
   handler: ({ params, respond }) => {
     const user = findUser(params.id) // params.id is a number — validated and coerced
@@ -51,7 +53,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 
 ## Adopt at your own pace
 
-Adding the module changes nothing by itself. Only routes that export an endpoint definition are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
+Adding the module changes nothing by itself. Only routes that directly default-export `defineRouteHandler({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
 > Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
 

@@ -1,6 +1,11 @@
-import { defineEndpointHandler } from '../../../../../src/runtime'
-import { siblingEndpoint } from './sibling.get.endpoint-contract'
+import { defineRouteHandler } from '../../../../../src/runtime'
+import { siblingContract } from '../contracts/sibling'
 
-export default defineEndpointHandler(siblingEndpoint, ({ query }) => {
-  return { name: query.name, sibling: true }
+export default defineRouteHandler({
+  operation: siblingContract.operation,
+  validate: {
+    query: siblingContract.query,
+    response: siblingContract.responses,
+  },
+  handler: ({ query }) => ({ name: query.name, sibling: true }),
 })

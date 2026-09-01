@@ -4,8 +4,8 @@ import {
   createMemoryIdempotencyStorage,
   defineEndpoint,
   defineEndpointHandler,
-} from '../src/runtime'
-import type { EndpointEventHandler, StandardSchemaLike } from '../src/runtime'
+} from './internal-runtime'
+import type { EndpointEventHandler, StandardSchemaLike } from './internal-runtime'
 
 const { setHeaders, setResponseStatus } = vi.hoisted(() => ({
   setHeaders: vi.fn(),

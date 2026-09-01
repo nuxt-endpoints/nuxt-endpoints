@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMemoryIdempotencyStorage } from '../src/runtime'
-import type { IdempotencyStorage, IdempotencyStoredResponse } from '../src/runtime'
+import { createMemoryIdempotencyStorage } from './internal-runtime'
+import type { IdempotencyStorage, IdempotencyStoredResponse } from './internal-runtime'
 import {
   canonicalizeIdempotencyValue,
   createIdempotencyFingerprint,
@@ -324,7 +324,7 @@ describe('development memory idempotency storage', () => {
 
 describe('fingerprint determinability at definition time', () => {
   it('rejects an idempotent endpoint with no body contract and no fingerprint', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     // Without a body contract the default projection cannot see a body the
     // handler reads itself, and the two payloads would share a fingerprint.
@@ -334,7 +334,7 @@ describe('fingerprint determinability at definition time', () => {
   })
 
   it('rejects the same single-define endpoint at definition time', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     // The merged form routes its `idempotency` slot through `.idempotency()`,
     // so the assertion fires before the handler is ever attached.
@@ -348,7 +348,7 @@ describe('fingerprint determinability at definition time', () => {
   })
 
   it('accepts one once the author states what identifies the request', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>
@@ -368,7 +368,7 @@ describe('fingerprint determinability at definition time', () => {
   })
 
   it('needs nothing extra when a body contract is declared', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>

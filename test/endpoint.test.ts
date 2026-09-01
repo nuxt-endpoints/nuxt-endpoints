@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
-import type { StandardSchemaLike } from '../src/runtime'
+import type { StandardSchemaLike } from './internal-runtime'
 
 const setResponseStatus = vi.fn()
 const setHeaders = vi.fn()
@@ -74,7 +74,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('passes validated request data into the handler', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
       operation: 'getUser',
@@ -92,7 +92,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('runs a single-define endpoint, handler and contract in one call', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     const handler = defineEndpoint({
       operation: 'getMergedUser',
@@ -107,7 +107,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('still returns a reusable contract when the single define omits a handler', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
       operation: 'getSplitUser',
@@ -126,7 +126,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('passes the H3 event, web request, and middleware context into the handler', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
       operation: 'getCurrentUser',
@@ -144,7 +144,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('returns declared error response bodies with status and headers', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
       operation: 'getUser',
@@ -168,7 +168,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('returns validation errors without exposing an exception stack', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
       operation: 'getUser',
@@ -194,7 +194,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('can validate response contracts at runtime', async () => {
-    const { defineEndpoint, defineEndpointHandler } = await import('../src/runtime')
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint(
       {
@@ -219,7 +219,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects the removed singular `response` contract with a migration hint', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     // TypeScript already rejects the key as an excess property, but discovery
     // jiti-evaluates plain JS route modules too, so the removal is enforced at
@@ -233,7 +233,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a declared response that mixes media with body', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({
@@ -246,7 +246,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a declared media list with no media types in it', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({
@@ -259,7 +259,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a declared media list containing an empty media type', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({
@@ -272,7 +272,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a media type that is not a single lowercase type/subtype', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     // A comma-joined string is an easy typo now that the array form exists,
     // and would otherwise be sent verbatim as one Content-Type.
@@ -293,7 +293,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects one schema shared by several media types', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>
@@ -314,7 +314,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a schema keyed by a media type the response does not declare', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>
@@ -330,7 +330,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a media type declared twice for one status', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({ responses: { 200: { media: ['text/csv', 'text/csv'] } } }),
@@ -338,7 +338,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a declared contentType that is not a string', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({
@@ -351,7 +351,7 @@ describe('DefinedEndpoint', () => {
   })
 
   it('rejects a non-JSON contentType on a validated body', async () => {
-    const { defineEndpoint } = await import('../src/runtime')
+    const { defineEndpoint } = await import('./internal-runtime')
 
     expect(() =>
       defineEndpoint({

@@ -1,18 +1,19 @@
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   operation: 'createUpload',
-  body: {
-    'application/json': z.object({ name: z.string() }),
-    'application/x-www-form-urlencoded': z.object({ name: z.string() }),
-    'multipart/form-data': z.object({ name: z.string() }),
+  validate: {
+    body: {
+      'application/json': z.object({ name: z.string() }),
+      'application/x-www-form-urlencoded': z.object({ name: z.string() }),
+      'multipart/form-data': z.object({ name: z.string() }),
+    },
+    response: {
+      201: z.object({ name: z.string(), bodyMediaType: z.string() }),
+    },
   },
-  responses: {
-    201: z.object({ name: z.string(), bodyMediaType: z.string() }),
+  handler: ({ body, bodyMediaType, respond }) => {
+    return respond(201, { name: body.name, bodyMediaType })
   },
-})
-
-export default defineEndpointHandler(endpoint, ({ body, bodyMediaType, respond }) => {
-  return respond(201, { name: body.name, bodyMediaType })
 })

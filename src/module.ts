@@ -1,7 +1,6 @@
 import fsp from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
   addImports,
   addPluginTemplate,
@@ -31,12 +30,8 @@ import { assertEndpointModuleEvaluated, resolveEndpointCarrierSource } from './d
 import type { ContractModuleLoaders } from './discovery'
 import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
-import {
-  defineEndpoint,
-  defineEndpointHandler,
-  idempotencyMetadataWithoutRuntimeMessage,
-} from './runtime/endpoint'
-import { defineEndpointMethodHandlers, defineEndpointMethods } from './runtime/endpoint-methods'
+import { idempotencyMetadataWithoutRuntimeMessage } from './runtime/endpoint'
+import { defineRouteHandler } from './runtime/route-handler'
 import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import { isMediaResponseContract } from './runtime/response'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
@@ -69,10 +64,7 @@ const mutationHttpMethods = new Set<string>(mutationHttpMethodList)
 // through Nuxt auto-imports. Each needs a matching global shim while jiti
 // evaluates those modules, where Nuxt auto-imports do not exist.
 const discoveryEvaluatedServerHelpers = [
-  { name: 'defineEndpoint', value: defineEndpoint },
-  { name: 'defineEndpointHandler', value: defineEndpointHandler },
-  { name: 'defineEndpointMethods', value: defineEndpointMethods },
-  { name: 'defineEndpointMethodHandlers', value: defineEndpointMethodHandlers },
+  { name: 'defineRouteHandler', value: defineRouteHandler },
 ] as const
 
 export type EndpointsOpenApiModuleOptions = {
@@ -127,27 +119,17 @@ type EndpointExport = Partial<
 
 type EndpointCarrier = {
   __endpoint_contract__?: EndpointExport
-  // Present on a defineEndpointMethodHandlers() dispatcher's default export
-  // instead of __endpoint_contract__: the exact EndpointMethodsMap passed to
-  // defineEndpointMethods(), keyed by declared HTTP method.
+  // Private Nitro 2 compatibility carrier for the canonical multi-method
+  // route form, keyed by declared HTTP method.
   __endpoint_contracts__?: Record<string, EndpointExport>
-}
-
-// A contract-module export can also be a defineEndpointMethods() group
-// itself (rather than a single defineEndpoint() result), when a route file
-// imports its group contract instead of declaring it inline.
-type EndpointGroupCarrier = {
-  __endpoint_methods__: true
-  methods: Record<string, EndpointExport>
 }
 
 type EndpointRouteModule = {
   default?: EndpointCarrier
-  endpoint?: EndpointExport
 }
 
-// Detection result for one declared method (single endpoint, or one member
-// of a defineEndpointMethods() group).
+// Detection result for one declared method (a single-method route, or one
+// member of a multi-method `defineRouteHandler()` definition).
 type EndpointMethodDetection = {
   operation?: string
   idempotency?: EndpointIdempotencyMetadata
@@ -178,17 +160,10 @@ type NitroWithEndpointHandlers = NitroRouteHandlerSource & {
   }
 }
 
-type EndpointsNuxtHook = ((
+type EndpointsNuxtHook = (
   name: 'nitro:init',
   listener: (nitro: NitroWithEndpointHandlers) => void | Promise<void>,
-) => void) &
-  ((name: 'nitro:config', listener: (config: { ignore?: string[] }) => void) => void)
-
-// Sibling contract files live next to their route inside server/api, so Nitro
-// must be told not to register them as routes. The pattern also excludes
-// matching filenames from Nitro's public-asset copying — documented in the
-// contract-file docs.
-const endpointContractIgnorePattern = '**/*.endpoint-contract.*'
+) => void
 
 const moduleName = 'endpoints'
 
@@ -267,14 +242,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           restoreGlobals()
         }
       },
-      resolveImport: (specifier, parentPath) => {
-        try {
-          const resolved = jiti.esmResolve(specifier, parentPath)
-          return resolved.startsWith('file:') ? fileURLToPath(resolved) : resolved
-        } catch {
-          return undefined
-        }
-      },
     }
 
     addServerTemplate({
@@ -308,9 +275,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     })
 
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
-    hook('nitro:config', (nitroConfig) => {
-      nitroConfig.ignore = [...(nitroConfig.ignore ?? []), endpointContractIgnorePattern]
-    })
     hook('nitro:init', async (nitro) => {
       if (resolvedOptions.openApi.enabled) {
         assertOpenApiRoutesDoNotOverlap(nitro, resolvedOptions.openApi.path, (message) =>
@@ -413,7 +377,7 @@ async function composeHandlers(
   // (catch-all/optional route rejection, idempotency-gap-without-policy
   // rejection, duplicate operation rejection, query/mutation method warning)
   // and pushes the resulting EndpointRouteHandler. Used once per single
-  // endpoint and once per declared method of a defineEndpointMethods() group,
+  // endpoint and once per declared method of a multi-method route,
   // so every existing check keeps applying per method without being
   // reimplemented for the group case.
   function registerDetectedMethod(
@@ -488,7 +452,7 @@ async function composeHandlers(
     if (isEndpointGroupDetection(detection)) {
       if (handler.method) {
         throw new Error(
-          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a defineEndpointMethods() group on a method-suffixed file (.${handler.method}.ts). Method groups belong on a method-suffix-free route file — its other declared methods would otherwise be unreachable. Move the defineEndpointMethods()/defineEndpointMethodHandlers() declaration to a bare route file, or declare a single endpoint with defineEndpoint()/defineEndpointHandler() instead.`,
+          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineRouteHandler() on a method-suffixed file (.${handler.method}.ts). Multi-method handlers belong on a method-suffix-free route file — their other methods would otherwise be unreachable. Move the definition to a bare route file, or keep only one root handler.`,
         )
       }
       for (const [method, memberDetection] of Object.entries(detection.methods)) {
@@ -499,7 +463,7 @@ async function composeHandlers(
 
     if (!handler.method) {
       throw new Error(
-        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares an endpoint but its file has no method suffix. Rename it to <name>.<method>.ts, or declare multiple methods with defineEndpointMethods().`,
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineRouteHandler() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
       )
     }
 
@@ -563,15 +527,11 @@ async function detectEndpoint(
   // A scanned route file that cannot be read is a real problem, so this stays
   // loud rather than treating the route as non-endpoint.
   const fileContent = await fsp.readFile(handler.handler, { encoding: 'utf-8' })
-  const source = await resolveEndpointCarrierSource(fileContent, handler.handler, loaders)
+  const source = await resolveEndpointCarrierSource(fileContent)
 
   if (source.kind === 'skip') {
     return null
   }
-  if (source.kind === 'contract') {
-    return getEndpointDetectionFromContractCarrier(source.carrier)
-  }
-
   const loadResult = await loaders.loadModule(handler.handler)
   const routeModuleEndpoint = getEndpointFromRouteModule(
     loadResult.module as EndpointRouteModule | undefined,
@@ -584,25 +544,6 @@ async function detectEndpoint(
   return null
 }
 
-// An imported contract module's export is either a single defineEndpoint()
-// result or a defineEndpointMethods() group; discovery.ts's
-// isEndpointCarrierCandidate() already restricted the carrier to one of
-// these two shapes before this runs.
-function getEndpointDetectionFromContractCarrier(carrier: unknown): EndpointDetection | null {
-  if (isEndpointGroupCarrier(carrier)) {
-    return { methods: getEndpointMethodDetections(carrier.methods) }
-  }
-  return getEndpointFromCarrier(carrier as EndpointExport | undefined)
-}
-
-function isEndpointGroupCarrier(value: unknown): value is EndpointGroupCarrier {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __endpoint_methods__?: unknown }).__endpoint_methods__ === true
-  )
-}
-
 function getEndpointFromRouteModule(
   routeModule: EndpointRouteModule | undefined,
 ): EndpointDetection | null {
@@ -610,14 +551,12 @@ function getEndpointFromRouteModule(
   if (defaultExport?.__endpoint_contracts__) {
     return { methods: getEndpointMethodDetections(defaultExport.__endpoint_contracts__) }
   }
-  const carrier = defaultExport?.__endpoint_contract__ || routeModule?.endpoint
+  const carrier = defaultExport?.__endpoint_contract__
   return getEndpointFromCarrier(carrier)
 }
 
-// Applies getEndpointFromCarrier() to every member of a
-// defineEndpointMethods() group instead of reimplementing its
-// operation/idempotency/idempotency-runtime-gap logic per method: each
-// member is itself an ordinary defineEndpoint() result.
+// Applies getEndpointFromCarrier() to every private compatibility member
+// instead of reimplementing operation/idempotency gap logic per method.
 function getEndpointMethodDetections(
   methods: Record<string, EndpointExport>,
 ): Record<string, EndpointMethodDetection> {

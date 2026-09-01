@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler, respond } from '../../src/runtime'
-import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../../src/runtime'
+import { defineEndpoint, defineEndpointHandler, respond } from '../internal-runtime'
+import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../internal-runtime'
 import type { H3Event } from 'h3'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>

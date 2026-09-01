@@ -1,7 +1,7 @@
 import { createApp, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../src/runtime'
+import { defineEndpoint, defineEndpointHandler } from './internal-runtime'
 import {
   defineRuntimeHandler,
   getRuntimeQuery,

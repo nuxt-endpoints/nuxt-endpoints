@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import * as v from 'valibot'
-import { defineEndpoint, defineEndpointHandler } from '../../src/runtime'
-import type { InferInput, InferOutput } from '../../src/runtime'
+import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import type { InferInput, InferOutput } from '../internal-runtime'
 
 const Params = v.object({
   id: v.pipe(v.string(), v.transform(Number)),

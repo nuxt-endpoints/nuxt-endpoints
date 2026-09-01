@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { Schema } from 'effect'
-import { defineEndpoint, defineEndpointHandler } from '../../src/runtime'
-import type { InferInput, InferOutput } from '../../src/runtime'
+import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import type { InferInput, InferOutput } from '../internal-runtime'
 
 const Params = Schema.Struct({
   id: Schema.NumberFromString,

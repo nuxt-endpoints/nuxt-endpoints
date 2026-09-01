@@ -93,10 +93,17 @@ async function checkClient() {
   sibling.name.toUpperCase()
   sibling.sibling.valueOf()
 
-  const serialized = await client('getSerialized')
+  const serialized = await client('getSerialized', { query: {} })
   serialized.createdAt.toUpperCase()
   // @ts-expect-error Date is serialized to a string on the HTTP wire.
   serialized.createdAt.getTime()
+
+  const serializedError = await client('getSerialized', { query: { fail: 'true' } }).result()
+  if (serializedError.status === 422) {
+    serializedError.body.rejectedAt.toUpperCase()
+    // @ts-expect-error status-specific Date output is serialized on the HTTP wire too.
+    serializedError.body.rejectedAt.getTime()
+  }
 
   // Media-type-map body: omitting `mediaType` defaults to the map's
   // `application/json` member, typing `body` the same as a single-schema
@@ -253,17 +260,20 @@ const mergedInferredResponse: $EndpointResponse<'getMergedInferred'> = {
 }
 
 async function checkMergedClient() {
-  const merged = await client('getMerged', { query: { id: 1 } })
+  const merged = await client('getMerged', { query: { id: '1' } })
   merged.id.toFixed()
   merged.name.toUpperCase()
 
-  const mergedResult = await client('getMerged', { query: { id: 1 } }).result()
+  const mergedResult = await client('getMerged', { query: { id: '1' } }).result()
   if (mergedResult.status === 404) {
     mergedResult.body.message.toUpperCase()
   }
 
   // @ts-expect-error the merged form's query contract is still required.
   await client('getMerged', {})
+
+  // @ts-expect-error the client sends the schema input, while the handler sees its numeric output.
+  await client('getMerged', { query: { id: 1 } })
 }
 
 void checkClient

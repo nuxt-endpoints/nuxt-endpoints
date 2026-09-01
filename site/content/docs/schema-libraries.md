@@ -20,16 +20,19 @@ Effect Schema can be passed directly to endpoint definitions. Runtime parsing us
 ```ts
 import { Schema } from 'effect'
 
-defineEndpoint({
+defineRouteHandler({
   params: Schema.Struct({
     id: Schema.NumberFromString,
   }),
-  responses: {
-    200: Schema.Struct({
-      id: Schema.Number,
-      name: Schema.String,
-    }),
+  validate: {
+    response: {
+      200: Schema.Struct({
+        id: Schema.Number,
+        name: Schema.String,
+      }),
+    },
   },
+  handler: ({ params }) => ({ id: params.id, name: 'Tom' }),
 })
 ```
 
@@ -44,9 +47,12 @@ import * as v from 'valibot'
 
 const Id = v.pipe(v.string(), v.transform(Number), v.number())
 
-defineEndpoint({
-  body: v.object({ id: Id }), // OpenAPI request schema: string
-  responses: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
+defineRouteHandler({
+  validate: {
+    body: v.object({ id: Id }), // OpenAPI request schema: string
+    response: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
+  },
+  handler: ({ body }) => ({ id: body.id }),
 })
 ```
 

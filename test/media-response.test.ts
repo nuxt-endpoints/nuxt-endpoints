@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type {
   defineEndpoint as DefineEndpoint,
   defineEndpointHandler as DefineEndpointHandler,
-} from '../src/runtime'
+} from './internal-runtime'
 
 const setResponseStatus = vi.fn()
 const setHeaders = vi.fn()
@@ -19,7 +19,7 @@ let defineEndpoint: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
 beforeAll(async () => {
-  ;({ defineEndpoint, defineEndpointHandler } = await import('../src/runtime'))
+  ;({ defineEndpoint, defineEndpointHandler } = await import('./internal-runtime'))
 })
 
 vi.mock('h3', () => {

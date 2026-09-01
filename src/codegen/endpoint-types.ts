@@ -9,18 +9,10 @@ export function buildEndpointRouteEntryUnion(handlers: readonly EndpointRouteHan
         .map((handler) => {
           const operation = handler.operation ? `, operation: '${handler.operation}'` : ''
           const importPath = toImportPath(handler.handler)
-          // A method-group entry's default export is the
-          // defineEndpointMethodHandlers() dispatcher, which carries every
-          // declared method's contract/handler-return under
-          // __endpoint_contracts__/__endpoint_method_handler_returns__ keyed
-          // by method, rather than the single-endpoint
-          // __endpoint_contract__/__endpoint_handler_return__ markers.
-          const definitionAccessor = handler.methodGroup
-            ? `typeof import('${importPath}').default['__endpoint_contracts__']['${handler.method}']['definition']`
-            : `typeof import('${importPath}').default['__endpoint_contract__']['definition']`
-          const handlerReturnAccessor = handler.methodGroup
-            ? `typeof import('${importPath}').default['__endpoint_method_handler_returns__']['${handler.method}']`
-            : `typeof import('${importPath}').default['__endpoint_handler_return__']`
+          const routeDefinition = `typeof import('${importPath}').default['~routeDef']`
+          const methodArgument = handler.methodGroup ? `, '${handler.method}'` : ''
+          const definitionAccessor = `EndpointDefinitionFromRoute<${routeDefinition}${methodArgument}>`
+          const handlerReturnAccessor = `EndpointHandlerReturnFromRoute<${routeDefinition}${methodArgument}>`
           return `  | { path: '${handler.route}', method: '${handler.method}'${operation}, definition: ${definitionAccessor}, handlerReturn: ${handlerReturnAccessor} }`
         })
         .join('\n')
@@ -51,7 +43,7 @@ export function generateEndpointTypes(
     : '\nexport type $UseEndpointResult = never\nexport type $UseEndpointResultPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never'
 
   return `
-import type { EndpointClient, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from '${toImportPath(resolve('./runtime'))}'
+import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from '${toImportPath(resolve('./runtime'))}'
 
 type EndpointRouteEntry =
 ${endpointUnion}

@@ -1,13 +1,14 @@
 import { z } from 'zod'
-import { defineEndpoint } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-// PROTOTYPE: single-define (merged) form - contract and handler in one call.
-export default defineEndpoint({
+export default defineRouteHandler({
   operation: 'getMerged',
-  query: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
+  validate: {
+    query: z.object({ id: z.coerce.number<string>() }),
+    response: {
+      200: z.object({ id: z.number(), name: z.string() }),
+      404: z.object({ message: z.string() }),
+    },
   },
   handler: ({ query, respond }) => {
     if (query.id === 0) {

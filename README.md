@@ -10,7 +10,7 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 - [📖 Documentation](https://nuxt-endpoints.github.io/nuxt-endpoints/)
 - [🎮 Browser type playground](https://nuxt-endpoints.github.io/nuxt-endpoints/playground)
 
-> Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative.
+> Status: early alpha. This branch exposes the planned H3/Nitro authoring shape while retaining Nuxt 4, Nitro 2, and H3 1 compatibility internally.
 
 ## One definition, everything typed
 
@@ -20,12 +20,14 @@ Describe the HTTP contract once, next to the handler, with the schema library yo
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineEndpoint({
+export default defineRouteHandler({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: z.object({ id: z.number(), name: z.string() }),
-    404: z.object({ message: z.string() }),
+  validate: {
+    response: {
+      200: z.object({ id: z.number(), name: z.string() }),
+      404: z.object({ message: z.string() }),
+    },
   },
   handler: ({ params, respond }) => {
     const user = findUser(params.id) // params.id is a number — already validated and coerced
@@ -94,7 +96,17 @@ npm install zod
 # or: npm install effect
 ```
 
-That's it. Adding the module changes nothing by itself: only routes that export an endpoint definition are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+
+## Platform transition
+
+Application code uses the same canonical route definition being developed for H3 and Nitro. On the current Nuxt 4 support line, Nuxt Endpoints supplies the missing implementation behind that API:
+
+- route modules are evaluated with Jiti during type generation because Nitro 2 has no contract provider;
+- request/response validation and multi-method dispatch delegate to private NE compatibility primitives;
+- generated types read the public `~routeDef` protocol, not those private primitives.
+
+The [`upstream-integration`](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/upstream-integration) branch replaces these compatibility internals with the experimental H3 2 and Nitro 3 implementations. The public route shape stays the same; preserving the old `defineEndpoint*` authoring APIs is not a project goal.
 
 Module options (OpenAPI route, optional client methods, the Vue Query adapter) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 

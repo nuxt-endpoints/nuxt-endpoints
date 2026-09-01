@@ -3,8 +3,8 @@ import {
   defineEndpoint,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
-} from '../../src/runtime'
-import type { EndpointMethodMember, StandardSchemaLike } from '../../src/runtime'
+} from '../internal-runtime'
+import type { EndpointMethodMember, StandardSchemaLike } from '../internal-runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 

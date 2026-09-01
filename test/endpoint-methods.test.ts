@@ -6,7 +6,7 @@ import {
   defineEndpoint,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
-} from '../src/runtime'
+} from './internal-runtime'
 import { defineRuntimeHandler } from '../src/runtime/platform'
 
 // These run a real HTTP request through a real H3 app (router included, since

@@ -3,20 +3,18 @@ title: Low-level HTTP
 description: Handle files, streams, redirects, proxies, raw Responses, and 204 routes.
 ---
 
-Nuxt Endpoints is strongest for JSON REST APIs. Use `responses` when the route returns typed JSON bodies.
+Nuxt Endpoints is strongest for JSON APIs, but the canonical route definition
+keeps native HTTP escape hatches.
 
-For lower-level HTTP behavior, omit `responses`. The route can still use request validation and the generated path client, but callers should use `.raw()` because the response body is no longer a schema-shaped JSON value.
+## Native responses
 
-Response type checking only applies when a route opts into a response contract. If a route needs to return a redirect, a proxy response, or another native `Response` that should not be modelled as a status at all, leave the response contract out and handle the client side as raw HTTP.
-
-Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and event streams all have a [first-class declaration](/docs/endpoints#non-json-responses) that keeps them in the contract without pretending their payload is validated.
+Omit `validate.response` when the response should not be modelled as a typed
+body. Request validation still applies; callers should use `.raw()`.
 
 ```ts
-export default defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.string() }),
-  handler: ({ params }) => {
-    return new Response(`raw response for ${params.id}`)
-  },
+  handler: ({ params }) => new Response(`raw response for ${params.id}`),
 })
 ```
 
@@ -28,23 +26,24 @@ const response = await $endpoint('/api/raw/:id', {
 const text = await response.text()
 ```
 
-There is intentionally no `useEndpointRaw`. Native `Response`, `Headers`, and streams do not serialize cleanly into Nuxt async-data payloads.
+There is intentionally no `useEndpointRaw`: native `Response`, `Headers`,
+and streams do not serialize into Nuxt async-data payloads.
 
 ## File downloads
 
-A download is a media response like any other, so it can stay in the contract:
+Use a media response when the representation is known:
 
 ```ts
-// server/api/files/[id].get.ts
-export default defineEndpoint({
+export default defineRouteHandler({
   operation: 'downloadFile',
   params: z.object({ id: z.string() }),
-  responses: {
-    200: { media: 'application/pdf', description: 'Invoice PDF' },
+  validate: {
+    response: {
+      200: { media: 'application/pdf', description: 'Invoice PDF' },
+    },
   },
   handler: async ({ params, respond }) => {
     const file = await loadFile(params.id)
-
     return respond(200, file.bytes, {
       headers: { 'content-disposition': `attachment; filename="${file.name}"` },
     })
@@ -53,232 +52,101 @@ export default defineEndpoint({
 ```
 
 ```ts
-const blob = await $endpoint('downloadFile', { params: { id: 'invoice-1' }, responseType: 'blob' })
-```
-
-When the content type varies per file and cannot be declared, drop the response contract and return a native `Response` instead, reading the body from `.raw()` on the client.
-
-```ts
-// server/api/files/[id].get.ts
-export default defineEndpoint({
-  params: z.object({ id: z.string() }),
-  handler: async ({ params }) => {
-    const file = await loadFile(params.id)
-
-    return new Response(file.bytes, {
-      headers: {
-        'content-type': file.contentType,
-        'content-disposition': `attachment; filename="${file.name}"`,
-      },
-    })
-  },
-})
-```
-
-```ts
-const response = await $endpoint('/api/files/:id', {
-  method: 'get',
+const response = await $endpoint('downloadFile', {
   params: { id: 'invoice-1' },
 }).raw()
 const blob = await response.blob()
-const url = URL.createObjectURL(blob)
-
-const link = document.createElement('a')
-link.href = url
-link.download = 'invoice.pdf'
-link.click()
-URL.revokeObjectURL(url)
 ```
 
-## Multipart uploads
+When the content type cannot be declared, return a native `Response` and read
+it through `.raw()`.
 
-Multipart requests are now a first-class contract shape — declare a
-`multipart/form-data` member in a [media-type body map](/docs/endpoints#media-type-request-bodies)
-to get validation, typing, and OpenAPI output. Drop down to the raw Nuxt event
-only when you need streaming part-by-part processing instead of a parsed form.
+## Multipart and raw uploads
 
-```ts
-// server/api/uploads.post.ts
-export default defineEventHandler(async (event) => {
-  const parts = await readMultipartFormData(event)
-  const file = parts?.find((part) => part.name === 'file')
-
-  if (!file?.data) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing file' })
-  }
-
-  const uploaded = await saveUpload(file)
-  return { id: uploaded.id }
-})
-```
+A media-type body map validates parsed representations and can expose raw
+bytes for selected members:
 
 ```ts
-const form = new FormData()
-form.append('file', file)
-
-const uploaded = await $fetch<{ id: string }>('/api/uploads', {
-  method: 'POST',
-  body: form,
-})
-```
-
-This route is outside the generated endpoint client until multipart request contracts become first-class.
-
-## Streaming and SSE
-
-Streaming is no longer a reason to leave the contract. Declare the status by
-its [media type](/docs/endpoints#non-json-responses) and the route keeps its
-place in OpenAPI and in the generated client, which stops parsing that route's
-body so callers receive the live stream.
-
-```ts
-// server/api/events.get.ts
-export default defineEndpoint({
-  operation: 'streamEvents',
-  responses: {
-    200: { media: 'text/event-stream' },
+export default defineRouteHandler({
+  validate: {
+    body: {
+      'multipart/form-data': z.object({ name: z.string() }),
+      'application/pdf': true,
+    },
+    response: { 201: z.object({ ok: z.literal(true) }) },
   },
-  handler: ({ respond }) => {
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
-      },
-    })
-
-    return respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
+  handler: ({ body, bodyMediaType, respond }) => {
+    if (bodyMediaType === 'application/pdf') {
+      return respond(201, { ok: savePdf(body) })
+    }
+    return respond(201, { ok: saveForm(body) })
   },
 })
 ```
 
-```ts
-const reader = (await $endpoint('streamEvents')).getReader()
-```
-
-An undeclared streaming route still works — return a native `Response` and use
-`.raw()`. What it gives up is the OpenAPI entry and the client's knowledge that
-the body should not be parsed.
-
-The chunks themselves stay untyped. Declaring their shape would need a complete
-chunk, cancellation, and error contract, and the demand in the ecosystem is for
-streaming to work at all rather than for typed chunks — so `media` declares
-what is sent, and `schema` documents it, without either claiming to check it.
-
-For browser SSE, `EventSource` is usually simpler:
-
-```ts
-const events = new EventSource('/api/events')
-events.addEventListener('message', (event) => {
-  console.log(event.data)
-})
-```
+Use a plain Nitro handler when you need streaming part-by-part multipart
+processing rather than a parsed contract value.
 
 ## Redirects
 
-For API redirects, return a native redirect response. Browser fetch follows redirects by default, so client code usually sees the final response.
+Redirect semantics belong to HTTP rather than a JSON response schema:
 
 ```ts
-// server/api/auth/callback.get.ts
-export default defineEndpoint({
-  query: z.object({ next: z.string().optional() }),
-  handler: ({ query }) => {
-    return new Response(null, {
+export default defineRouteHandler({
+  validate: {
+    query: z.object({ to: z.string().startsWith('/') }),
+  },
+  handler: ({ query }) =>
+    new Response(null, {
       status: 302,
-      headers: {
-        location: query.next ?? '/dashboard',
-      },
+      headers: { location: query.to },
+    }),
+})
+```
+
+Call redirects with `.raw()` when status and `Location` matter.
+
+## Proxies
+
+Return the upstream `Response` directly. Do not declare a schema unless the
+route actually reads and validates the upstream body:
+
+```ts
+export default defineRouteHandler({
+  params: z.object({ path: z.string() }),
+  handler: ({ request, params }) => {
+    return fetch(new URL(params.path, 'https://upstream.example'), {
+      method: request.method,
+      headers: request.headers,
+      signal: request.signal,
     })
   },
 })
 ```
 
-```ts
-const response = await $endpoint('/api/auth/callback', {
-  method: 'get',
-  query: { next: '/dashboard' },
-}).raw()
+## Empty responses
 
-if (response.redirected) {
-  await navigateTo(response.url, { external: true })
-}
-```
-
-For UI navigation, prefer `navigateTo` directly from the page or middleware instead of hiding navigation behind an API request.
-
-## Proxy routes
-
-Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `.raw()` from the client.
+An explicit 204 can be declared as a media response and returned with
+`respond`:
 
 ```ts
-// server/api/proxy/[id].get.ts
-export default defineEndpoint({
-  params: z.object({ id: z.string() }),
-  handler: async ({ params }) => {
-    return await fetch(`https://api.example.com/files/${params.id}`)
+export default defineRouteHandler({
+  validate: {
+    response: {
+      204: { media: 'application/octet-stream', description: 'Deleted' },
+    },
   },
+  handler: ({ respond }) => respond(204, new Uint8Array()),
 })
 ```
 
-```ts
-const response = await $endpoint('/api/proxy/:id', {
-  method: 'get',
-  params: { id: 'asset-1' },
-}).raw()
-const contentType = response.headers.get('content-type')
-const data = await response.arrayBuffer()
-```
+For strict HTTP semantics where no content type or body should be emitted,
+return `new Response(null, { status: 204 })` without a response schema and
+use `.raw()` on the client.
 
-## Raw Web Responses
+## When to keep a plain Nitro route
 
-Use raw `Response` returns when the route owns status, headers, cookies, or a body shape that should not be modeled as JSON.
-
-```ts
-// server/api/report.get.ts
-export default defineEndpoint({
-  handler: () => {
-    return new Response('created', {
-      status: 201,
-      headers: {
-        'x-report-id': 'report_123',
-      },
-    })
-  },
-})
-```
-
-```ts
-const response = await $endpoint('/api/report', { method: 'get' }).raw()
-const reportId = response.headers.get('x-report-id')
-const text = await response.text()
-```
-
-## 204 No Content
-
-For no-content JSON API routes, keep the response contract. Declare `204` and return it with `respond`.
-
-```ts
-// server/api/sessions/current.delete.ts
-export default defineEndpoint({
-  responses: {
-    204: z.undefined(),
-  },
-  handler: ({ respond }) => {
-    clearSession()
-    return respond(204, undefined)
-  },
-})
-```
-
-```ts
-const result = await $endpoint('/api/sessions/current', { method: 'delete' }).result()
-
-if (result.status === 204) {
-  result.body // undefined
-}
-```
-
-Use `.raw()` when the caller only needs the native status:
-
-```ts
-const response = await $endpoint('/api/sessions/current', { method: 'delete' }).raw()
-response.status // 204
-```
+Use `defineEventHandler` directly when the contract would be incomplete or
+misleading—for example, transparent proxies, open-ended streaming protocols,
+or routes whose behavior is entirely controlled by another framework. Plain
+and contracted routes coexist in the same server directory.

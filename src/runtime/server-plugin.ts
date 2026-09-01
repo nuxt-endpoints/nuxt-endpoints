@@ -24,11 +24,7 @@ type EndpointsRuntimeOptions = {
 
 type HandlerFunction = {
   __endpoint_contract__?: DefinedEndpoint<EndpointDefinition>
-  // Present on a defineEndpointMethodHandlers() dispatcher instead of
-  // __endpoint_contract__: one DefinedEndpoint per declared method, keyed by
-  // that method. Every manifest entry for a method-group route shares the
-  // same dispatcher (same `load()`), differing only in `definition.method`
-  // below, so the matching member is picked per manifest entry.
+  // Private compatibility carrier for the canonical multi-method form.
   __endpoint_contracts__?: Record<string, DefinedEndpoint<EndpointDefinition>>
   __set_endpoint_route__?: (identity: EndpointRouteIdentity) => void
   __set_endpoint_runtime__?: (runtime: EndpointRuntime | undefined) => void
@@ -147,7 +143,7 @@ function resolveEndpointContract(
   const member = handler.__endpoint_contracts__[definition.method]
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method in its defineEndpointMethods() group. Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
+      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching member in its multi-method defineRouteHandler(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
     )
   }
   return member

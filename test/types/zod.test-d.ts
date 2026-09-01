@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../../src/runtime'
-import type { EndpointClient } from '../../src/runtime'
+import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import type { EndpointClient } from '../internal-runtime'
 
 type Client = EndpointClient<{
   path: '/api/users/:id'

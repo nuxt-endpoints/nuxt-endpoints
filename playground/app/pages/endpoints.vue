@@ -61,7 +61,7 @@
             <article class="article -stage">
               <header class="header">
                 <span class="value">Server contract</span>
-                <code class="code">defineEndpoint</code>
+                <code class="code">defineRouteHandler</code>
               </header>
               <pre class="pre"><code>{{ selectedScenario.contract }}</code></pre>
             </article>
@@ -262,23 +262,27 @@ type TryOperation = {
   confirmations: string[]
 }
 
-const getUserContract = `export const endpoint = defineEndpoint({
+const getUserContract = `export default defineRouteHandler({
+  operation: 'getUser',
   params: z.object({ id: z.string() }),
-  query: z.object({ includeAge: z.coerce.boolean().optional() }),
-  headers: z.object({ 'x-client-version': z.string().min(1) }),
-  responses: {
-    200: User,
-    404: ErrorResponse,
+  validate: {
+    query: z.object({ includeAge: z.coerce.boolean().optional() }),
+    headers: z.object({ 'x-client-version': z.string().min(1) }),
+    response: { 200: User, 404: ErrorResponse },
   },
+  handler: ({ params }) => findUser(params.id),
 })`
 
-const createUserContract = `export const endpoint = defineEndpoint({
+const createUserContract = `export default defineRouteHandler({
   operation: 'createUser',
-  body: z.object({
-    name: z.string().min(1),
-    age: z.number().int().nonnegative().optional(),
-  }),
-  responses: { 201: User },
+  validate: {
+    body: z.object({
+      name: z.string().min(1),
+      age: z.number().int().nonnegative().optional(),
+    }),
+    response: { 201: User },
+  },
+  handler: ({ body, respond }) => respond(201, createUser(body)),
 })`
 
 const inspectorScenarios: InspectorScenario[] = [
@@ -362,19 +366,19 @@ if (result.status === 201) result.body.id`,
     operation: 'searchUsers',
     method: 'GET',
     path: '/api/users/search?q=ja&limit=99',
-    contract: `export const endpoint = defineEndpoint({
-  query: v.object({
-    q: v.pipe(v.string(), v.minLength(1)),
-    limit: v.optional(v.pipe(
-      v.string(),
-      v.transform(Number),
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(10),
-    )),
-  }),
-  responses: { 200: SearchResult },
+    contract: `export default defineRouteHandler({
+  operation: 'searchUsers',
+  validate: {
+    query: v.object({
+      q: v.pipe(v.string(), v.minLength(1)),
+      limit: v.optional(v.pipe(
+        v.string(), v.transform(Number), v.number(),
+        v.integer(), v.minValue(1), v.maxValue(10),
+      )),
+    }),
+    response: { 200: SearchResult },
+  },
+  handler: ({ query }) => searchUsers(query),
 })`,
     client: `const response = await $endpoint.searchUsers({
   query: { q: 'ja', limit: '99' },

@@ -39,16 +39,18 @@ npm install effect
 
 ## Your first endpoint
 
-Create an ordinary Nuxt server route and default-export a `defineEndpoint()` call with a `handler` property:
+Create an ordinary Nuxt server route and directly default-export a `defineRouteHandler()` call:
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineEndpoint({
+export default defineRouteHandler({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
+  validate: {
+    response: { 200: z.object({ id: z.number(), name: z.string() }) },
+  },
   handler: ({ params }) => {
     return { id: params.id, name: 'Tom' } // params.id is a number — validated and coerced
   },

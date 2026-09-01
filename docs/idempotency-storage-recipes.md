@@ -236,16 +236,28 @@ every request.
 ```ts
 const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
 
-export const endpoint = defineEndpoint({
-  operation: 'grantPoints',
-  body: GrantPointsBody,
-  responses: { 201: GrantPointsResult },
-}).idempotency({
-  required: true,
-  storage: () => idempotencyStorage,
-  scope: ({ event }) => event.context.tenant.id,
-  authorization: ({ event }) => requirePermission(event, 'points:grant'),
-})
+export default defineRouteHandler(
+  {
+    operation: 'grantPoints',
+    validate: {
+      body: GrantPointsBody,
+      response: { 201: GrantPointsResult },
+    },
+    idempotency: {
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: true,
+    },
+    handler: ({ body, respond }) => respond(201, grantPoints(body)),
+  },
+  {
+    idempotency: {
+      storage: () => idempotencyStorage,
+      scope: ({ event }) => event.context.tenant.id,
+      authorization: ({ event }) => requirePermission(event, 'points:grant'),
+    },
+  },
+)
 ```
 
 ## Conformance before production

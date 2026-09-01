@@ -300,7 +300,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(schema.paths['/api/separated'].get.operationId).toBe('getSeparated')
     })
 
-    it('serves an endpoint whose contract is a sibling .endpoint-contract file', async () => {
+    it('serves an endpoint whose contract values come from an ordinary server/contracts module', async () => {
       await expect($fetch('/api/sibling')).resolves.toEqual({
         name: 'sibling',
         sibling: true,
@@ -314,8 +314,8 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(schema.paths['/api/sibling'].get.operationId).toBe('getSibling')
     })
 
-    it('does not register sibling contract files as Nitro routes', async () => {
-      const response = await fetch('/api/sibling.get.endpoint-contract')
+    it('does not register ordinary contract modules as Nitro routes', async () => {
+      const response = await fetch('/contracts/sibling')
       expect(response.status).toBe(404)
     })
 
@@ -579,17 +579,17 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
 }
 
 function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
-  // Each union member is one line, so a line carrying `__endpoint_contracts__`
-  // came from a multi-method group. Nitro types a method-suffix-free route
-  // file under `InternalApi[path]['default']`, so those paths are compared as
-  // the union of their declared methods instead of method by method.
+  // Each union member is one line. A method argument after `~routeDef` marks
+  // the multi-method form. Nitro 2 types a method-suffix-free route file under
+  // `InternalApi[path]['default']`, so those paths are compared as the union
+  // of their declared methods instead of method by method.
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
       const match = line.match(/\| \{ path: '([^']+)', method: '([^']+)'/)
       if (!match) return []
       const [, path, method] = match
-      return [{ path, method, group: line.includes('__endpoint_contracts__') }]
+      return [{ path, method, group: line.includes("['~routeDef'],") }]
     })
     .filter((route) => route.path !== undefined && route.method !== undefined)
   if (routes.length === 0) {
@@ -621,14 +621,15 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
   return `import type { $EndpointPathResponse } from '#endpoints'
 import type { InternalApi } from 'nitropack/types'
 
-type Equal<LEFT, RIGHT> =
-  (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends
-  (<VALUE>() => VALUE extends RIGHT ? 1 : 2)
-    ? (<VALUE>() => VALUE extends RIGHT ? 1 : 2) extends
-      (<VALUE>() => VALUE extends LEFT ? 1 : 2)
-      ? true
-      : false
+// Mutual structural assignability is the contract here. Generated route
+// helpers intentionally retain conditional aliases around the same concrete
+// body, which the function-parameter equality trick treats as nominally
+// different even when both public types accept exactly the same values.
+type Equal<LEFT, RIGHT> = [LEFT] extends [RIGHT]
+  ? [RIGHT] extends [LEFT]
+    ? true
     : false
+  : false
 type Assert<VALUE extends true> = VALUE
 
 // A route that declares a stream response is exempt, and deliberately so.
