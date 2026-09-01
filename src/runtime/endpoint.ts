@@ -894,8 +894,23 @@ export function defineEndpoint(
 // Shared only with the H3-compatible route-handler adapter. It deliberately
 // stays out of runtime/index.ts so it does not become application API.
 export function validateEndpointDefinition(contract: EndpointDefinition): void {
+  validateEndpointIdempotencyDefinition(contract.idempotency)
   validateEndpointBodyDefinition(contract.body)
   validateEndpointResponseDefinitions(contract)
+}
+
+function validateEndpointIdempotencyDefinition(
+  idempotency: EndpointDefinition['idempotency'],
+): void {
+  if (typeof idempotency !== 'object' || idempotency === null) return
+
+  for (const runtimeOption of idempotencyRuntimeOptionKeys) {
+    if (runtimeOption in idempotency) {
+      throw new TypeError(
+        `Runtime-only idempotency option \`${runtimeOption}\` cannot be declared in a route contract. Keep only enabled, headerName, and required in the contract.`,
+      )
+    }
+  }
 }
 
 function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void {

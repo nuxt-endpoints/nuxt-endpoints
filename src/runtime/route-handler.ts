@@ -32,6 +32,12 @@ type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
   response?: RESPONSES
 }
 
+type RouteContractIdempotency = {
+  storage?: never
+  scope?: never
+  authorization?: never
+}
+
 type RouteHandlerInput<
   OPERATION,
   PARAMS,
@@ -52,7 +58,7 @@ type RouteHandlerInput<
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
-  idempotency?: IDEMPOTENCY
+  idempotency?: IDEMPOTENCY & RouteContractIdempotency
   handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
 }
 
@@ -61,7 +67,7 @@ type RuntimeMethodMetadata = {
   summary?: string
   description?: string
   tags?: string[]
-  idempotency?: EndpointIdempotencyMetadata
+  idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
 }
 
 type RuntimeMethodValidation = RouteValidation<
@@ -253,7 +259,8 @@ export function defineRouteHandler<
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const IDEMPOTENCY extends EndpointIdempotencyMetadata | undefined = undefined,
+  const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
+    undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointContract<
     OPERATION,
     PARAMS,
@@ -375,6 +382,7 @@ export function defineRouteHandler<
 >(
   definition: Definition & {
     params?: Params
+    idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
     /** Request validation is per method: declare it inside each method entry. */
     validate?: never
     get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn>
@@ -430,7 +438,9 @@ export function defineRouteHandler(
   ] as const) {
     const entry = methodsDefinition[method]
     if (!entry) continue
-    endpoints[method] = defineEndpoint(toEndpointDefinition(entry, definition.params), options)
+    const contract = toEndpointDefinition(entry, definition.params)
+    validateEndpointDefinition(contract)
+    endpoints[method] = defineEndpoint(contract, options)
     handlers[method] = entry.handler
   }
   return Object.assign(
