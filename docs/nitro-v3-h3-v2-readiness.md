@@ -2,6 +2,11 @@
 
 Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
 
+> This document preserves a dated package/API measurement. Its adapter tables
+> are evidence, not the current public authoring guide. The current product
+> boundary and upstream plan live in the [roadmap](./roadmap.md); current route
+> syntax lives in the [endpoint guide](../site/content/docs/endpoints.md).
+
 H3 rows last verified: 2026-08-24, against `h3@2.0.1-rc.22` — the newest H3 v2
 release resolvable in this repository's lockfile, where it arrives transitively.
 Nitro rows were recorded against `nitro@3.0.260610-beta` and have not been

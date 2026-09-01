@@ -51,7 +51,8 @@ export default defineRouteHandler({
 ```
 
 ```ts
-const response = await $endpoint('downloadFile', {
+const response = await $endpoint('/api/invoices/:id/download', {
+  method: 'get',
   params: { id: 'invoice-1' },
 }).raw()
 const blob = await response.blob()

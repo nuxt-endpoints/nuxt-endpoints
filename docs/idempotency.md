@@ -1,8 +1,14 @@
 # Idempotency-Key Server Helper Design
 
-Status: implemented; production durability remains application-owned.
+Status: historical design record; production durability remains application-owned.
 
 Last consolidated: 2026-08-15
+
+> The public API alternatives recorded below explain how the feature evolved;
+> they are not the current API. Current routes declare serializable metadata on
+> `defineRouteHandler`, central runtime callbacks live in
+> `server/endpoints/runtime.ts`, and `$endpoint(path, { method, ... })` creates
+> or accepts the client key. See the current [public guide](../site/content/docs/idempotency.md).
 
 This document defines the guarantees, ownership boundary, and state model for
 optional `Idempotency-Key` replay protection in Nuxt Endpoints. The public API,
@@ -222,7 +228,7 @@ before the application handler and are not added to the endpoint's declared
 response union. OpenAPI adds the problem media type alongside any application
 response already declared for the same status, without replacing it.
 
-## Public API decision
+## Historical public API decision
 
 Three declaration shapes were considered.
 
@@ -279,7 +285,7 @@ export const endpoint = defineEndpoint({
 })
 ```
 
-Decision: adopt C. `DefinedEndpoint.idempotency()` returns a new endpoint and
+Historical decision at the time: adopt C. `DefinedEndpoint.idempotency()` returns a new endpoint and
 does not mutate the original. The returned definition gains only serializable,
 client-safe metadata:
 
@@ -432,8 +438,9 @@ runtime callbacks, so the server plugin resolves the endpoint override and
 central policy together and fails before serving when `storage`, `scope`, or
 `authorization` is still missing, or when the policy file does not
 default-export a valid policy.
-Supplying idempotency metadata directly to `defineEndpoint()` remains
-rejected for the same reasons as before.
+This builder decision was later superseded by the canonical
+`defineRouteHandler` contract plus central runtime policy described in the
+public guide.
 
 Deferred extensions, recorded as open questions: an application-wide
 `headerName` default (conflicts with literal-type inference from the method),

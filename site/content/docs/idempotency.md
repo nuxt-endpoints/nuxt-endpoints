@@ -105,7 +105,8 @@ to opt into automatic generation. Supply a string when the logical operation
 must survive a page reload, process restart, or queue handoff.
 
 ```ts
-const request = $endpoint('grantPoints', {
+const request = $endpoint('/api/points/grants', {
+  method: 'post',
   body: { userId: 'u_1', amount: 10 },
 })
 

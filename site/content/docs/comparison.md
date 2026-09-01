@@ -24,7 +24,14 @@ Nuxt's typed-fetch work and [`fetchdts`](https://github.com/unjs/fetchdts) are c
 
 Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. The canonical `defineRouteHandler` contract supplies that information. Its consumers can change without changing route authoring.
 
-The preferred Nuxt 5 direction is to contribute endpoint metadata to Nuxt's generated fetch schema through a public module hook, then let Nuxt clients and Nuxt Endpoints consume the same successful response projection. Until that hook and implementation exist, this is a migration direction rather than a Nuxt 5 support claim.
+For the Nuxt 5 generation, the preferred direction is to contribute endpoint
+metadata to Nuxt's generated fetch schema through a public integration point,
+then let Nuxt clients and Nuxt Endpoints consume the same successful response
+projection. `$endpoint` keeps the richer per-status result and `useEndpoint`
+keeps its Nuxt async-data UX; upstream primitives replace duplicated plumbing
+rather than those application-facing APIs. Until that integration is covered
+by the package test matrix, this remains a migration direction rather than a
+Nuxt 5 support claim.
 
 ## tRPC
 

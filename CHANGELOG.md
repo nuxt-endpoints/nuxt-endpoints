@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** endpoint routes now directly default-export the canonical
+  `defineRouteHandler({ ... })` shape. The former `defineEndpoint*` authoring
+  helpers are no longer public API. Request and response schemas live under
+  `validate`, while path params remain at the route root.
+- **Breaking:** generated clients use path plus HTTP method as their only public
+  identity. Named operation calls, operation aliases, and generated operation
+  Query factories have been removed.
+- **Breaking:** awaiting `$endpoint(...)` now returns the declared
+  `{ status, ok, body, headers }` union directly. The public `.result()`, data
+  mode, and `useEndpointResult` compatibility APIs have been removed;
+  `useEndpoint` exposes the serializable status union through Nuxt async data.
+- Vue Query consumes the same lazy endpoint request through `.queryOptions()`
+  or `.mutationOptions()`. Required idempotency keys are generated when that
+  request object is created and reused by retries of the same object.
+- Zod 4 schemas use their native `.toJSONSchema()` conversion. This includes
+  end-to-end OpenAPI extraction for `z.file()` and raises the Zod peer baseline
+  to 4.2.
+
+### Documentation
+
+- Reframed the project as a Nuxt 4.5+ implementation of the route-contract
+  direction being developed for the Nuxt 5 generation. `$endpoint` and
+  `useEndpoint` remain the application-facing UX while compatible H3, Nitro,
+  and Nuxt primitives replace internal plumbing over time.
+- Updated the README, documentation site, browser type playground, local
+  playground, architecture notes, and package smoke fixture to the current API.
+
 ## 0.7.2 - 2026-08-29
 
 ### Fixed

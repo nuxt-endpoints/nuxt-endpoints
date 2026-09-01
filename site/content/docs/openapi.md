@@ -55,7 +55,7 @@ Both are optional. With neither, the document is exactly what the route contract
 
 ## Generated from route contracts
 
-Request schemas, response schemas, summaries, route paths, and optional operation IDs are collected from discovered endpoint definitions. When `operation` is omitted, a stable operationId is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
+Request schemas, response schemas, summaries, and route paths are collected from discovered endpoint definitions. A stable OpenAPI `operationId` is derived from the route method and path. OpenAPI-only details are layered on top through `document` and `extend` above.
 
 A [media response](/docs/endpoints#non-json-responses) appears like any other status. Its content keys are the declared `media` — one entry per type when it declares several — and each schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload, or one chunk of it, in more detail. A validated status labelled with a `+json` profile is keyed by that profile instead of `application/json`.
 

@@ -56,7 +56,10 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 
 Adding the module changes nothing by itself. Only routes that directly default-export `defineRouteHandler({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
-> Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
+> Nuxt Endpoints supports Nuxt 4.5+ today and is designed to adopt the
+> route-contract primitives being developed for the Nuxt 5 generation. The
+> `$endpoint` / `useEndpoint` UX remains the stable boundary while lower-level
+> implementation moves upstream. See [Compatibility](/docs/getting-started#compatibility).
 
 ## Next steps
 

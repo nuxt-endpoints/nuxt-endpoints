@@ -8,7 +8,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Define Nuxt endpoint contracts once and reuse them for runtime validation, typed clients, Vue Query, status-aware typed results, and OpenAPI.',
+        'Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, typed clients, Vue Query, status-aware results, and OpenAPI.',
     },
   ],
 })
@@ -70,7 +70,10 @@ const queryPitch = {
       code: `import { useQuery } from '@tanstack/vue-query'
 
 const route = useRoute()
-const request = $endpoint.getUser({ params: { id: String(route.params.id) } })
+const request = $endpoint('/api/users/:id', {
+  method: 'get',
+  params: { id: String(route.params.id) },
+})
 const user = useQuery(request.queryOptions())
 
 if (user.data.value?.status === 200) {
@@ -107,11 +110,16 @@ const pitches = [
         lang: 'ts',
         code: `import { z } from 'zod'
 
-export const endpoint = defineEndpoint({
+export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
-  responses: {
-    200: User,
-    404: z.object({ message: z.string() }),
+  validate: {
+    response: {
+      200: User,
+      404: z.object({ message: z.string() }),
+    },
+  },
+  handler: (event) => {
+    return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
   },
 })`,
       },
@@ -151,7 +159,7 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
-        code: `export default defineEndpoint({
+        code: `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
   handler: (event) => {
     return findUser(event.validated.params.id)
@@ -162,9 +170,13 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 2 — tighten the contract',
         lang: 'ts',
-        code: `export const endpoint = defineEndpoint({
+        code: `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
-  responses: { 200: User, 404: NotFound },
+  validate: { response: { 200: User, 404: NotFound } },
+  handler: async (event) => {
+    const user = await findUser(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'Not found' })
+  },
 })
 
 // now the handler return is checked against the schemas,
@@ -180,7 +192,7 @@ if (result.status === 200) result.body.name // User`,
     points: [
       {
         icon: 'lucide:list-checks',
-        text: 'responses: { 200: User, 404: NotFound } — TypeScript checks handler returns',
+        text: 'validate.response declares 200 and 404 — TypeScript checks handler returns',
       },
       {
         icon: 'lucide:split',
@@ -241,7 +253,7 @@ if (result.status === 404) {
   "paths": {
     "/api/users/{id}": {
       "get": {
-        "operationId": "getUser",
+        "operationId": "getApiUsersById",
         "parameters": [
           { "name": "id", "in": "path", "required": true }
         ],
@@ -319,8 +331,10 @@ const stackItems = [
         <p class="text -readiness">
           <Icon name="lucide:shield-check" size="0.95rem" aria-hidden="true" />
           <span>
-            Supports Nuxt 4.5+ —
-            <NuxtLink to="/docs/getting-started#compatibility">see compatibility</NuxtLink>
+            Nuxt 4.5+ today, built for the Nuxt 5 generation. Upstream primitives will replace
+            internal plumbing while <code>$endpoint</code> and <code>useEndpoint</code> stay the
+            application-facing UX —
+            <NuxtLink to="/docs/getting-started#compatibility">how compatibility works</NuxtLink>
           </span>
         </p>
 

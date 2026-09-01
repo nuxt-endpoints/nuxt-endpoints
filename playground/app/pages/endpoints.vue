@@ -4,8 +4,8 @@
       <p class="text -eyebrow">Core client</p>
       <h1 class="title">Typed endpoints</h1>
       <p class="text -lede">
-        Call generated <code class="code">$endpoint</code> methods, compare a Valibot-backed route,
-        and verify that legacy Nitro handlers keep working through plain
+        Call path-and-method <code class="code">$endpoint</code> requests, compare a Valibot-backed
+        route, and verify that legacy Nitro handlers keep working through plain
         <code class="code">$fetch</code>.
       </p>
     </header>
@@ -38,7 +38,7 @@
         >
           <span class="unit">
             <span class="value">{{ scenario.status }}</span>
-            <code class="code">$endpoint.{{ scenario.operation }}</code>
+            <code class="code">$endpoint(path)</code>
           </span>
           <strong class="strong">{{ scenario.title }}</strong>
           <span class="text">{{ scenario.description }}</span>
@@ -61,7 +61,7 @@
             <article class="article -stage">
               <header class="header">
                 <span class="value">Server contract</span>
-                <code class="code">defineEndpoint</code>
+                <code class="code">defineRouteHandler</code>
               </header>
               <pre class="pre"><code>{{ selectedScenario.contract }}</code></pre>
             </article>
@@ -120,13 +120,13 @@
           <p class="text -eyebrow">Try it yourself</p>
           <h2 id="try-it-yourself-title" class="title">Choose what you want to verify</h2>
           <p class="text -explanation">
-            Select one operation, read its check points, then change the input and compare the
-            result beside it.
+            Select one request, read its check points, then change the input and compare the result
+            beside it.
           </p>
         </div>
       </header>
 
-      <div class="actions -operations" aria-label="Choose an operation">
+      <div class="actions -operations" aria-label="Choose a request">
         <button
           v-for="operation in tryOperations"
           :key="operation.id"
@@ -141,10 +141,10 @@
       </div>
 
       <div class="workspace">
-        <article class="article -exercise" aria-label="Operation form">
+        <article class="article -exercise" aria-label="Request form">
           <header class="header">
             <div class="unit">
-              <p class="text -eyebrow">Selected operation</p>
+              <p class="text -eyebrow">Selected request</p>
               <h3 class="title">{{ selectedTryOperation.label }}</h3>
             </div>
             <code class="code">{{ selectedTryOperation.route }}</code>
@@ -213,7 +213,7 @@
           </form>
         </article>
 
-        <article class="article -result" aria-label="Operation result" aria-live="polite">
+        <article class="article -result" aria-label="Request result" aria-live="polite">
           <header class="header">
             <div class="unit">
               <p class="text -eyebrow">Output</p>
@@ -261,22 +261,25 @@ type TryOperation = {
   confirmations: string[]
 }
 
-const getUserContract = `export const endpoint = defineEndpoint({
+const getUserContract = `export default defineRouteHandler({
   params: z.object({ id: z.string() }),
-  query: z.object({ includeAge: z.coerce.boolean().optional() }),
-  headers: z.object({ 'x-client-version': z.string().min(1) }),
-  responses: {
-    200: User,
-    404: ErrorResponse,
+  validate: {
+    query: z.object({ includeAge: z.coerce.boolean().optional() }),
+    headers: z.object({ 'x-client-version': z.string().min(1) }),
+    response: { 200: User, 404: ErrorResponse },
   },
+  handler: (event) => findUser(event.validated.params.id),
 })`
 
-const createUserContract = `export const endpoint = defineEndpoint({
-  body: z.object({
-    name: z.string().min(1),
-    age: z.number().int().nonnegative().optional(),
-  }),
-  responses: { 201: User },
+const createUserContract = `export default defineRouteHandler({
+  validate: {
+    body: z.object({
+      name: z.string().min(1),
+      age: z.number().int().nonnegative().optional(),
+    }),
+    response: { 201: User },
+  },
+  handler: (event) => event.respond(201, createUser(event.validated.body)),
 })`
 
 const inspectorScenarios: InspectorScenario[] = [
@@ -359,21 +362,21 @@ if (result.status === 201) result.body.id`,
       'Static types know that query input is a string. Runtime validation still protects the HTTP boundary from an out-of-range value.',
     method: 'GET',
     path: '/api/users/search?q=ja&limit=99',
-    contract: `export const endpoint = defineEndpoint({
-  query: v.object({
-    q: v.pipe(v.string(), v.minLength(1)),
-    limit: v.optional(v.pipe(
-      v.string(),
-      v.transform(Number),
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(10),
-    )),
-  }),
-  responses: { 200: SearchResult },
+    contract: `export default defineRouteHandler({
+  validate: {
+    query: v.object({
+      q: v.pipe(v.string(), v.minLength(1)),
+      limit: v.optional(v.pipe(
+        v.string(), v.transform(Number), v.number(),
+        v.integer(), v.minValue(1), v.maxValue(10),
+      )),
+    }),
+    response: { 200: SearchResult },
+  },
+  handler: (event) => searchUsers(event.validated.query),
 })`,
-    client: `const response = await $endpoint.searchUsers({
+    client: `const response = await $endpoint('/api/users/search', {
+  method: 'get',
   query: { q: 'ja', limit: '99' },
 }).raw()
 
@@ -388,7 +391,7 @@ response.status // 400`,
 const tryOperations: TryOperation[] = [
   {
     id: 'get-user',
-    label: '$endpoint.getUser',
+    label: "$endpoint('/api/users/:id')",
     route: 'GET /api/users/:id',
     summary: 'Params, query, headers, and declared errors',
     confirmations: [
@@ -398,7 +401,7 @@ const tryOperations: TryOperation[] = [
   },
   {
     id: 'create-user',
-    label: '$endpoint.createUser',
+    label: "$endpoint('/api/users')",
     route: 'POST /api/users',
     summary: 'Validated request body and a 201 response',
     confirmations: [
@@ -409,7 +412,7 @@ const tryOperations: TryOperation[] = [
   },
   {
     id: 'search-users',
-    label: '$endpoint.searchUsers',
+    label: "$endpoint('/api/users/search')",
     route: 'GET /api/users/search',
     summary: 'Valibot transformation and runtime validation',
     confirmations: [
@@ -424,7 +427,7 @@ const tryOperations: TryOperation[] = [
     summary: 'Incremental adoption without an endpoint export',
     confirmations: [
       'The 200 result confirms that a legacy Nitro route still works through plain $fetch.',
-      'Unlike opted-in routes, /api/legacy-stats has no generated $endpoint operation and is absent from OpenAPI.',
+      'Unlike opted-in routes, /api/legacy-stats is not a known $endpoint path and is absent from OpenAPI.',
     ],
   },
 ]
@@ -443,7 +446,7 @@ const inspectorRunning = ref(false)
 
 const formattedResult = computed(() =>
   result.value === undefined
-    ? '// Run the selected operation to see its result here.'
+    ? '// Run the selected request to see its result here.'
     : JSON.stringify(result.value, null, 2),
 )
 const selectedTryOperation = computed(

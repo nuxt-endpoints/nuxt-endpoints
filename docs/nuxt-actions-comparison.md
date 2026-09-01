@@ -28,7 +28,7 @@ source, playground examples, and tests before being used in this ledger.
 | Nuxt Actions capability           | Nuxt Endpoints decision               | Notes                                                                              |
 | --------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
 | Standard Schema input validation  | Already supported                     | Keep schema-library-neutral runtime parsing                                        |
-| End-to-end input/output inference | Already supported                     | Generated path, method, and operation clients are broader than action references   |
+| End-to-end input/output inference | Already supported                     | Generated path-and-method clients are broader than action references               |
 | Output validation                 | Already supported                     | Runtime response validation remains optional                                       |
 | Typed middleware context          | Adopt in the core roadmap             | H3 event exposure is implemented; evaluate an immutable context builder separately |
 | Optimistic updates                | Delegate to TanStack Query            | Provide generated keys and recipes, not a second rollback engine                   |

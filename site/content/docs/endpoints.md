@@ -3,9 +3,9 @@ title: Define Endpoints
 description: Declare validated request and response contracts with the canonical route-handler API.
 ---
 
-Nuxt Endpoints uses the same single-definition route shape being developed for
-H3 and Nitro. Directly default-export `defineRouteHandler({...})`; the handler
-receives parsed schema output.
+Nuxt Endpoints uses a single-definition route shape designed to align with the
+route-contract work happening in H3 and Nitro. Directly default-export
+`defineRouteHandler({...})`; the handler receives parsed schema output.
 
 ```ts
 // server/api/users/[id].get.ts
@@ -29,14 +29,13 @@ export default defineRouteHandler({
 ```
 
 On Nuxt 4/Nitro 2/H3 1, the module implements this API through a private
-compatibility adapter. The authoring shape is intentionally identical to the
-Nitro 3/H3 2 integration; `defineEndpoint*()` is no longer public API.
+compatibility adapter. As compatible upstream primitives become available, that
+adapter can shrink without changing the route or client UX.
 
 ## Definition fields
 
 Root fields describe route-wide metadata and path params:
 
-- `operation`: optional unique client operation name.
 - `params`: Standard Schema for router params.
 - `summary`, `description`, `tags`: OpenAPI metadata.
 - `idempotency`: serializable idempotency contract metadata.
@@ -242,10 +241,10 @@ export default defineRouteHandler({
 })
 ```
 
-There is no `*.endpoint-contract.ts` filename convention. On the Nitro 2
-compatibility line the complete canonical route module is evaluated at build
-time, so keep its top-level dependency graph deterministic. Nitro 3 replaces
-this with handler-free AST extraction and a route-contract provider.
+There is no `*.endpoint-contract.ts` filename convention. On the current Nuxt 4
+line the complete canonical route module is evaluated at build time, so keep
+its top-level dependency graph deterministic. The project is working toward an
+upstream contract carrier that can remove this evaluation requirement.
 
 ## Canonical macro-compatible form
 

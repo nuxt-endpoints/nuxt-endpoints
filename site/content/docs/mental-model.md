@@ -15,7 +15,7 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
+Each endpoint route is generated onto `$endpoint('/path', { method })` calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. Paths and HTTP methods are the public identity; there is no second operation-name API to keep in sync.
 
 ## 4. Response handling is explicit
 
@@ -27,4 +27,4 @@ The module can serve an OpenAPI 3.1 document without maintaining a separate rout
 
 ## 6. Server-state adapters remain optional
 
-Named endpoint contracts can generate ordinary query, mutation, and infinite-query options for Vue Query. Vue Query owns cache behavior while Nuxt Endpoints keeps request and response types aligned with the server contract.
+Endpoint request objects expose ordinary query or mutation options for Vue Query. Vue Query owns cache behavior while Nuxt Endpoints keeps request identity and response types aligned with the server contract.

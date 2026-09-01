@@ -39,9 +39,11 @@ type PlaygroundRelatedInformation = {
 }
 type TypeScriptModule = typeof import('typescript')
 
-const defaultServerCode = `export default defineEndpoint({
+const defaultServerCode = `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
-  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
+  validate: {
+    response: { 200: z.object({ id: z.number(), name: z.string() }) },
+  },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Ada' }
   },
@@ -54,7 +56,7 @@ const defaultClientCode = `const result = await $endpoint('/api/users/:id', {
 
 console.log(\`id: \${result.body.id}, name: \${result.body.name}\`)`
 
-const inferServerCode = `export default defineEndpoint({
+const inferServerCode = `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
   handler: (event) => {
     // no response schema: the client's type is inferred from this return
@@ -69,9 +71,11 @@ const inferClientCode = `const result = await $endpoint('/api/users/:id', {
 
 console.log(\`\${result.body.name} (\${result.body.role})\`)`
 
-const schemaServerCode = `export default defineEndpoint({
+const schemaServerCode = `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
-  responses: { 200: z.object({ id: z.number(), name: z.string(), role: z.string() }) },
+  validate: {
+    response: { 200: z.object({ id: z.number(), name: z.string(), role: z.string() }) },
+  },
   handler: (event) => {
     // error: the schema declares \`role\`, so this return no longer satisfies it
     return { id: event.validated.params.id, name: 'Ada' }
@@ -584,28 +588,17 @@ declare const z: {
     shape: Shape,
   ): Schema<ObjectInput<Shape>, ObjectOutput<Shape>>
 }
-declare function defineEndpoint<
+declare function defineRouteHandler<
   Params extends Schema<unknown, unknown> | undefined = undefined,
   Responses extends { 200: Schema<unknown, unknown> } | undefined = undefined,
   Return extends
     | ResponsesOutput<Responses>
     | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
 >(definition: {
-  operation?: string
   params?: Params
-  responses?: Responses
-  handler?: (event: { validated: { params: ParamsOutput<Params> } }) => Return
+  validate?: { response?: Responses }
+  handler: (event: { validated: { params: ParamsOutput<Params> } }) => Return
 }): Endpoint<Params, Responses, AwaitedLike<Return>>
-declare function defineEndpointHandler<
-  Params,
-  Responses,
-  Return extends
-    | ResponsesOutput<Responses>
-    | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
->(
-  endpoint: Endpoint<Params, Responses, unknown>,
-  handler: (event: { validated: { params: ParamsOutput<Params> } }) => Return,
-): Endpoint<Params, Responses, AwaitedLike<Return>>
 declare function $endpoint(
   path: '/api/users/:id',
   options: EndpointRequest<typeof import('./server').default> & { method: 'get' },

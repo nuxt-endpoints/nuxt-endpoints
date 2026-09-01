@@ -1,6 +1,6 @@
 ---
 title: Limits
-description: Early alpha, with the important constraints documented.
+description: Supported platform versions, current constraints, and upstream integration plans.
 ---
 
 The core endpoint flow is usable, but OpenAPI metadata, discovery, and release polish are intentionally conservative.
@@ -37,7 +37,7 @@ Unsupported Zod or Valibot constructs fail according to their converter librarie
 
 ## Planned work
 
-- Work with Nuxt and Nitro on stable build-time route metadata.
+- Work with H3, Nitro, and Nuxt on stable build-time route contracts and event metadata.
 - Add first-class endpoint metadata for OpenAPI-specific fields.
 - Add better component and reference controls for shared schemas.
-- Add Nuxt 5, Nitro 3, and H3 2 coverage after their integration APIs stabilize.
+- Add Nuxt 5 coverage to the published support matrix when its integration APIs stabilize.

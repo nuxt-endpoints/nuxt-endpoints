@@ -10,7 +10,10 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 - [📖 Documentation](https://nuxt-endpoints.github.io/nuxt-endpoints/)
 - [🎮 Browser type playground](https://nuxt-endpoints.github.io/nuxt-endpoints/playground)
 
-> Status: early alpha. This branch exposes the planned H3/Nitro authoring shape while retaining Nuxt 4, Nitro 2, and H3 1 compatibility internally.
+> Nuxt 4 today, designed for the Nuxt 5 generation. Nuxt Endpoints provides the
+> `$endpoint` / `useEndpoint` experience now and will adopt H3, Nitro, and Nuxt
+> primitives upstream as they become available, while keeping application-facing
+> APIs as stable as practical.
 
 ## One definition, everything typed
 
@@ -69,10 +72,10 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
 - ✅ Lazy `$endpoint` request objects: status unions, `.raw()`, `.queryOptions()`, `.mutationOptions()`
 - ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
-- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the query factories forward the request the way `useFetch` does
+- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and request-object Query options forward the incoming request
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
-- ✅ Optional named operations (`$endpoint.getUser(...)`) and importable types from `#endpoints`
-- ✅ Generated TanStack/Vue Query adapter: `useQuery` / `useMutation` / `useInfiniteQuery` option factories from named endpoints, with optional Nuxt SSR setup
+- ✅ Importable path, method, request, and result helper types from `#endpoints`
+- ✅ TanStack/Vue Query integration through `.queryOptions()` / `.mutationOptions()`, with optional Nuxt SSR setup
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 
 ## Quick Start
@@ -93,15 +96,22 @@ npm install zod
 
 That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
 
-## Platform transition
+## Nuxt 4 now, ready to follow upstream
 
-Application code uses the same canonical route definition being developed for H3 and Nitro. On the current Nuxt 4 support line, Nuxt Endpoints supplies the missing implementation behind that API:
+Nuxt Endpoints brings the route-contract model being developed for the Nuxt 5
+generation to Nuxt 4.5+ today. On Nuxt 4, the module currently supplies the
+missing build-time discovery, validation, and contract plumbing itself.
 
-- route modules are evaluated with Jiti during type generation because Nitro 2 has no contract provider;
-- request/response validation and multi-method dispatch delegate to private NE compatibility primitives;
-- generated types read the public `~routeDef` protocol, not those private primitives.
+`$endpoint` and `useEndpoint` are Nuxt Endpoints' application-facing UX, not
+temporary substitutes for an upstream client. They remain useful regardless of
+where the lower-level primitives live. As H3, Nitro, and Nuxt gain suitable
+contract APIs, this project will delegate to them and keep only the integration
+and UX they do not provide. The goal is to avoid maintaining the same machinery
+twice while preserving application code wherever practical.
 
-The [`upstream-integration`](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/upstream-integration) branch replaces these compatibility internals with the experimental H3 2 and Nitro 3 implementations. The public route shape stays the same; preserving the old `defineEndpoint*` authoring APIs is not a project goal.
+Upstream APIs are still evolving, so an absolutely change-free migration cannot
+be promised. Compatibility at the Nuxt Endpoints boundary is nevertheless a
+design constraint, and any unavoidable change will be documented as a migration.
 
 Module options (OpenAPI route, optional client methods, the Vue Query adapter) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 
@@ -113,7 +123,7 @@ Guides:
 - [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — status-aware and raw response shapes
-- [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — generated TanStack Vue Query option factories and SSR setup
+- [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — request-object Query options and SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics
 - [Idempotency](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/idempotency) — optional `Idempotency-Key` replay protection

@@ -1,577 +1,129 @@
-# Nuxt Endpoints Roadmap and Design Decisions
+# Nuxt Endpoints Roadmap
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-08-18
-
-This is the source of truth for product-level implementation priorities and
-for recommendations that are not specific to one client adapter. Detailed
-adapter and comparison evidence live in focused documents so they can evolve
-without hiding the broader roadmap.
-
-## Design document map
-
-| Document                                                        | Responsibility                                                                                                                 |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions                           |
-| [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                                       |
-| [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                                         |
-| [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
-| [Nitro v3 and H3 v2 readiness](./nitro-v3-h3-v2-readiness.md)   | Stable endpoint contract, completed preparation, adapter boundary, remaining risks, and acceptance checklist                   |
-| [Type generation and Nuxt 5](./type-generation.md)              | Current contract markers, JSON wire types, `InternalApi` agreement, discovery failure policy, and Nuxt 5 typed-fetch migration |
-
-## Current implementation status
-
-| Area                                                                  | Status                           | Next decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Endpoint contracts, runtime validation, generated client, and OpenAPI | Implemented                      | Continue stabilization and compatibility work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Contract-file separation for build-time discovery                     | Implemented                      | Discovery statically resolves the handler's contract import and evaluates only the contract module; non-endpoint routes are never evaluated. Standard placement is a sibling `*.endpoint-contract.*` file, excluded from Nitro scanning through the public `ignore` option; the suffix is deliberately fixed (not configurable) because it exists only for that ignore pattern — contracts placed outside route directories need no suffix at all                                                                                                                                                   |
-| JSON wire response mapping and Nitro `InternalApi` agreement          | Implemented                      | Replace only through a tested Nuxt 5 typed-fetch adapter                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Shared fresh-request and fetcher extension boundary                   | Implemented                      | `createEndpointRequest`, fetcher injection, and shared key normalization                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| TanStack Query adapter                                                | Phases 1-3 implemented           | Initial public decisions confirmed; monitor adoption and compatibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Idempotency-Key helper                                                | Implemented                      | Application-owned durable adapters must pass the conformance contract                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Idempotency central runtime policy                                    | Implemented                      | `server/endpoints/runtime.ts` supplies storage/scope/authorization defaults under its `idempotency` key; endpoints keep contract metadata and overrides                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Nuxt DevTools endpoint inspector                                      | Proposed after API stabilization | Avoid duplicating Query cache DevTools                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Primitive-layer boundary and adapter                                  | Designed, not implemented        | Keep `EndpointRouteEntry` canonical and project foreign contracts onto it. This module's layer nests inside core's rather than beside it, so lazy bodies, validated-value placement, and one-call-vs-two do not collide — nothing needs aligning ahead of time                                                                                                                                                                                                                                                                                                                                      |
-| Endpoints on configuration-registered routes                          | Implemented                      | Discovery reads `nitro.options.handlers` alongside `scannedHandlers`, so `nitro.handlers` and `addServerHandler` routes are ordinary endpoints. The only requirement is a real source-file path with a JS/TS extension; inline and virtual handlers are skipped, not guessed at                                                                                                                                                                                                                                                                                                                     |
-| Nitro built-in OpenAPI coexistence                                    | Implemented                      | Measured `nitropack@2.13.4`: `defineRouteMeta()` is an AST macro read as JSON literals, so validator-derived schemas cannot reach Nitro's document and merging the two is impossible. Two routes warn at build time; one shared route fails the build. Serving UI for this module's own document is a separate candidate                                                                                                                                                                                                                                                                            |
-| OpenAPI document metadata layering                                    | Implemented                      | `openApi.document` (deep-merged) and `openApi.extend` (runs last) on `server/endpoints/runtime.ts`; they were unreachable from a Nuxt app before, since the document is built in the server plugin and module options cannot carry a callback                                                                                                                                                                                                                                                                                                                                                       |
-| Endpoint hooks (`onValidationError`, `wrapHandler`)                   | Implemented                      | Same key names at both scopes: runtime options on `defineEndpoint()`, and `server/endpoints/runtime.ts` application-wide, the one file holding every setting `nuxt.config.ts` cannot carry. `onValidationError` resolves endpoint -> application -> default; `wrapHandler` nests application -> endpoint -> idempotency, making idempotency the built-in consumer of a now-public extension point rather than a privileged one                                                                                                                                                                      |
-| Media-type request bodies                                             | Implemented                      | JSON, URL-encoded, multipart, and text/\* members with 415 on mismatch, wire-typed client `mediaType` option, and per-member OpenAPI content. The response side is one media type per status; content negotiation stays out                                                                                                                                                                                                                                                                                                                                                                         |
-| Per-method dispatch                                                   | Implemented                      | `defineEndpointMethods()` groups on method-suffix-free files, with derived HEAD/OPTIONS and 405 + Allow. Members stay ordinary `defineEndpoint()` contracts, so operations, idempotency, and media-type bodies work per method                                                                                                                                                                                                                                                                                                                                                                      |
-| Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                                                                                                                                                                                 |
-| Optional path-parameter contracts                                     | Rejected                         | OpenAPI has no honest representation for optional path parameters; declare two routes instead. Build-time rejection shipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Non-JSON response declarations                                        | Implemented                      | One door: `{ media: '<type>' or [...], schema? }` keeps XML, CSV, files, streams, and SSE inside `responses` — media type on the wire and in OpenAPI, payload never validated, client stops parsing that route's body. A validated body may still be labelled with a `+json` profile; any other `contentType` there fails the build and names `media`                                                                                                                                                                                                                                               |
-| Response content negotiation                                          | Implemented for media responses  | `media` accepts an array: RFC 9110 selection with weights and specificity, 406 before the handler runs and routed through `onValidationError`, `responseMediaType` narrowed to the declared union, `Vary: Accept`, and a client `accept` option that is part of the cache key. Cheap on this side precisely because nothing here is typed by media type - a media body is `EndpointMediaBody` and its client type is a stream whichever type is chosen. Negotiating _validated_ bodies stays out until the encoder question is answered. Measured: `h3-route-tools@0.1.1` does not negotiate at all |
-| First-class typed streaming/SSE                                       | Deferred                         | Chunk-level typing stays out: it would need a complete chunk, cancellation, and error contract, and the measured ecosystem demand is for streaming to work at all, not for typed chunks                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Low-level files, streams, redirects, and proxies                      | Available                        | Keep native HTTP escape hatches documented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-
-The H3 event change is covered by runtime and type tests and is now part of the
-core endpoint handler context.
-
-## Decision principles
-
-- Keep Nuxt `server/api` endpoint contracts as the source of truth.
-- Preserve plain HTTP, status-specific response contracts, and OpenAPI output.
-- Add extension boundaries that can support multiple consumers instead of
-  embedding one state-management library into the endpoint core.
-- Reuse Nitro and H3 middleware semantics before creating a second middleware
-  ecosystem.
-- Delegate cache algorithms, form state, and application security policy to
-  the ecosystems that already own them.
-- Add convenience APIs only when they preserve the contract model and can be
-  tested at both the runtime and type levels.
-- Keep low-level native HTTP escape hatches when a first-class contract would
-  be incomplete or misleading.
-
-## Roadmap summary
-
-| Capability                                  | Decision                           | Priority                                               |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
-| H3 event in handler context                 | Adopted and implemented            | Complete                                               |
-| Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                      |
-| Shared client extension primitives          | Adopt                              | Foundation work                                        |
-| TanStack Query integration                  | Adopted and implemented            | Stabilization and compatibility                        |
-| Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API |
-| Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                    |
-| DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                            |
-| Stream response declarations                | Adopted and implemented            | Complete                                               |
-| Typed stream chunks                         | Keep low-level for now             | Last, after a complete design                          |
-| Progressive form enhancement                | Defer                              | Only with a concrete native-form requirement           |
-| Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                 |
-| Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                      |
-| Form field state and dirtiness              | Delegate                           | TanStack Form, VeeValidate, or application code        |
-| CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize              |
-| Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics             |
-
-## Shared client extension track
-
-The following primitives are useful beyond TanStack Query and should be
-designed as shared client infrastructure:
-
-- typed fetcher injection for authentication, base URL, tracing, metrics,
-  tests, and mocks;
-- a fresh, AbortSignal-aware request boundary without exposing the whole
-  internal runtime object;
-- generated operation-to-request-options types;
-- one deterministic request-key normalization implementation;
-- documented SSR cookie and authorization forwarding behavior;
-- a stable extension API for optional clients such as Effect and TanStack
-  Query.
-
-The TanStack adapter is the first concrete consumer and therefore contains the
-current detailed requirements. The shared boundary must not be named or shaped
-so narrowly that Effect, testing, tracing, or future adapters need to bypass it.
-
-## Typed server middleware context
-
-Typed server context is independent of TanStack Query. It supports request
-authentication, tenant resolution, database transactions, request IDs,
-permissions, and tracing inside endpoint handlers.
-
-### Level 1: expose the H3 event
-
-Status: implemented.
-
-`EndpointContext` now exposes the original `H3Event`, so standard Nitro
-middleware can attach values to `event.context` and endpoint handlers can read
-the same request-scoped object.
-
-```ts
-// server/middleware/auth.ts
-export default defineEventHandler(async (event) => {
-  event.context.user = await getCurrentUser(event)
-})
-```
-
-```ts
-export default defineEndpointHandler(endpoint, ({ event, params }) => {
-  return findUserForAccount(event.context.user.accountId, params.id)
-})
-```
-
-TypeScript does not infer the assignment by inspecting middleware code. The
-application supplies the static type through normal H3 module augmentation:
-
-```ts
-// types/h3.d.ts
-declare module 'h3' {
-  interface H3EventContext {
-    user: User
-  }
-}
-
-export {}
-```
-
-The runtime value comes from Nitro middleware; the application-wide static
-type comes from `H3EventContext` augmentation. The public guide documents this
-in [Request event and middleware context](../site/content/docs/endpoints.md).
-
-### Level 2: optional typed context builder
-
-Recommendation: defer until Level 1 proves insufficient.
-
-An immutable builder could accumulate middleware return types for a specific
-endpoint family without application-wide augmentation:
-
-```ts
-const authenticatedEndpoint = createEndpointBuilder()
-  .use(authMiddleware) // adds { user: User }
-  .use(tenantMiddleware) // adds { tenant: Tenant }
-
-export const endpoint = authenticatedEndpoint.define({
-  params: ProjectParams,
-  response: Project,
-})
-
-export default endpoint.handler(({ params, ctx }) => {
-  return findProject(ctx.tenant.id, params.id)
-})
-```
-
-Requirements:
-
-- every `.use()` returns a new immutable builder;
-- context types accumulate as an intersection in declaration order;
-- middleware sees the H3 event and only previously accumulated context;
-- runtime execution matches the inferred type order;
-- H3 errors and endpoint status responses preserve normal Nitro semantics;
-- middleware cannot execute the downstream handler twice;
-- discovery and OpenAPI depend on the endpoint definition, not middleware
-  implementation details;
-- middleware code never enters generated client types or browser bundles;
-- standard Nitro middleware remains supported and interoperable;
-- request context remains isolated between concurrent requests.
-
-| Level 1: H3 event context | Level 2: typed endpoint builder     |
-| ------------------------- | ----------------------------------- |
-| `event.context.user`      | `ctx.user`                          |
-| Application-wide type     | Endpoint-family-specific type       |
-| H3 module augmentation    | Middleware return-type inference    |
-| Standard Nitro middleware | Endpoint-specific composition chain |
-| Small and implemented     | More precise but not implemented    |
-
-The builder becomes materially useful when public, authenticated, and admin
-endpoint groups have different context; middleware is distributed as a
-package; omitting authentication should fail compilation; or context must
-accumulate in stages such as `user -> tenant -> permissions`.
-
-Required tests before publication:
-
-- handlers see all fields added by preceding middleware;
-- middleware sees only fields accumulated before it;
-- missing fields fail compilation;
-- blocked or failed middleware does not execute the handler;
-- runtime order matches type accumulation order;
-- context is isolated between concurrent requests;
-- middleware implementation is absent from generated client output;
-- ordinary `event.context` remains accessible.
-
-## Idempotency-Key replay protection
-
-The detailed design and conformance requirements live in
-[Idempotency-Key Server Helper Design](./idempotency.md).
-
-Mutation retry and server-side replay protection are different concerns. A
-timed-out write may need a stable `Idempotency-Key` so a retry does not perform
-the operation twice.
-
-Adopted and implemented as an optional endpoint helper with an explicit
-storage contract. The client does not hide a replay cache, and the
-development-only memory adapter is not presented as production-safe.
-
-Implemented design points:
-
-- configurable header name and TTL;
-- pluggable durable storage;
-- request fingerprinting to reject key reuse with different input;
-- explicit user or tenant scope;
-- defined behavior for in-flight, successful, failed, and expired operations;
-- endpoint metadata or OpenAPI documentation where useful;
-- concurrency tests across duplicate requests and multiple server instances.
-
-Deliberate first-version omissions, recorded in the design document and
-collected here so their triggers stay discoverable. None is scheduled; all are
-demand- or externally-driven:
-
-- Strict IETF Structured Fields key syntax — revisit if the expired draft
-  advances or ecosystem behavior converges (design doc, header syntax note).
-- Lease heartbeat/cancellation — only if post-expiry handler overlap becomes a
-  real operational problem for long-running handlers.
-- Waiting/polling on in-flight requests instead of an immediate `409` — only
-  on real retry-UX demand.
-- Merging helper-generated `400`/`409`/`422` problems into the typed
-  awaited status union — for typed handling of those failures.
-
-The first two would rework the claim/complete execution path inside
-`DefinedEndpoint.handler()`; that is the moment to also extract that path into
-its own module (see Deferred internal refactorings).
-
-## Operation-aware observability
-
-Named operations provide stable labels for tracing and metrics. Shared
-infrastructure should expose route, method, duration, result
-status, and transport failure without forcing every application to wrap
-`$endpoint` manually.
-
-Candidate integration points:
-
-- typed fetcher interceptors on the client;
-- narrow Nuxt request/success/error/settled hooks;
-- server timing and tracing around validation and handler execution;
-- Effect annotations using the same operation metadata.
-
-Request bodies, response bodies, authorization headers, and cookies must not be
-emitted by default. UI toasts and user-facing messages are application concerns,
-not observability.
-
-## Nuxt DevTools endpoint inspector
-
-Recommendation: implement only after endpoint and adapter APIs stabilize.
-
-A future tab could show:
-
-- discovered path and method;
-- request and response contract summaries;
-- runtime response-validation status;
-- generated client features and enabled adapters;
-- OpenAPI document links;
-- discovery and operation-name collision diagnostics.
-
-It must not expose sensitive payloads or duplicate TanStack Query Devtools'
-cache inspector.
-
-## Multipart and typed streams
-
-Multipart uploads ship as one member of a media-type request-body map, which
-is what kept request types, runtime parsing, client serialization, OpenAPI
-media types, and encoding metadata consistent with each other rather than
-bolted on as a `FormData` convenience wrapper.
-
-Stream _declarations_ ship (see Typed SSE chunks below). Typed streaming - the
-chunks themselves - should remain raw HTTP until a design preserves:
-
-- chunk schemas and end-to-end chunk inference;
-- optional per-chunk runtime validation;
-- cancellation and disconnect AbortSignal behavior;
-- SSE `event`, `id`, and `retry` metadata;
-- typed error events;
-- EventSource versus POST streaming semantics;
-- non-JSON payloads and SSR limitations;
-- native `Response` escape hatches;
-- Effect Stream integration where its model differs from browser streams.
-
-Public guidance is [Non-JSON responses](../site/content/docs/endpoints.md) for
-declaring one, and [Low-level HTTP](../site/content/docs/low-level-http.md) for
-routes that stay outside the contract.
-
-## Primitive-layer boundary and upstream convergence
-
-Recorded 2026-08-18, from reading `h3-route-tools@0.1.1` (source at
-`sandros94/h3-typed-routes`) against this codebase, and from
-[`h3js/h3#1437`](https://github.com/h3js/h3/issues/1437), which proposes
-growing H3 core into a validated-routing surface: `params` and `response`
-validation, uniform async validation, per-method dispatch, and a convention
-for handlers exposing their resolved contract as an introspectable property.
-The RFC explicitly keeps the typed-fetch client, OpenAPI generation, and the
-Nitro module downstream, which is where this module lives.
-
-### The layer split
-
-Everything this module owns divides in two:
-
-- **Primitive layer** — contract definition, request/response validation,
-  JSON wire projection, typed client plumbing, OpenAPI generation, and
-  build-time contract discovery. This is the layer upstream is growing into.
-- **Application layer** — idempotency, the TanStack Query adapter, the Effect
-  adapter, Nuxt async-data integration, and operation-named call targets.
-  Nothing upstream is proposing to own this.
-
-Compared on the primitive layer alone, this module is not uniformly ahead. It
-is stronger on discovery robustness (evaluation failures fail the build rather
-than silently degrading types), schema-library breadth (Zod, Valibot, and
-Effect Schema without wrappers, where a `~standard.jsonSchema`-only approach
-degrades to an empty schema), status-typed client results, and verified
-agreement with the platform's own wire projection. The contract-expressiveness
-gap that motivated this comparison is closed: per-method dispatch, media-type
-request bodies, and stream response declarations all ship. What remains
-one-sided is response-side media types on a _validated_ status and response
-content negotiation.
-
-### Adapter over generalization
-
-Decision: keep `EndpointRouteEntry` and `EndpointDefinition` as the canonical
-vocabulary, and project foreign contracts into them at the boundary. Do not
-generalize the internal types to accept arbitrary contract shapes.
-
-This works because both sides bottom out in Standard Schema, so the adapter
-rearranges structure rather than translating semantics — a foreign
-`{ params, get: { validate: { query, body, response } } }` maps onto this
-module's flat per-method definition without touching the schema values. The
-type helpers that every application-layer adapter already derives from
-`EndpointRouteEntry` therefore keep working unchanged.
-
-Constructs the canonical vocabulary cannot express must fail loudly at the
-adapter rather than being partially mapped. Silently keeping only the JSON
-branch of a media-type body would reproduce exactly the degradation this
-module rejects elsewhere.
-
-### The seam is ours, not an upstream request
-
-An earlier version of this section argued that an external primitive layer must
-expose an interception point between validation and handler invocation, and
-that the absence of one in `h3-route-tools` and in the RFC was a gap to raise
-upstream. That was wrong, and the reason is worth keeping.
-
-**Our layer nests inside core's, not beside it.** In the adapter shape, what
-core's `defineValidatedHandler` wraps is _this module's_ function, not the
-application's handler. So the sequence stays:
-
-```
-core validates (body lazily)
-  -> calls our function
-       -> we await the body once and build our own context
-       -> our wrapper chain (wrapHandler, idempotency)
-            -> the application's handler, receiving values
-```
-
-Everything the seam was wanted for survives that, because we are still the one
-calling the application's handler. What we would delegate to core is the
-_execution_ of validation; the shape we present is unchanged. Concretely, none
-of the differences between the two designs collide:
-
-|                             | core                                                            | this module                                                   | collides                                   |
-| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
-| request body                | lazy, validated inside `.json()`                                | awaited once in our layer, handed over as a value             | no                                         |
-| validated values            | written back into the request today; `event.context.*` proposed | read from wherever core puts them, projected into our context | no                                         |
-| contract and handler        | one call                                                        | two calls                                                     | no — the stamp is attached where they meet |
-| position before the handler | none                                                            | inside our layer                                              | no                                         |
-
-Two consequences follow.
-
-**Nothing needs aligning.** Reading the body eagerly and running idempotency
-before the application's handler are choices about the layer we own, not bets on
-what core does. Moving idempotency into a handler-called
-`ctx.idempotency(callback)` would be a coherent alternative — it keeps the
-replay guarantee, since the callback simply is not invoked — but it buys
-portability we already have, and costs the declarative form that drives the
-client's typed `idempotencyKey`, the OpenAPI entries, and the build-time checks.
-
-**Lazy request bodies are right for core and wrong here.** Core must support
-streaming bodies whether or not validation is declared, so it reads nothing
-until asked. This module's contract states the intent up front: a declared
-`body` will be read, and Nitro middleware — which runs before our handler
-entirely — is where a request gets rejected before that happens. Making
-`context.body` lazy would mean `await` at every call site, for a benefit this
-position does not receive.
-
-### Sequence
-
-1. **Widen the contract vocabulary** — done: media-type request bodies,
-   per-method dispatch, and stream response declarations all ship. The
-   remaining known gap is response-side media types on a validated status and
-   response content negotiation.
-2. **Extract the interception seam** — done: `wrapHandler` names the
-   validated-context and deferred-execute pair, and idempotency is its first
-   consumer rather than a privileged one.
-3. **Define the contract adapter** — the type-level projection plus its runtime
-   counterpart, one implementation per upstream, all targeting
-   `EndpointRouteEntry`.
-4. **~~Take the seam requirement upstream~~** — dropped. The seam is ours to
-   place (see above), so there is nothing to request. What is worth sending
-   upstream is the one thing that costs core nothing and that the RFC itself
-   asks about: whether a validated handler should expose its resolved contract
-   as an introspectable property. Every generated surface here reads exactly
-   that.
-
-Steps 1 and 2 are independently valuable and do not depend on upstream
-timing. Step 3 should wait until an upstream contract shape is stable.
-
-### Handler return typing: measured, then fixed
-
-Two problems were found by probing this codebase against the reference
-implementation's `ConstResponse`, and both are now fixed:
-
-- **Tuple responses were unusable.** `DeepMutable`, which strips `readonly`
-  before the handler-return check, collapsed every array — tuples included —
-  to `Item[]`. It now maps tuples element-wise.
-- **Inline literals and tuples needed `as const`.** They no longer do.
-
-The working mechanism is a `const` type parameter capturing the handler's
-actual return, constrained by a `DeepReadonly` projection of the contract:
-capture keeps `{ ok: true }` and `['a', 1]` narrow, and the readonly
-projection is what lets the captured (deeply readonly) value satisfy the
-contract, tuple arity included.
-
-Four things had to be true at once, each verified by reverting it:
-
-- **No preceding overload.** Any earlier overload defeats the capture, whatever
-  its own shape. Both entry points are therefore single signatures.
-- **No conditional on the handler parameter.** A deferred conditional there
-  defeats the capture too, so `HasEndpointResponses` cannot gate the argument.
-- **Discrimination in the return type instead.** Endpoints with no declared
-  responses need the opposite treatment — their client type comes from the
-  handler return, where a sample `name: 'Tom'` must widen to `string`. That
-  reversal happens in the return type, which the capture does not reach.
-- **`respond()` results excluded from widening.** Their wrapper and status
-  literal are deliberate; only their body widens.
-
-Approaches that do not work, so they are not retried: a constraint alone
-(no contextual type for a function body's return), intersecting the inference
-site with a concrete expected type, and discriminating overloads through a
-`DEFINITION` constraint (a failed constraint falls back to the constraint
-itself, silently producing `never` fields).
-
-Measured against the reference implementation on the same cases: it also
-accepts inline literals without `as const`, but accepts a wrong tuple —
-`['a', 'b']` and `['a', 1, 'extra']` both satisfy a `[string, number]`
-contract there, because its readonly projection collapses tuples to arrays.
-This implementation rejects both.
-
-### Typed SSE chunks: not planned
-
-Declaring a streaming response was worth doing and now ships: a `media`
-declaration keeps its route inside the contract, reaches OpenAPI with its media
-type, and tells the generated client not to parse that route's body.
-
-Typing the _chunks_ is not. Every SSE issue across nuxt, nitro, and h3 is about
-making SSE work or making it easier to return — promoting `EventStream` to
-public API, returning it directly from a handler, close/error handling,
-platform-specific breakage. None asks for chunk payload schemas. The reference
-implementation does not type chunks either; it declares the streamed status and
-its media types for documentation, and stops there.
-
-The shape of the demand also argues against it: token streams, progress
-events, notifications, and live updates have little in common, so a chunk
-contract would be either too loose to be worth having or too specific to fit
-the next case. Revisit only if concrete demand appears.
-
-### Not adopted from the reference implementation
-
-- Swallowing module-evaluation failures during build-time discovery. Types
-  degrade silently and no test covers the path.
-- Depending on a single proposed Standard Schema extension for JSON Schema
-  conversion. It narrows supported validators to those that implement it.
-
-## Delegated and deliberately omitted features
-
-- Cache storage, stale policy, retry, request deduplication, optimistic rollback,
-  polling, offline persistence, and infinite-page state belong to TanStack
-  Query when that adapter is used.
-- Form fields, dirtiness, touched state, and client validation belong to form
-  libraries or application code.
-- Authentication presets, rate limiting, and CSRF policy belong to application
-  and Nitro middleware ecosystems. Typed request context should make those
-  integrations ergonomic without turning Nuxt Endpoints into a security-policy
-  framework.
-- Status-specific endpoint response schemas remain more precise than one global
-  action-error code union. Any convenience error API must preserve HTTP status
-  semantics.
-- Grouped action namespaces are not currently justified because named endpoint
-  operations and explicit generated helpers provide the useful ergonomics.
-
-## Deferred internal refactorings
-
-Recorded so the "why not" survives; none of these block current work.
-
-- Extracting the idempotency execution path (~150 lines) out of
-  `DefinedEndpoint.handler()` requires reworking the late-injection closures
-  (`routeIdentity`, `idempotencyPolicy`). This is no longer deferred on its own
-  merits: it is step 2 of the primitive-layer boundary work above, where the
-  extracted seam is what makes the application layer portable across primitive
-  implementations. Sequence it with that, not with the next idempotency
-  feature.
-- Splitting `runtime/client.ts` into type and implementation files adds imports
-  without adding testability: the boundary is already clear inside the file and
-  the type surface has a dedicated `.test-d.ts` suite.
-- The landing page's pitch copy lives inside `site/app/pages/index.vue`;
-  extracting it into data modules and card components is worthwhile only once
-  marketing copy churn becomes frequent.
-
-## Overall delivery priority
-
-1. Stabilize the current Nuxt 4/Nitro 2 contract, wire response, discovery, and
-   package release surface.
-2. Track the Nuxt 5 typed-fetch and public route-metadata extension APIs; add a
-   compatibility adapter only against released, testable versions.
-3. Evaluate the endpoint context builder only after learning from real H3 event
-   usage.
-4. Add operation-aware observability after operation metadata boundaries
-   stabilize.
-5. Add advanced adapter ergonomics and DevTools only after the public API is
-   stable.
-6. Implement typed stream chunks only after concrete demand and a complete
-   transport contract exist. Declaring a stream, and multipart requests, both
-   ship already.
-
-```text
-Nuxt 4 / Nitro 2 contract stability
--> Nuxt 5 typed-fetch and route-metadata adapter
--> optional typed context builder
--> operation-aware observability
--> advanced adapter ergonomics
--> DevTools and scaffolding
--> typed stream chunks
-```
-
-## Independent review brief
-
-Reviewers should answer:
-
-1. Does Level 1 H3 context cover enough applications to defer a builder?
-2. Can a future builder remain fully interoperable with Nitro/H3?
-3. Is idempotency scoped narrowly enough, and is durable storage mandatory?
-4. Are the proposed observability fields useful without leaking payloads or
-   credentials?
-5. Does the DevTools proposal avoid duplicating existing tools?
-6. Is typed streaming correctly deferred until all chunk, cancellation, error,
-   and protocol semantics are designed together?
-7. Which proposed item blocks current adoption, and which can remain a
-   backward-compatible later extension?
-
-Vue Query integration now uses `.queryOptions()` and `.mutationOptions()` on
-the endpoint request itself; the public guide documents the supported boundary.
+Last consolidated: 2026-09-02
+
+## Product boundary
+
+Nuxt Endpoints supports Nuxt 4.5+ today and brings the route-contract model
+being developed for the Nuxt 5 generation to that support line.
+
+The public product boundary is:
+
+- `defineRouteHandler({...})` for route authoring;
+- `$endpoint(path, { method, ...input })` for lazy status-aware requests;
+- `useEndpoint(path, { method, ...input })` for Nuxt async data;
+- request-object `.queryOptions()` and `.mutationOptions()` for Vue Query;
+- OpenAPI generated from the same contracts.
+
+`$endpoint` and `useEndpoint` are not temporary copies of upstream APIs.
+They are the Nuxt Endpoints UX. H3, Nitro, and Nuxt own lower-level routing,
+event, build, and typed-fetch primitives. As those projects expose suitable
+integration points, Nuxt Endpoints should delegate to them and delete its
+equivalent plumbing without forcing application code to change.
+
+Compatibility is a design constraint, not an absolute promise. If an upstream
+change makes a public adjustment unavoidable, ship it as an explicit migration
+instead of silently changing semantics.
+
+## Current branches
+
+| Branch  | Purpose                                                                 |
+| ------- | ----------------------------------------------------------------------- |
+| `main`  | Published Nuxt 4.5+ line using Nitro 2 and H3 1 compatibility adapters  |
+| `nuxt5` | Integration prototype against the H3/Nitro/fetchdts route-contract work |
+
+The two branches should keep the same application-facing API. Differences
+belong behind the platform adapter and build-time metadata boundary.
+
+## Implemented
+
+- Direct, canonical `defineRouteHandler({...})` authoring, including grouped
+  method definitions for method-suffix-free routes.
+- Standard Schema request validation with Zod, Valibot, and Effect Schema.
+- Declared per-status responses, runtime response validation, status-aware
+  client results, and native `.raw()` access.
+- Generated path-and-method clients and helper types from `#endpoints`.
+- `useEndpoint` with Nuxt async-data behavior and SSR request forwarding.
+- Request-object Vue Query options and optional automatic QueryClient setup.
+- Required idempotency keys generated when the request object is created and
+  reused by retries of that object.
+- Application-owned idempotency storage and central runtime policy.
+- OpenAPI 3.1 generation, document extension, media request/response support,
+  and Zod native JSON Schema conversion including `z.file()`.
+- Incremental adoption beside ordinary Nitro routes.
+
+## Stable decisions
+
+- Path plus method is the public endpoint identity. Named operation client APIs
+  and generated operation factories have been removed.
+- Awaiting `$endpoint` returns the declared status union. There is no data mode
+  and no public `.result()` compatibility layer.
+- `useEndpoint` uses `useAsyncData`; a declared non-2xx response is data, not
+  a Nuxt async-data error.
+- Query and mutation integrations consume the same lazy endpoint request object.
+- Idempotency declaration metadata remains in the contract. Runtime storage,
+  scope, and authorization live in `server/endpoints/runtime.ts`.
+- Zod conversion uses the schema's native `.toJSONSchema()`; a separate
+  `file()` helper is unnecessary because Zod provides `z.file()`.
+
+## Upstream integration
+
+The goal is one underlying contract pipeline, not parallel implementations.
+
+### H3
+
+Prefer H3 to carry the resolved route contract on the request event. This lets
+runtime consumers such as validation and idempotency share one contract without
+introducing a second hook lifecycle.
+
+### Nitro
+
+Prefer a supported build-time route-contract provider. On the Nuxt 4 line,
+route modules are currently evaluated through Jiti during discovery. A Nitro
+provider should replace that evaluation and expose serializable contract
+metadata without importing handler-only dependencies.
+
+### Nuxt and fetchdts
+
+Prefer Nuxt's generated fetch schema as the common successful-response
+projection. Nuxt Endpoints still owns:
+
+- schema input types for params, query, headers, and body;
+- per-status result unions, including declared non-2xx bodies;
+- `$endpoint`, `useEndpoint`, and request-object integrations;
+- runtime validation, OpenAPI, and idempotency.
+
+The adapter should contribute only metadata Nuxt's schema does not already
+contain.
+
+## Next work
+
+1. Prepare the upstream proposal for attaching the route contract to the H3
+   event.
+2. Turn the Nitro route-contract prototype into a small reviewable upstream
+   proposal.
+3. Keep `main` and `nuxt5` API fixtures identical and isolate only platform
+   integration differences.
+4. Add released Nuxt 5 packages to the support matrix once the required public
+   integration points stabilize.
+5. Continue compatibility, storage-conformance, and OpenAPI edge-case testing.
+
+## Non-goals
+
+- Reimplementing Vue Query caching, retries, invalidation, or Devtools.
+- Creating a second authentication, rate-limiting, CSRF, or middleware system.
+- Typing arbitrary streaming chunks or pretending redirects and proxies are
+  ordinary JSON contracts.
+- Maintaining operation-name aliases alongside path-and-method calls.
+- Promising support for an unreleased platform combination before it is covered
+  by the test matrix.
+
+## Supporting notes
+
+- [Type generation and Nuxt 5](./type-generation.md)
+- [Nitro v3 and H3 v2 readiness](./nitro-v3-h3-v2-readiness.md)
+- [Idempotency behavior](./idempotency.md)
+- [Idempotency storage recipes](./idempotency-storage-recipes.md)
+- [Nuxt Actions comparison](./nuxt-actions-comparison.md)
