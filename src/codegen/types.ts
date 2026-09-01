@@ -7,14 +7,13 @@ import type { EndpointIdempotencyMetadata } from '../runtime/contract'
 export type ResolvePath = (path: string) => string
 
 // The composed handler shape build-time endpoint detection produces (a Nitro
-// route handler augmented with the operation name and idempotency metadata
+// route handler augmented with idempotency metadata
 // read from its `.idempotency()` call, once known). Every codegen builder
 // consumes this same shape, so it is the one export both module.ts and the
 // generators below share instead of redeclaring it.
 export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
   route: string
   method: string
-  operation?: string
   idempotency?: EndpointIdempotencyMetadata
   // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.
@@ -31,7 +30,6 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
 // structural superset and is passed in as-is.
 export type EndpointClientCodegenOptions = {
   client: {
-    result: boolean
     raw: boolean
   }
 }

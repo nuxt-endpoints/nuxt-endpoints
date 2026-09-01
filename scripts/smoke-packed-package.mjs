@@ -57,17 +57,15 @@ try {
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
-export default defineRouteHandler({
-  operation: 'echoMessage',
-  validate: {
-    body: z.object({ message: z.string() }),
-    response: {
-      201: z.object({ message: z.string() }),
-    },
+export const endpoint = defineEndpoint({
+  body: z.object({ message: z.string() }),
+  responses: {
+    201: z.object({ message: z.string() }),
   },
-  handler: ({ body, respond }) => {
-    return respond(201, body)
-  },
+})
+
+export default defineEndpointHandler(endpoint, ({ body, respond }) => {
+  return respond(201, body)
 })
 `,
   )
@@ -78,14 +76,9 @@ export default defineRouteHandler({
   const endpointTypes = await readFile(join(smokeRoot, '.nuxt/types/endpoints.d.ts'), 'utf8')
   const serverImports = await readFile(join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'), 'utf8')
 
-  assertIncludes(endpointTypes, "operation: 'echoMessage'", 'generated endpoint operation')
-  assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
-  assertSymbolExcludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
-  assertSymbolExcludes(
-    serverImports,
-    'defineEndpointHandler',
-    'defineEndpointHandler server auto-import',
-  )
+  assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
+  assertIncludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
+  assertIncludes(serverImports, 'defineEndpointHandler', 'defineEndpointHandler server auto-import')
   assertSymbolExcludes(serverImports, 'createResponse', 'createResponse server auto-import')
   assertSymbolExcludes(serverImports, 'respond', 'respond server auto-import')
 

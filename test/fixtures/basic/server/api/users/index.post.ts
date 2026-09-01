@@ -11,7 +11,6 @@ const User = z.object({
 })
 
 export default defineRouteHandler({
-  operation: 'createUser',
   validate: {
     body: UserInput,
     response: {

@@ -14,5 +14,5 @@ const result = await $endpoint('/api/upload', {
 </script>
 
 <template>
-  <div>upload: {{ result.name }} via {{ result.bodyMediaType }}</div>
+  <div>upload: {{ result.body.name }} via {{ result.body.bodyMediaType }}</div>
 </template>

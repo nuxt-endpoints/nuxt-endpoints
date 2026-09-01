@@ -5,9 +5,9 @@
       <h1 class="title">Persistent queries and idempotent mutations</h1>
       <p class="text -lede">
         The list is server-rendered through <code class="code">useQuery</code>. Adding a row uses
-        <code class="code">useMutation</code>, then invalidates the generated
-        <code class="code">listSqliteUsers</code> key. The database file lives under
-        <code class="code">playground/.data</code> for this local demo only.
+        <code class="code">useMutation</code>, then invalidates the endpoint request key. The
+        database file lives under <code class="code">playground/.data</code> for this local demo
+        only.
       </p>
     </header>
 
@@ -93,7 +93,6 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, onServerPrefetch, ref } from 'vue'
-import { endpointMutationOptions, endpointQueryOptions } from '#endpoints/query'
 
 const queryClient = useQueryClient()
 const sqliteUserName = ref('Margaret Hamilton')
@@ -103,17 +102,29 @@ const lastSqliteRequest = ref<{
   firstId: number
   replayId?: number
 }>()
-const sqliteUsersQuery = useQuery(endpointQueryOptions.listSqliteUsers())
+const sqliteUsersRequest = $endpoint('/api/sqlite/users', { method: 'get' })
+const sqliteUsersQuery = useQuery({
+  ...sqliteUsersRequest.queryOptions(),
+  select: (result) => result.body,
+})
 const sqliteUsers = sqliteUsersQuery.data
 const sqliteUsersStatus = sqliteUsersQuery.status
 const sqliteUsersFetching = sqliteUsersQuery.isFetching
 const sqliteUsersError = computed(() => errorMessage(sqliteUsersQuery.error.value))
 
 const sqliteUserMutation = useMutation({
-  ...endpointMutationOptions.createSqliteUser(),
+  mutationFn: async (request: { name: string; idempotencyKey: string }) => {
+    const result = await $endpoint('/api/sqlite/users', {
+      method: 'post',
+      body: { name: request.name },
+      idempotencyKey: request.idempotencyKey,
+    })
+    if (!result.ok) throw result.body
+    return result.body
+  },
   onSuccess: async () => {
     await queryClient.invalidateQueries({
-      queryKey: endpointQueryOptions.listSqliteUsers.key(),
+      queryKey: sqliteUsersRequest.queryOptions().queryKey,
     })
   },
 })
@@ -128,10 +139,7 @@ function addSqliteUser() {
 
   const key = globalThis.crypto.randomUUID()
   sqliteUserMutation.mutate(
-    {
-      body: { name },
-      idempotencyKey: key,
-    },
+    { name, idempotencyKey: key },
     {
       onSuccess: (created) => {
         sqliteUserName.value = ''
@@ -150,10 +158,7 @@ function replaySqliteUser() {
   if (!previous) return
 
   sqliteUserMutation.mutate(
-    {
-      body: { name: previous.name },
-      idempotencyKey: previous.key,
-    },
+    { name: previous.name, idempotencyKey: previous.key },
     {
       onSuccess: (replayed) => {
         previous.replayId = replayed.id

@@ -15,7 +15,6 @@ const User = v.object({
 // Valibot example: query strings are transformed to numbers before the
 // handler runs, and the OpenAPI schema reflects the input (string) side.
 export default defineRouteHandler({
-  operation: 'searchUsers',
   summary: 'Search users by name',
   validate: {
     query: v.object({

@@ -12,7 +12,6 @@ receives parsed schema output.
 import { z } from 'zod'
 
 export default defineRouteHandler({
-  operation: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   validate: {
     query: z.object({ include: z.string().optional() }),
@@ -70,7 +69,6 @@ const Params = z.object({ id: z.coerce.number() })
 export default defineRouteHandler({
   params: Params,
   get: {
-    operation: 'getUser',
     validate: {
       response: { 200: User, 404: z.object({ message: z.string() }) },
     },
@@ -79,7 +77,6 @@ export default defineRouteHandler({
     },
   },
   put: {
-    operation: 'updateUser',
     validate: {
       body: z.object({ name: z.string() }),
       response: { 200: User },
@@ -199,7 +196,6 @@ belong in the application-wide endpoint runtime file:
 
 ```ts
 export default defineRouteHandler({
-  operation: 'createPayment',
   validate: {
     body: PaymentInput,
     response: { 201: Payment },
@@ -228,7 +224,6 @@ directories, for example in `server/contracts`:
 ```ts
 // server/contracts/user.ts
 export const userContract = {
-  operation: 'getUser',
   params: UserParams,
   responses: { 200: User, 404: NotFound },
 }
@@ -239,7 +234,6 @@ export const userContract = {
 import { userContract } from '../../../contracts/user'
 
 export default defineRouteHandler({
-  operation: userContract.operation,
   params: userContract.params,
   validate: { response: userContract.responses },
   handler: (event) => {

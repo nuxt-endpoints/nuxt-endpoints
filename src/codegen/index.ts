@@ -2,10 +2,6 @@ export { generateEndpointClient } from './endpoint-client'
 export { buildEndpointRouteEntryUnion, generateEndpointTypes } from './endpoint-types'
 export { generateEndpointHandlerManifest } from './handler-manifest'
 export type { EndpointHandlerManifestDescriptor } from './handler-manifest'
-export {
-  generateEndpointQueryClient,
-  generateEndpointQueryPlugin,
-  generateEndpointQueryTypes,
-} from './query-adapter'
+export { generateEndpointQueryPlugin } from './query-adapter'
 export { toImportPath } from './shared'
 export type { EndpointClientCodegenOptions, EndpointRouteHandler, ResolvePath } from './types'

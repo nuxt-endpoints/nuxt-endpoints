@@ -35,7 +35,6 @@ Use a media response when the representation is known:
 
 ```ts
 export default defineRouteHandler({
-  operation: 'downloadFile',
   params: z.object({ id: z.string() }),
   validate: {
     response: {

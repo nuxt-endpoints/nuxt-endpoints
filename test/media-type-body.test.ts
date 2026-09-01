@@ -72,7 +72,7 @@ describe('single-schema body (regression: unchanged behavior)', () => {
   })
 
   it('validates the body through the original readRuntimeBody path and leaves bodyMediaType undefined', async () => {
-    const endpoint = defineEndpoint({ operation: 'createUser', body: UserJson })
+    const endpoint = defineEndpoint({ body: UserJson })
     const handler = defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => {
       expect(bodyMediaType).toBeUndefined()
       return { id: 1, name: body.name }
@@ -85,7 +85,7 @@ describe('single-schema body (regression: unchanged behavior)', () => {
   })
 
   it('still returns a 400 validation failure shaped like before', async () => {
-    const endpoint = defineEndpoint({ operation: 'createUser', body: UserJson })
+    const endpoint = defineEndpoint({ body: UserJson })
     const handler = defineEndpointHandler(endpoint, ({ body }) => ({ id: 1, name: body.name }))
 
     await expect(handler(createEvent({ body: { name: 42 } }))).resolves.toMatchObject({
@@ -107,7 +107,6 @@ describe('media-type-map body: request-time dispatch', () => {
 
   function mapEndpoint() {
     return defineEndpoint({
-      operation: 'createUpload',
       body: {
         'application/json': UserJson,
         'application/x-www-form-urlencoded': UserJson,

@@ -5,7 +5,6 @@ import type {
   StandardSchemaLike,
   StatusResponse,
   UseEndpointClient,
-  UseEndpointResultClient,
 } from '../../src/runtime'
 
 type Schema<OUTPUT> = StandardSchemaLike<unknown, OUTPUT>
@@ -30,9 +29,7 @@ type WireOutput = Simplify<Serialize<ServerOutput>>
 type DeclaredRoute = {
   path: '/api/serialized'
   method: 'get'
-  operation: 'getSerialized'
   definition: {
-    operation: 'getSerialized'
     responses: {
       200: Schema<ServerOutput>
       422: Schema<{ rejectedAt: Date }>
@@ -43,10 +40,7 @@ type DeclaredRoute = {
 type InferredRoute = {
   path: '/api/inferred-serialized'
   method: 'get'
-  operation: 'getInferredSerialized'
-  definition: {
-    operation: 'getInferredSerialized'
-  }
+  definition: {}
   handlerReturn:
     | ServerOutput
     | StatusResponse<202, { acceptedAt: Date }>
@@ -56,15 +50,13 @@ type InferredRoute = {
 type Routes = DeclaredRoute | InferredRoute
 type Client = EndpointClient<Routes>
 type UseClient = UseEndpointClient<Routes>
-type UseResultClient = UseEndpointResultClient<Routes>
 
 declare const client: Client
 declare const useClient: UseClient
-declare const useResultClient: UseResultClient
 
 describe('endpoint JSON wire response types', () => {
   it('serializes declared success bodies like Nitro InternalApi', async () => {
-    const call = client('getSerialized')
+    const call = client('/api/serialized', { method: 'get' })
     expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<
       | { status: 200; ok: true; body: WireOutput; headers: Headers }
       | { status: 422; ok: false; body: { rejectedAt: string }; headers: Headers }
@@ -79,7 +71,7 @@ describe('endpoint JSON wire response types', () => {
       void response.body.nested.omitted
     }
 
-    const state = useClient('getSerialized')
+    const state = useClient('/api/serialized', { method: 'get' })
     expectTypeOf(state.data.value).toEqualTypeOf<
       | { status: 200; ok: true; body: WireOutput }
       | { status: 422; ok: false; body: { rejectedAt: string } }
@@ -91,29 +83,23 @@ describe('endpoint JSON wire response types', () => {
       expectTypeOf(await raw.json()).toEqualTypeOf<WireOutput>()
     }
 
-    const result = await call.result()
-    if (result.status === 200) {
-      expectTypeOf(result.body).toEqualTypeOf<WireOutput>()
+    if (response.status === 200) {
+      expectTypeOf(response.body).toEqualTypeOf<WireOutput>()
     }
-    if (result.status === 422) {
-      expectTypeOf(result.body).toEqualTypeOf<{ rejectedAt: string }>()
-    }
-
-    const resultState = useResultClient('getSerialized')
-    if (resultState.data.value?.status === 422) {
-      expectTypeOf(resultState.data.value.body).toEqualTypeOf<{ rejectedAt: string }>()
+    if (response.status === 422) {
+      expectTypeOf(response.body).toEqualTypeOf<{ rejectedAt: string }>()
     }
   })
 
   it('serializes inferred handler and status-response bodies', async () => {
-    const call = client('getInferredSerialized')
+    const call = client('/api/inferred-serialized', { method: 'get' })
     expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<
       | { status: 200; ok: true; body: WireOutput; headers: Headers }
       | { status: 202; ok: true; body: { acceptedAt: string }; headers: Headers }
       | { status: 400; ok: false; body: { rejectedAt: string }; headers: Headers }
     >()
 
-    const result = await call.result()
+    const result = await call
     if (result.status === 200) {
       expectTypeOf(result.body).toEqualTypeOf<WireOutput>()
     }

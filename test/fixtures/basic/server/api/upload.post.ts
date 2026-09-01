@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { defineRouteHandler } from '../../../../../src/runtime'
 
 export default defineRouteHandler({
-  operation: 'createUpload',
   validate: {
     body: {
       'application/json': z.object({ name: z.string() }),

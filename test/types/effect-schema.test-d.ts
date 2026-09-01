@@ -20,7 +20,6 @@ describe('Effect Schema support', () => {
 
   it('types handler context from Effect Schema outputs', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: Params,
       responses: { 200: UserResponse },
     })
@@ -34,7 +33,6 @@ describe('Effect Schema support', () => {
 
   it('rejects invalid Effect Schema response returns', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: { 200: UserResponse },
     })
 

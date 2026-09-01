@@ -67,7 +67,6 @@ describe('media response contracts', () => {
   it('passes a returned ReadableStream through untouched, even with response validation enabled', async () => {
     const endpoint = defineEndpoint(
       {
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv' },
           404: z.object({ message: z.string() }),
@@ -86,7 +85,6 @@ describe('media response contracts', () => {
 
   it('lets a handler-supplied content-type win over the declared one, case-insensitively', async () => {
     const endpoint = defineEndpoint({
-      operation: 'exportUsers',
       responses: {
         200: { media: 'text/csv' },
       },
@@ -111,7 +109,6 @@ describe('media response contracts', () => {
   it('still validates a non-media status declared on the same endpoint', async () => {
     const endpoint = defineEndpoint(
       {
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv' },
           404: z.object({ message: z.string() }),
@@ -134,7 +131,6 @@ describe('media response contracts', () => {
   it('still throws "is not declared" for a media response returned on an undeclared status', async () => {
     const endpoint = defineEndpoint(
       {
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv' },
         },
@@ -160,7 +156,6 @@ describe('media response contracts', () => {
   it('applies a validated contentType of a JSON profile through setHeaders, and still validates the body', async () => {
     const endpoint = defineEndpoint(
       {
-        operation: 'getProblem',
         responses: {
           200: z.object({ ok: z.literal(true) }),
           404: {
@@ -195,7 +190,6 @@ describe('media response contracts', () => {
 
   it('sets no content-type header for a validated status with no declared contentType', async () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: z.object({ id: z.number() }),
       },
@@ -298,7 +292,6 @@ describe('media response contracts', () => {
   describe('Accept negotiation', () => {
     function createNegotiatingEndpoint() {
       return defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: ['text/csv', 'application/json'] },
         },
@@ -329,7 +322,6 @@ describe('media response contracts', () => {
 
     it('still reports the single declared media type without varying on Accept', async () => {
       const endpoint = defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv' },
         },
@@ -353,7 +345,6 @@ describe('media response contracts', () => {
 
     it('varies on Accept for every status of a negotiating endpoint, validated ones included', async () => {
       const endpoint = defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: ['text/csv', 'application/json'] },
           404: z.object({ message: z.string() }),
@@ -397,7 +388,6 @@ describe('media response contracts', () => {
       const failures: unknown[] = []
       const endpoint = defineEndpoint(
         {
-          operation: 'exportUsers',
           responses: {
             200: { media: ['text/csv', 'application/json'] },
           },
@@ -432,7 +422,6 @@ describe('media response contracts', () => {
 
     it('keeps a status that does not offer the negotiated type on its own declared media type', async () => {
       const endpoint = defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: ['text/csv', 'application/json'] },
           404: {

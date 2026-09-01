@@ -17,7 +17,6 @@ const users = {
 } as const
 
 export default defineRouteHandler({
-  operation: 'getUser',
   params: z.object({
     id: z.string(),
   }),

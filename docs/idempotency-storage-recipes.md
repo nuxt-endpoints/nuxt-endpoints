@@ -238,7 +238,6 @@ const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
 
 export default defineRouteHandler(
   {
-    operation: 'grantPoints',
     validate: {
       body: GrantPointsBody,
       response: { 201: GrantPointsResult },

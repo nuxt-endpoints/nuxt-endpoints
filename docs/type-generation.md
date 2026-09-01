@@ -1,106 +1,132 @@
-# Type Generation and the Platform Transition
+# Type Generation, Wire Responses, and Nuxt 5
 
 Status: maintainer architecture note.
 
-Last verified: 2026-08-31
+Last verified: 2026-09-01
 
-## Stable authoring surface
+This document is the source of truth for how Nuxt Endpoints discovers route
+contracts, generates client types, and stays aligned with Nitro 3 and Nuxt 5.
 
-Both supported implementations use one canonical route shape:
+## Current prototype implementation
 
-```ts
-export default defineRouteHandler({
-  operation: 'getUser',
-  params: UserParams,
-  validate: {
-    query: UserQuery,
-    response: { 200: User, 404: NotFound },
-  },
-  handler: ({ params, query, respond }) => {
-    // ...
-  },
-})
-```
+Nuxt Endpoints does not use `InternalApi` as the source of its complete client
+contract. `InternalApi` contains route methods and serialized success returns,
+but it does not represent validated params, query, headers, request bodies,
+status-specific error bodies, idempotency, or OpenAPI
+metadata.
 
-The default export exposes its source definition through `~routeDef`. Generated
-client types project request schemas and handler returns from that protocol.
-They do not refer to NE's private `__endpoint_contract__` or
-`__endpoint_handler_return__` compatibility markers.
+The current build flow is:
 
-The old `defineEndpoint*()` authoring family is intentionally absent from the
-package's public runtime exports and Nuxt auto-imports. It remains private only
-because the Nitro 2/H3 1 adapter delegates validation and dispatch to the
-already-tested implementation.
+1. [`collectNitroRouteHandlers`](../src/nitro-route-handlers.ts) reads Nitro's
+   discovered and configured route handlers.
+2. Nitro's compiler extracts the contract expression and only its required
+   bindings. Handler-only code is not imported during the build.
+3. NE reads the supported `nitro.getRouteContracts()` provider; it no longer
+   scans or Jiti-evaluates route files.
+4. Nitro generates `InternalRouteSchema`; NE contributes opaque `contract` and
+   `handlerReturn` fields through Nitro's type-generation input.
+5. The endpoint client reads those fields through
+   `TypedFetchMetadataField`.
 
-## Nuxt 4, Nitro 2, and H3 1 implementation
-
-Nitro 2 has no route-contract compiler or metadata provider. This branch fills
-that gap without changing application authoring:
-
-1. Nitro's discovered route list supplies each route, method, and source file.
-2. A conservative source scan selects only direct
-   `defineRouteHandler({...})` routes.
-3. Jiti evaluates the selected route module with the canonical helper installed
-   as an auto-import-compatible global.
-4. The adapter reads private runtime metadata from the returned handler to
-   generate the client manifest and OpenAPI document.
-5. Generated TypeScript imports the route's public `~routeDef` sidecar.
-
-This is a compatibility implementation, not the desired upstream design.
-Because the complete route file is evaluated, its top-level dependency graph
-must be deterministic and safe at build time. Put reusable schemas and
-contract values in ordinary modules such as `server/contracts/user.ts`; there
-is no special `*.endpoint-contract.ts` convention.
-
-Discovery fails closed. If a canonical route cannot be evaluated or its
-default export does not expose contract metadata, generation stops instead of
-silently producing an incomplete client.
-
-## Nitro 3 implementation
-
-The `upstream-integration` branch enables Nitro's experimental
-`routeContracts` compiler and reads `nitro.getRouteContracts()`. Nitro
-extracts the handler-free graph from the same canonical call, so NE no longer
-scans or evaluates route handlers.
-
-The intended replacement is:
-
-```text
-Nuxt 4 compatibility                 Upstream implementation
-──────────────────────────────────   ─────────────────────────────────
-source scan + Jiti evaluation    →   Nitro route-contract compiler
-private runtime carrier          →   Nitro contract provider
-NE validation/dispatch adapter   →   H3 defineRouteHandler
-~routeDef generated type input   =   ~routeDef generated type input
-```
-
-That equality is the point of aligning this branch now: application route code
-does not need another migration when the upstream implementation is adopted.
+The runtime handler keeps `~routeDef` for TypeScript inference, but build-time
+metadata comes from Nitro's provider, not private NE carrier fields.
 
 ## Server values and client wire values
 
-Response schemas describe values on the server. JSON clients receive their
-serialized wire representation. For example, a schema output of `Date`
-arrives as `string`.
+Response schemas describe the value returned and optionally validated on the
+server. HTTP clients receive the JSON representation of that value. These are
+not always the same TypeScript type.
 
-On the Nitro 2 line, `EndpointWireValue` adapts Nitro's
-`Simplify<Serialize<T>>`. The mapping is used by success bodies,
-`.result()`, `.raw().json()`, `useEndpoint`, and Vue Query projections.
-Native `Response`, streams, files, redirects, and other non-JSON transports
-remain raw HTTP concerns.
+```ts
+const ResponseBody = z.object({
+  createdAt: z.date(),
+})
 
-## Nuxt typed-fetch boundary
+export default defineEndpointHandler(endpoint, () => ({
+  createdAt: new Date(), // server/schema output: Date
+}))
 
-Nuxt/Nitro's successful typed-fetch projection and NE's full status-aware
-contract are related but distinct:
+const result = await $endpoint('/api/items/:id', { method: 'get', params: { id: '1' } })
+result.body.createdAt // client/wire value: string
+```
 
-- Nuxt typed fetch owns the ordinary successful `$fetch` result.
-- Status-specific bodies remain available through a separate result API.
-- Request inputs come from schema input types; handlers receive schema output
-  types.
-- OpenAPI, Vue Query, and other consumers read the same Nitro contract
-  provider rather than rescanning route files.
+On the Nitro 2 support line, [`EndpointWireValue`](../src/runtime/wire.ts) is a
+small compatibility adapter over Nitro's `Simplify<Serialize<T>>`. It is used
+by every JSON client response surface:
 
-Cross-generated tests must continue to verify successful JSON responses against
-Nitro's `InternalApi` until the Nuxt 5 typed-fetch provider replaces that
-compatibility seam.
+- awaited `$endpoint` status bodies;
+- `.raw().json()`;
+- `useEndpoint`;
+- Effect result values;
+- TanStack Query request options.
+
+Runtime response validation still runs against the server/schema output before
+the HTTP framework serializes it. Native `Response`, streams, files, redirects,
+and custom non-JSON transports are outside this mapping and should use the raw
+HTTP APIs.
+
+## `InternalApi` agreement
+
+The intended equality is limited to the successful JSON response projection:
+
+```ts
+$EndpointPathResponse<Path, Method> === InternalApi[Path][Method]
+```
+
+The Nuxt integration fixture extracts every generated endpoint path/method pair
+and type-checks this equality against Nitro's generated `nitro-routes.d.ts`.
+Serialization-boundary coverage includes `Date`, `toJSON` values, collections,
+omitted non-JSON properties, declared status bodies, and inferred handler
+returns.
+
+Status-specific non-2xx bodies intentionally remain a Nuxt Endpoints feature.
+They are exposed by awaiting `$endpoint(...)` and by `.raw()`, and are not merged into
+`InternalApi`'s successful handler-return projection.
+
+## Discovery failure policy
+
+Nitro treats the direct `defineRouteHandler({...})` call as a macro. Unsupported
+or mutable bindings fail with a source diagnostic; extraction never silently
+drops part of a contract. Ordinary routes and unrelated helpers with the same
+local name are ignored. The extracted module may evaluate schema imports, but
+it does not retain handler-only callbacks such as `validate.onError`.
+
+## Nuxt 5 and `fetchdts`
+
+Nuxt's typed-fetch work is tracked in
+[`nuxt/nuxt#35769`](https://github.com/nuxt/nuxt/issues/35769). The reusable
+Nitro typed-fetch work is tracked in
+[`nitrojs/nitro#2758`](https://github.com/nitrojs/nitro/issues/2758). Until an
+upstream implementation lands, released package support remains a migration
+direction; this branch verifies the proposed integration with local prototypes.
+
+[`fetchdts`](https://github.com/unjs/fetchdts) supplies type utilities for a
+schema containing paths, methods, query, body, headers, response, and response
+headers. It does not discover Nuxt routes or provide runtime validation by
+itself.
+
+The implemented prototype integration is:
+
+1. Author the Standard Schema contract in H3's route shape.
+2. Read it through Nitro's build-time registry provider.
+3. Add opaque NE fields to Nitro's generated fetch schema.
+4. Keep status-specific results, runtime validation, OpenAPI, idempotency,
+   Effect, and TanStack Query at the Nuxt Endpoints layer.
+5. Make awaited `$endpoint` requests status-aware while keeping `.raw()` for native responses.
+
+## Nuxt 5 acceptance conditions
+
+Nuxt 5 support is claimed only after all of the following are verified against
+released package versions:
+
+- endpoint path and method discovery uses a supported integration API;
+- successful JSON responses match Nuxt's typed fetch result for every fixture
+  endpoint;
+- params, query, headers, and body retain schema input types;
+- handler context retains schema output types;
+- status-specific result and raw-response unions remain intact;
+- `Date` and other serialization boundaries match actual HTTP values;
+- runtime validation, OpenAPI, idempotency, Effect, and TanStack Query tests
+  pass;
+- Nitro 2 support is either preserved through an explicit adapter or removed
+  in a documented major-version change.

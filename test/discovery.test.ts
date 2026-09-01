@@ -27,7 +27,6 @@ describe('canonical route source discovery on Nitro 2', () => {
     const single = `
       import { User } from '../contracts/user'
       export default defineRouteHandler({
-        operation: 'getUser',
         validate: { response: { 200: User } },
         handler: () => ({ id: 1 }),
       })

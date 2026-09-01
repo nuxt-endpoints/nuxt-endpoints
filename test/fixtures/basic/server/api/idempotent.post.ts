@@ -4,7 +4,6 @@ import { defineRouteHandler } from '../../../../../src/runtime'
 let executionCount = 0
 
 export default defineRouteHandler({
-  operation: 'createIdempotentItem',
   validate: {
     body: z.object({ amount: z.number().positive() }),
     response: {

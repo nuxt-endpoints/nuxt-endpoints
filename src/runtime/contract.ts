@@ -172,7 +172,6 @@ export type EndpointIdempotencyMetadata<
 }
 
 export type EndpointDefinition = EndpointRequestContract & {
-  operation?: string
   responses?: EndpointResponsesContract
   summary?: string
   description?: string

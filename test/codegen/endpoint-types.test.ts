@@ -15,7 +15,6 @@ const listUsersHandler: EndpointRouteHandler = {
   handler: '/server/api/users.get.ts',
   route: '/api/users',
   method: 'get',
-  operation: 'listUsers',
 }
 
 const healthHandler: EndpointRouteHandler = {
@@ -28,7 +27,6 @@ const multiGetHandler: EndpointRouteHandler = {
   handler: '/server/api/multi.ts',
   route: '/api/multi',
   method: 'get',
-  operation: 'getMulti',
   methodGroup: true,
 }
 
@@ -36,12 +34,11 @@ const multiPutHandler: EndpointRouteHandler = {
   handler: '/server/api/multi.ts',
   route: '/api/multi',
   method: 'put',
-  operation: 'putMulti',
   methodGroup: true,
 }
 
 const defaultClientOptions: EndpointClientCodegenOptions = {
-  client: { result: true, raw: true },
+  client: { raw: true },
 }
 
 describe('buildEndpointRouteEntryUnion', () => {
@@ -49,12 +46,11 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(buildEndpointRouteEntryUnion([])).toBe('  | never')
   })
 
-  it('embeds the operation name when the handler declares one', () => {
+  it('embeds path, method, contract, and handler return metadata', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler])
 
     expect(union).toContain("path: '/api/users'")
     expect(union).toContain("method: 'get'")
-    expect(union).toContain("operation: 'listUsers'")
     expect(union).toContain(
       "definition: EndpointDefinitionFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef']>",
     )
@@ -63,19 +59,13 @@ describe('buildEndpointRouteEntryUnion', () => {
     )
   })
 
-  it('omits the operation field entirely when the handler has none', () => {
-    const union = buildEndpointRouteEntryUnion([healthHandler])
-
-    expect(union).not.toContain('operation:')
-  })
-
   it('joins multiple handlers as separate union members', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler, healthHandler])
 
     expect(union.split('\n')).toHaveLength(2)
   })
 
-  it('projects each method-group entry from the canonical route definition', () => {
+  it('selects every method from a grouped route definition', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
@@ -94,11 +84,11 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union).not.toContain('__endpoint_handler_return')
   })
 
-  it('keeps the single-endpoint accessor shape unchanged when methodGroup is not set', () => {
+  it('uses the public route definition helpers', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler])
 
-    expect(union).not.toContain('__endpoint_contracts__')
-    expect(union).not.toContain('__endpoint_method_handler_returns__')
+    expect(union).toContain('EndpointDefinitionFromRoute')
+    expect(union).toContain('EndpointHandlerReturnFromRoute')
   })
 })
 
@@ -113,39 +103,32 @@ describe('generateEndpointTypes', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
     expect(content).toContain(
-      "import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointOperationCall, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointResultClient, UseEndpointResultClientMethod } from './runtime'",
+      "import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
     )
   })
 
-  it('produces real result/raw response types when both client features are enabled', () => {
+  it('produces awaited path and raw response types', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: true, raw: true },
+      client: { raw: true },
     })
 
-    expect(content).toContain(
-      "export type $EndpointResult<OPERATION extends EndpointOperation> = Awaited<ReturnType<$EndpointCall<OPERATION>['result']>>",
-    )
-    expect(content).toContain(
-      "export type $EndpointRawResponse<OPERATION extends EndpointOperation> = Awaited<ReturnType<$EndpointCall<OPERATION>['raw']>>",
-    )
+    expect(content).toContain('export type $EndpointPathResponse<')
+    expect(content).toContain('export type $EndpointPathRawResponse<')
   })
 
-  it('degrades result/raw response types to never when both client features are disabled', () => {
+  it('omits raw response helpers when raw is disabled', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: false, raw: false },
+      client: { raw: false },
     })
 
     expect(content).toContain(
-      'export type $EndpointResult<OPERATION extends EndpointOperation> = never',
-    )
-    expect(content).toContain(
-      'export type $EndpointRawResponse<OPERATION extends EndpointOperation> = never',
+      'export type $EndpointPathRawResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = never',
     )
   })
 
   it('uses the plain EndpointClient type', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
-      client: { result: true, raw: true },
+      client: { raw: true },
     })
 
     expect(content).toContain('export type $EndpointClient = EndpointClient<')

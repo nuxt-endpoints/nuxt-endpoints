@@ -78,7 +78,6 @@ describe('endpoint query contracts over real requests', () => {
 describe('media-type-map body contracts over real requests', () => {
   function uploadEndpoint() {
     return defineEndpoint({
-      operation: 'upload',
       body: {
         'application/json': z.object({ name: z.string() }),
         'application/x-www-form-urlencoded': z.object({ name: z.string() }),

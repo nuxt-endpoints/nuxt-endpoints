@@ -14,7 +14,6 @@ without hiding the broader roadmap.
 | Document                                                        | Responsibility                                                                                                                 |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions                           |
-| [TanStack Query adapter](./tanstack-query-adapter.md)           | Query/Mutation factories, key design, error modes, SSR integration, test matrix, and the eight adapter decisions               |
 | [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                                       |
 | [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                                         |
 | [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
@@ -26,7 +25,7 @@ without hiding the broader roadmap.
 | Area                                                                  | Status                           | Next decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Endpoint contracts, runtime validation, generated client, and OpenAPI | Implemented                      | Continue stabilization and compatibility work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Canonical route contract authoring                                    | Implemented                      | Public authoring uses direct `defineRouteHandler({...})` only. On Nitro 2 the route module is evaluated through a private Jiti compatibility adapter; Nitro 3 replaces that adapter with its route-contract compiler/provider. Reusable schemas live in ordinary contract modules and no NE-specific filename convention is used.                                                                                                                                                                                                                                                                   |
+| Contract-file separation for build-time discovery                     | Implemented                      | Discovery statically resolves the handler's contract import and evaluates only the contract module; non-endpoint routes are never evaluated. Standard placement is a sibling `*.endpoint-contract.*` file, excluded from Nitro scanning through the public `ignore` option; the suffix is deliberately fixed (not configurable) because it exists only for that ignore pattern — contracts placed outside route directories need no suffix at all                                                                                                                                                   |
 | JSON wire response mapping and Nitro `InternalApi` agreement          | Implemented                      | Replace only through a tested Nuxt 5 typed-fetch adapter                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -40,9 +39,9 @@ without hiding the broader roadmap.
 | Endpoints on configuration-registered routes                          | Implemented                      | Discovery reads `nitro.options.handlers` alongside `scannedHandlers`, so `nitro.handlers` and `addServerHandler` routes are ordinary endpoints. The only requirement is a real source-file path with a JS/TS extension; inline and virtual handlers are skipped, not guessed at                                                                                                                                                                                                                                                                                                                     |
 | Nitro built-in OpenAPI coexistence                                    | Implemented                      | Measured `nitropack@2.13.4`: `defineRouteMeta()` is an AST macro read as JSON literals, so validator-derived schemas cannot reach Nitro's document and merging the two is impossible. Two routes warn at build time; one shared route fails the build. Serving UI for this module's own document is a separate candidate                                                                                                                                                                                                                                                                            |
 | OpenAPI document metadata layering                                    | Implemented                      | `openApi.document` (deep-merged) and `openApi.extend` (runs last) on `server/endpoints/runtime.ts`; they were unreachable from a Nuxt app before, since the document is built in the server plugin and module options cannot carry a callback                                                                                                                                                                                                                                                                                                                                                       |
-| Endpoint hooks (`onValidationError`, `wrapHandler`)                   | Implemented                      | Runtime-only hooks live in `defineRouteHandler()`'s optional second argument or `server/endpoints/runtime.ts`; they never enter the build-time contract graph. Resolution remains route → application → default.                                                                                                                                                                                                                                                                                                                                                                                    |
+| Endpoint hooks (`onValidationError`, `wrapHandler`)                   | Implemented                      | Same key names at both scopes: runtime options on `defineEndpoint()`, and `server/endpoints/runtime.ts` application-wide, the one file holding every setting `nuxt.config.ts` cannot carry. `onValidationError` resolves endpoint -> application -> default; `wrapHandler` nests application -> endpoint -> idempotency, making idempotency the built-in consumer of a now-public extension point rather than a privileged one                                                                                                                                                                      |
 | Media-type request bodies                                             | Implemented                      | JSON, URL-encoded, multipart, and text/\* members with 415 on mismatch, wire-typed client `mediaType` option, and per-member OpenAPI content. The response side is one media type per status; content negotiation stays out                                                                                                                                                                                                                                                                                                                                                                         |
-| Per-method dispatch                                                   | Implemented                      | The multi-method `defineRouteHandler()` form on method-suffix-free files provides per-method operations, validation, idempotency metadata, and handlers, with derived HEAD/OPTIONS and 405 + Allow.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Per-method dispatch                                                   | Implemented                      | `defineEndpointMethods()` groups on method-suffix-free files, with derived HEAD/OPTIONS and 405 + Allow. Members stay ordinary `defineEndpoint()` contracts, so operations, idempotency, and media-type bodies work per method                                                                                                                                                                                                                                                                                                                                                                      |
 | Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                                                                                                                                                                                 |
 | Optional path-parameter contracts                                     | Rejected                         | OpenAPI has no honest representation for optional path parameters; declare two routes instead. Build-time rejection shipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Non-JSON response declarations                                        | Implemented                      | One door: `{ media: '<type>' or [...], schema? }` keeps XML, CSV, files, streams, and SSE inside `responses` — media type on the wire and in OpenAPI, payload never validated, client stops parsing that route's body. A validated body may still be labelled with a `+json` profile; any other `contentType` there fails the build and names `media`                                                                                                                                                                                                                                               |
@@ -129,11 +128,8 @@ export default defineEventHandler(async (event) => {
 ```
 
 ```ts
-export default defineRouteHandler({
-  params: UserParams,
-  handler: ({ event, params }) => {
-    return findUserForAccount(event.context.user.accountId, params.id)
-  },
+export default defineEndpointHandler(endpoint, ({ event, params }) => {
+  return findUserForAccount(event.context.user.accountId, params.id)
 })
 ```
 
@@ -168,7 +164,6 @@ const authenticatedEndpoint = createEndpointBuilder()
   .use(tenantMiddleware) // adds { tenant: Tenant }
 
 export const endpoint = authenticatedEndpoint.define({
-  operation: 'getProject',
   params: ProjectParams,
   response: Project,
 })
@@ -250,7 +245,7 @@ demand- or externally-driven:
 - Waiting/polling on in-flight requests instead of an immediate `409` — only
   on real retry-UX demand.
 - Merging helper-generated `400`/`409`/`422` problems into the typed
-  `.result()` union — on demand for typed handling of those failures.
+  awaited status union — for typed handling of those failures.
 
 The first two would rework the claim/complete execution path inside
 `DefinedEndpoint.handler()`; that is the moment to also extract that path into
@@ -259,7 +254,7 @@ its own module (see Deferred internal refactorings).
 ## Operation-aware observability
 
 Named operations provide stable labels for tracing and metrics. Shared
-infrastructure should expose operation name, route, method, duration, result
+infrastructure should expose route, method, duration, result
 status, and transport failure without forcing every application to wrap
 `$endpoint` manually.
 
@@ -280,7 +275,7 @@ Recommendation: implement only after endpoint and adapter APIs stabilize.
 
 A future tab could show:
 
-- discovered path, method, and operation name;
+- discovered path and method;
 - request and response contract summaries;
 - runtime response-validation status;
 - generated client features and enabled adapters;
@@ -578,5 +573,5 @@ Reviewers should answer:
 7. Which proposed item blocks current adoption, and which can remain a
    backward-compatible later extension?
 
-Adapter-specific reviewers should separately evaluate the eight decisions in
-the [TanStack Query adapter document](./tanstack-query-adapter.md).
+Vue Query integration now uses `.queryOptions()` and `.mutationOptions()` on
+the endpoint request itself; the public guide documents the supported boundary.

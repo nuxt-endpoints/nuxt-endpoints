@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMemoryIdempotencyStorage } from './internal-runtime'
-import type { IdempotencyStorage, IdempotencyStoredResponse } from './internal-runtime'
+import { createMemoryIdempotencyStorage } from '../src/runtime'
+import type { IdempotencyStorage, IdempotencyStoredResponse } from '../src/runtime'
 import {
   canonicalizeIdempotencyValue,
   createIdempotencyFingerprint,
@@ -328,7 +328,7 @@ describe('fingerprint determinability at definition time', () => {
 
     // Without a body contract the default projection cannot see a body the
     // handler reads itself, and the two payloads would share a fingerprint.
-    expect(() => defineEndpoint({ operation: 'publish' }).idempotency({ required: true })).toThrow(
+    expect(() => defineEndpoint({}).idempotency({ required: true })).toThrow(
       /needs an explicit fingerprint/,
     )
   })
@@ -340,7 +340,6 @@ describe('fingerprint determinability at definition time', () => {
     // so the assertion fires before the handler is ever attached.
     expect(() =>
       defineEndpoint({
-        operation: 'publishMerged',
         idempotency: { required: true },
         handler: () => ({ published: true }),
       }),
@@ -352,15 +351,15 @@ describe('fingerprint determinability at definition time', () => {
     const { z } = await import('zod')
 
     expect(() =>
-      defineEndpoint({ operation: 'publish', params: z.object({ id: z.string() }) }).idempotency({
+      defineEndpoint({ params: z.object({ id: z.string() }) }).idempotency({
         required: true,
         fingerprint: ({ params }) => ({ params }),
       }),
     ).not.toThrow()
 
-    // An operation that genuinely takes no input says so.
+    // A request that genuinely takes no input says so.
     expect(() =>
-      defineEndpoint({ operation: 'ping' }).idempotency({
+      defineEndpoint({}).idempotency({
         required: true,
         fingerprint: () => ({}),
       }),

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 export default defineRouteHandler({
-  operation: 'health',
   validate: {
     response: {
       200: z.object({

@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { defineRouteHandler } from '../../../../../src/runtime'
 
 export default defineRouteHandler({
-  operation: 'getCustomReport',
   validate: {
     query: z.object({ id: z.string() }),
     response: {

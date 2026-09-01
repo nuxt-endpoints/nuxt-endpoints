@@ -39,18 +39,16 @@ npm install effect
 
 ## Your first endpoint
 
-Create an ordinary Nuxt server route and directly default-export a `defineRouteHandler()` call:
+Create an ordinary Nuxt server route and default-export a `defineEndpoint()` call with a `handler` property:
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 
-export default defineRouteHandler({
+export default defineEndpoint({
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: { 200: z.object({ id: z.number(), name: z.string() }) },
-  },
+  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Tom' } // params.id is a number — validated and coerced
   },
@@ -100,35 +98,20 @@ export default defineNuxtConfig({
 })
 ```
 
-`openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.result` and `client.raw` control which optional methods are generated on `$endpoint` calls.
+`openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.raw` controls whether `.raw()` is generated on `$endpoint` calls.
 
-To generate typed query, mutation, and infinite-query options for Vue Query, install
-the optional peer and enable `client.query`:
+Endpoint request objects expose typed query and mutation options when the optional Vue Query peer is installed:
 
 ```bash
 vp add @tanstack/vue-query
 ```
 
-```ts
-export default defineNuxtConfig({
-  modules: ['nuxt-endpoints'],
-  endpoints: {
-    client: {
-      query: true,
-    },
-  },
-})
-```
-
-`query: true` leaves QueryClient setup to the application. See
-[Vue Query](/docs/tanstack-query) for generated factories and the opt-in
-automatic Nuxt SSR setup.
+No generated factory or module option is required. See [Vue Query](/docs/tanstack-query) for `.queryOptions()`, `.mutationOptions()`, and the opt-in automatic Nuxt SSR setup.
 
 ## What gets generated
 
 - `$endpoint`: a generated path/method client available in Nuxt app code.
-- `#endpoints`: helper types for paths, optional operation targets, calls, status-aware typed results, and raw Web Responses.
-- `#endpoints/query`: Query, Mutation, Infinite Query, and key factories when `client.query` is enabled.
+- `#endpoints`: helper types for paths, methods, calls, status-aware typed results, and raw Web Responses.
 - `/_endpoints/schema`: the default OpenAPI 3.1 document route when OpenAPI generation is enabled.
 
 Adding the module changes nothing by itself: only routes that export an endpoint definition are affected. Existing routes keep working unchanged — see [Incremental Adoption](/docs/incremental-adoption).

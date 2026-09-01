@@ -65,10 +65,10 @@ describe('build-time idempotency runtime gap detection', () => {
 
   it('ignores non-idempotent endpoints entirely', () => {
     const detection = getEndpointFromCarrier({
-      definition: { operation: 'getUser' },
+      definition: {},
     })
 
-    expect(detection).toEqual({ operation: 'getUser' })
+    expect(detection).toEqual({})
   })
 })
 
@@ -156,7 +156,6 @@ describe('media response detection', () => {
   it('reports mediaResponse: true for a carrier declaring a media response via responses', () => {
     const detection = getEndpointFromCarrier({
       definition: {
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv' },
           404: { message: 'not used at build time' } as never,
@@ -164,31 +163,29 @@ describe('media response detection', () => {
       },
     })
 
-    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
+    expect(detection).toEqual({ mediaResponse: true })
   })
 
   it('reports mediaResponse: true for a carrier declaring a media response via a bare response', () => {
     const detection = getEndpointFromCarrier({
       definition: {
-        operation: 'exportUsers',
         responses: { 200: { media: 'text/csv' } },
       },
     })
 
-    expect(detection).toEqual({ operation: 'exportUsers', mediaResponse: true })
+    expect(detection).toEqual({ mediaResponse: true })
   })
 
   it('reports no stream key when the carrier declares only validated responses', () => {
     const detection = getEndpointFromCarrier({
       definition: {
-        operation: 'getUser',
         responses: {
           200: { message: 'validated' } as never,
         },
       },
     })
 
-    expect(detection).toEqual({ operation: 'getUser' })
+    expect(detection).toEqual({})
   })
 })
 
@@ -249,7 +246,6 @@ describe('resolveModuleOptions', () => {
 
   it('resolves client defaults when no client options are provided', () => {
     expect(resolveModuleOptions({}, false).client).toEqual({
-      result: true,
       raw: true,
       query: false,
       querySetup: 'external',
@@ -265,25 +261,24 @@ describe('resolveQueryClientOption', () => {
     expect(resolveQueryClientOption(false)).toEqual(disabled)
   })
 
-  it('enables the query client with defaults when query is true', () => {
-    expect(resolveQueryClientOption(true)).toEqual({
-      query: true,
-      querySetup: 'external',
-      queryStaleTime: 60_000,
-    })
-  })
-
-  it('applies an object override, defaulting fields it does not set', () => {
+  it('applies automatic setup and defaults staleTime', () => {
     expect(resolveQueryClientOption({ setup: 'auto' })).toEqual({
       query: true,
       querySetup: 'auto',
       queryStaleTime: 60_000,
     })
-    expect(resolveQueryClientOption({ staleTime: 1_000 })).toEqual({
+    expect(resolveQueryClientOption({ setup: 'auto', staleTime: 1_000 })).toEqual({
       query: true,
-      querySetup: 'external',
+      querySetup: 'auto',
       queryStaleTime: 1_000,
     })
+  })
+
+  it('rejects removed factory-era Query configuration at runtime', () => {
+    expect(() => resolveQueryClientOption(true as never)).toThrow(/query: true was removed/)
+    expect(() => resolveQueryClientOption({ staleTime: 1_000 } as never)).toThrow(
+      /only supports.*setup.*auto/,
+    )
   })
 })
 

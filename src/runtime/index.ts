@@ -2,7 +2,6 @@ export {
   createEndpointClient,
   createEndpointRequest,
   createUseEndpoint,
-  createUseEndpointResult,
   normalizeEndpointRequestKey,
 } from './client'
 export type {
@@ -24,11 +23,6 @@ export type {
   EndpointClientRuntimeValue,
   EndpointFetcherRawResponse,
   EndpointFetcherRuntime,
-  EndpointOperation,
-  EndpointOperationCall,
-  EndpointOperationCallArgs,
-  EndpointOperationCaller,
-  EndpointOperationRequestOptions,
   EndpointPath,
   EndpointPathCall,
   EndpointPathCaller,
@@ -54,18 +48,8 @@ export type {
   UseEndpointClientMethod,
   UseEndpointClientOptions,
   UseEndpointClientRuntimeValue,
-  UseEndpointOperationArgs,
-  UseEndpointOperationCaller,
   UseEndpointOptions,
   UseEndpointPathCaller,
-  UseEndpointResultClient,
-  UseEndpointResultCaller,
-  UseEndpointResultClientMethod,
-  UseEndpointResultClientOptions,
-  UseEndpointResultClientRuntimeValue,
-  UseEndpointResultOperationArgs,
-  UseEndpointResultOperationCaller,
-  UseEndpointResultPathCaller,
 } from './client'
 export type {
   EndpointBodyMediaTypeMap,

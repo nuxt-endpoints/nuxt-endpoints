@@ -10,30 +10,20 @@ export function generateEndpointClient(
   options: EndpointClientCodegenOptions,
 ): string {
   const routes = toEndpointRouteConfigEntries(handlers)
-  const useEndpointResultRuntimeImport = options.client.result ? ', createUseEndpointResult' : ''
-  const useEndpointResultTypeImport = options.client.result ? ', $UseEndpointResult' : ''
-  const clientFeatures = {
-    result: options.client.result,
-    raw: options.client.raw,
-  }
+  const clientFeatures = { raw: options.client.raw }
   const clientRuntimeImportPath = toImportPath(resolve('./runtime/client'))
-  // `$endpoint` mirrors `$fetch`, so it gets features only. The `useEndpoint`
-  // family mirrors `useFetch`, which swaps in `useRequestFetch()` for relative
-  // paths during SSR — hence the extra `captureFetcher`.
-  const clientOptions = `, { features: ${JSON.stringify(clientFeatures)} }`
+  // Direct `$endpoint` awaits mirror `$fetch`; its Query option methods and
+  // `useEndpoint` use `captureFetcher` to forward SSR request headers.
+  const clientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`
   const asyncDataClientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`
   const asyncDataRuntime = '__useEndpointAsyncData'
-  const useEndpointResultExport = options.client.result
-    ? `\nexport const useEndpointResult = createUseEndpointResult(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpointResult`
-    : ''
-
   return `
 import { createUseAsyncData } from '#app/composables/asyncData'
-import { useRequestFetch } from 'nuxt/app'
-import { createEndpointClient, createUseEndpoint${useEndpointResultRuntimeImport} } from '${clientRuntimeImportPath}'
+import { useRequestFetch, useRequestHeaders } from 'nuxt/app'
+import { createEndpointClient, createUseEndpoint } from '${clientRuntimeImportPath}'
 
 import type { EndpointFetcherRuntime } from '${clientRuntimeImportPath}'
-import type { $EndpointClient, $UseEndpoint${useEndpointResultTypeImport} } from '#endpoints'
+import type { $EndpointClient, $UseEndpoint } from '#endpoints'
 
 const routes = ${JSON.stringify(routes, null, 2)} as const
 export const __useEndpointAsyncData = createUseAsyncData()
@@ -44,13 +34,19 @@ export const __useEndpointAsyncData = createUseAsyncData()
 // \`useAsyncData\` raises its own error for a genuinely misplaced call.
 const captureFetcher = () => {
   try {
-    return useRequestFetch() as unknown as EndpointFetcherRuntime
+    const requestFetch = useRequestFetch() as unknown as EndpointFetcherRuntime
+    if (typeof requestFetch.raw === 'function') return requestFetch
+
+    // Nuxt 4's local request fetcher does not expose ofetch's raw helper.
+    // Recreate the same request forwarding on the global server $fetch so
+    // status-aware calls can retain status and headers.
+    return $fetch.create({ headers: useRequestHeaders() }) as EndpointFetcherRuntime
   } catch {
     return undefined
   }
 }
 
 export const $endpoint = createEndpointClient(routes${clientOptions}) as unknown as $EndpointClient
-export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint${useEndpointResultExport}
+export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint
 `.trimStart()
 }

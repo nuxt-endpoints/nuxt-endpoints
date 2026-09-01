@@ -61,7 +61,7 @@
             <article class="article -stage">
               <header class="header">
                 <span class="value">Server contract</span>
-                <code class="code">defineRouteHandler</code>
+                <code class="code">defineEndpoint</code>
               </header>
               <pre class="pre"><code>{{ selectedScenario.contract }}</code></pre>
             </article>
@@ -71,7 +71,7 @@
             <article class="article -stage">
               <header class="header">
                 <span class="value">Generated client</span>
-                <code class="code">.result() / .raw()</code>
+                <code class="code">await / .raw()</code>
               </header>
               <pre class="pre"><code>{{ selectedScenario.client }}</code></pre>
             </article>
@@ -239,7 +239,6 @@ type InspectorScenario = {
   title: string
   description: string
   takeaway: string
-  operation: 'getUser' | 'createUser' | 'searchUsers'
   method: 'GET' | 'POST'
   path: string
   contract: string
@@ -262,27 +261,22 @@ type TryOperation = {
   confirmations: string[]
 }
 
-const getUserContract = `export default defineRouteHandler({
-  operation: 'getUser',
+const getUserContract = `export const endpoint = defineEndpoint({
   params: z.object({ id: z.string() }),
-  validate: {
-    query: z.object({ includeAge: z.coerce.boolean().optional() }),
-    headers: z.object({ 'x-client-version': z.string().min(1) }),
-    response: { 200: User, 404: ErrorResponse },
+  query: z.object({ includeAge: z.coerce.boolean().optional() }),
+  headers: z.object({ 'x-client-version': z.string().min(1) }),
+  responses: {
+    200: User,
+    404: ErrorResponse,
   },
-  handler: ({ params }) => findUser(params.id),
 })`
 
-const createUserContract = `export default defineRouteHandler({
-  operation: 'createUser',
-  validate: {
-    body: z.object({
-      name: z.string().min(1),
-      age: z.number().int().nonnegative().optional(),
-    }),
-    response: { 201: User },
-  },
-  handler: ({ body, respond }) => respond(201, createUser(body)),
+const createUserContract = `export const endpoint = defineEndpoint({
+  body: z.object({
+    name: z.string().min(1),
+    age: z.number().int().nonnegative().optional(),
+  }),
+  responses: { 201: User },
 })`
 
 const inspectorScenarios: InspectorScenario[] = [
@@ -293,15 +287,15 @@ const inspectorScenarios: InspectorScenario[] = [
     description: 'Params, query, and a required header reach the handler as validated values.',
     takeaway:
       'The client input is generated from params, query, and headers. The 200 body is checked against the declared User schema.',
-    operation: 'getUser',
     method: 'GET',
     path: '/api/users/1?includeAge=true',
     contract: getUserContract,
-    client: `const result = await $endpoint.getUser({
+    client: `const result = await $endpoint('/api/users/:id', {
+  method: 'get',
   params: { id: '1' },
   query: { includeAge: true },
   headers: { 'x-client-version': 'playground/1.0' },
-}).result()
+})
 
 if (result.status === 200) result.body.name`,
     request: {
@@ -316,16 +310,16 @@ if (result.status === 200) result.body.name`,
     title: 'Declared response',
     description: 'A non-2xx status stays typed data instead of becoming an unknown error body.',
     takeaway:
-      'Because 404 is declared, .result() returns it as a typed branch. TypeScript narrows result.body to ErrorResponse.',
-    operation: 'getUser',
+      'Because 404 is declared, awaiting the request returns it as a typed branch. TypeScript narrows result.body to ErrorResponse.',
     method: 'GET',
     path: '/api/users/999?includeAge=true',
     contract: getUserContract,
-    client: `const result = await $endpoint.getUser({
+    client: `const result = await $endpoint('/api/users/:id', {
+  method: 'get',
   params: { id: '999' },
   query: { includeAge: true },
   headers: { 'x-client-version': 'playground/1.0' },
-}).result()
+})
 
 if (result.status === 404) result.body.message`,
     request: {
@@ -341,13 +335,13 @@ if (result.status === 404) result.body.message`,
     description: 'A validated request body produces the response declared for a successful POST.',
     takeaway:
       'The generated client requires the body defined by the contract. The 201 branch carries the declared User response type.',
-    operation: 'createUser',
     method: 'POST',
     path: '/api/users',
     contract: createUserContract,
-    client: `const result = await $endpoint.createUser({
+    client: `const result = await $endpoint('/api/users', {
+  method: 'post',
   body: { name: 'Sid', age: 30 },
-}).result()
+})
 
 if (result.status === 201) result.body.id`,
     request: {
@@ -363,22 +357,21 @@ if (result.status === 201) result.body.id`,
     description: 'Valibot transforms the query string, then rejects a value outside 1–10.',
     takeaway:
       'Static types know that query input is a string. Runtime validation still protects the HTTP boundary from an out-of-range value.',
-    operation: 'searchUsers',
     method: 'GET',
     path: '/api/users/search?q=ja&limit=99',
-    contract: `export default defineRouteHandler({
-  operation: 'searchUsers',
-  validate: {
-    query: v.object({
-      q: v.pipe(v.string(), v.minLength(1)),
-      limit: v.optional(v.pipe(
-        v.string(), v.transform(Number), v.number(),
-        v.integer(), v.minValue(1), v.maxValue(10),
-      )),
-    }),
-    response: { 200: SearchResult },
-  },
-  handler: ({ query }) => searchUsers(query),
+    contract: `export const endpoint = defineEndpoint({
+  query: v.object({
+    q: v.pipe(v.string(), v.minLength(1)),
+    limit: v.optional(v.pipe(
+      v.string(),
+      v.transform(Number),
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(10),
+    )),
+  }),
+  responses: { 200: SearchResult },
 })`,
     client: `const response = await $endpoint.searchUsers({
   query: { q: 'ja', limit: '99' },
@@ -499,11 +492,10 @@ async function runInspectorScenario(id: InspectorScenarioId) {
 
   try {
     if (id === 'created') {
-      const response = await $endpoint
-        .createUser({
-          body: { name: 'Sid', age: 30 },
-        })
-        .result()
+      const response = await $endpoint('/api/users', {
+        method: 'post',
+        body: { name: 'Sid', age: 30 },
+      })
       inspectorResponse.value = {
         status: response.status,
         statusText: statusText(response.status),
@@ -515,11 +507,10 @@ async function runInspectorScenario(id: InspectorScenarioId) {
     }
 
     if (id === 'invalid-query') {
-      const response = await $endpoint
-        .searchUsers({
-          query: { q: 'ja', limit: '99' },
-        })
-        .raw()
+      const response = await $endpoint('/api/users/search', {
+        method: 'get',
+        query: { q: 'ja', limit: '99' },
+      }).raw()
       inspectorResponse.value = {
         status: response.status,
         statusText: response.statusText,
@@ -530,13 +521,12 @@ async function runInspectorScenario(id: InspectorScenarioId) {
       return
     }
 
-    const response = await $endpoint
-      .getUser({
-        params: { id: id === 'not-found' ? '999' : '1' },
-        query: { includeAge: true },
-        headers: { 'x-client-version': 'playground/1.0' },
-      })
-      .result()
+    const response = await $endpoint('/api/users/:id', {
+      method: 'get',
+      params: { id: id === 'not-found' ? '999' : '1' },
+      query: { includeAge: true },
+      headers: { 'x-client-version': 'playground/1.0' },
+    })
 
     inspectorResponse.value = {
       status: response.status,
@@ -560,13 +550,12 @@ async function runInspectorScenario(id: InspectorScenarioId) {
 
 async function loadUser() {
   try {
-    const response = await $endpoint
-      .getUser({
-        params: { id: userId.value },
-        query: { includeAge: true },
-        headers: { 'x-client-version': 'playground/1.0' },
-      })
-      .result()
+    const response = await $endpoint('/api/users/:id', {
+      method: 'get',
+      params: { id: userId.value },
+      query: { includeAge: true },
+      headers: { 'x-client-version': 'playground/1.0' },
+    })
     result.value = {
       status: response.status,
       ok: response.ok,
@@ -581,14 +570,13 @@ async function loadUser() {
 
 async function createUser() {
   try {
-    const response = await $endpoint
-      .createUser({
-        body: {
-          name: newUserName.value,
-          age: Number.isInteger(newUserAge.value) ? newUserAge.value : undefined,
-        },
-      })
-      .raw()
+    const response = await $endpoint('/api/users', {
+      method: 'post',
+      body: {
+        name: newUserName.value,
+        age: Number.isInteger(newUserAge.value) ? newUserAge.value : undefined,
+      },
+    }).raw()
     result.value = {
       status: response.status,
       ok: response.ok,
@@ -603,14 +591,13 @@ async function createUser() {
 
 async function searchUsers() {
   try {
-    const response = await $endpoint
-      .searchUsers({
-        query: {
-          q: searchQuery.value,
-          limit: searchLimit.value || undefined,
-        },
-      })
-      .raw()
+    const response = await $endpoint('/api/users/search', {
+      method: 'get',
+      query: {
+        q: searchQuery.value,
+        limit: searchLimit.value || undefined,
+      },
+    }).raw()
     result.value = {
       status: response.status,
       ok: response.ok,

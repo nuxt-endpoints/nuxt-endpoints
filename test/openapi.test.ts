@@ -13,7 +13,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/users/:id',
           method: 'get',
           definition: {
-            operation: 'getUser',
             summary: 'Get user',
             params: z.object({
               id: z.string().uuid(),
@@ -42,7 +41,7 @@ describe('createOpenApiDocument', () => {
 
     expect(document.openapi).toBe('3.1.0')
     expect(document.info).toEqual({ title: 'Example API', version: '1.2.3' })
-    expect(document.paths['/api/users/{id}'].get.operationId).toBe('getUser')
+    expect(document.paths['/api/users/{id}'].get.operationId).toBe('getApiUsersById')
     expect(document.paths['/api/users/{id}'].get.parameters).toMatchObject([
       {
         name: 'id',
@@ -86,7 +85,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/users',
         method: 'post',
         definition: {
-          operation: 'createUser',
           body: z.object({
             name: z.string().min(1),
           }),
@@ -122,7 +120,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/uploads',
         method: 'post',
         definition: {
-          operation: 'createUpload',
           body: {
             'application/json': z.object({ name: z.string() }),
             'multipart/form-data': z.object({ name: z.string(), tag: z.array(z.string()) }),
@@ -166,7 +163,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/items',
         method: 'post',
         definition: {
-          operation: 'createItem',
           body: v.object({
             id: numberFromString,
           }),
@@ -205,7 +201,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/effect-items',
         method: 'post',
         definition: {
-          operation: 'createEffectItem',
           body: Schema.Struct({ name: Schema.String }),
           responses: { 200: Schema.Struct({ id: Schema.Number, name: Schema.String }) },
         },
@@ -241,7 +236,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/users/:id',
         method: 'get',
         definition: {
-          operation: 'getUser',
           params: z.object({ id: z.string().uuid() }),
           responses: { 200: User },
         },
@@ -270,7 +264,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/users/:id',
           method: 'get',
           definition: {
-            operation: 'getUser',
             params: z.object({ id: z.string().uuid() }),
             responses: {
               200: z.object({
@@ -329,7 +322,7 @@ describe('createOpenApiDocument', () => {
       UserExample: { value: { id: '12121212-1212-4121-8121-121212121212' } },
     })
     expect(document.paths['/api/users/{id}'].get).toMatchObject({
-      operationId: 'getUser',
+      operationId: 'getApiUsersById',
       externalDocs: { url: 'https://docs.example.com/users' },
       security: [{ bearerAuth: [] }],
       'x-owner': 'platform',
@@ -347,7 +340,7 @@ describe('createOpenApiDocument', () => {
     })
   })
 
-  it('generates fallback operation ids when operation is omitted', () => {
+  it('generates operation ids from the method and path', () => {
     const document = createOpenApiDocument([
       {
         path: '/api/users/:userId/posts/:postId',
@@ -371,27 +364,25 @@ describe('createOpenApiDocument', () => {
     )
   })
 
-  it('rejects duplicate operations', () => {
+  it('rejects duplicate generated operation ids', () => {
     expect(() => {
       createOpenApiDocument([
         {
           path: '/api/users',
           method: 'get',
           definition: {
-            operation: 'listUsers',
             responses: { 200: z.array(z.object({ id: z.string() })) },
           },
         },
         {
-          path: '/api/members',
+          path: '/api/users',
           method: 'get',
           definition: {
-            operation: 'listUsers',
             responses: { 200: z.array(z.object({ id: z.string() })) },
           },
         },
       ])
-    }).toThrow('Duplicate endpoint operation: listUsers')
+    }).toThrow('Duplicate endpoint operation: getApiUsers')
   })
 
   it('documents idempotency headers and framework Problem Details responses', () => {
@@ -400,7 +391,6 @@ describe('createOpenApiDocument', () => {
         path: '/api/items',
         method: 'post',
         definition: {
-          operation: 'createItem',
           idempotency: {
             enabled: true,
             headerName: 'X-Request-Key',
@@ -626,7 +616,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/export',
           method: 'get',
           definition: {
-            operation: 'exportUsers',
             responses: {
               200: { media: 'text/csv', description: 'CSV export' },
             },
@@ -650,7 +639,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/export',
           method: 'get',
           definition: {
-            operation: 'exportUsers',
             responses: {
               200: {
                 media: 'text/csv',
@@ -677,7 +665,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/export',
           method: 'get',
           definition: {
-            operation: 'exportUsers',
             responses: {
               200: { media: ['text/csv', 'application/json'] },
             },
@@ -697,7 +684,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/export',
           method: 'get',
           definition: {
-            operation: 'exportUsers',
             responses: {
               200: {
                 media: ['text/csv', 'application/json'],
@@ -730,7 +716,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/problem',
           method: 'get',
           definition: {
-            operation: 'getProblem',
             responses: {
               404: {
                 body: z.object({ type: z.string(), title: z.string() }),
@@ -765,7 +750,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/users/:id',
           method: 'get',
           definition: {
-            operation: 'getUser',
             params: z.object({ id: z.string() }),
             responses: { 200: z.object({ id: z.string() }) },
           },
@@ -786,7 +770,7 @@ describe('createOpenApiDocument', () => {
         {
           path: '/api/health',
           method: 'get',
-          definition: { operation: 'health', responses: { 200: z.object({ ok: z.boolean() }) } },
+          definition: { responses: { 200: z.object({ ok: z.boolean() }) } },
         },
       ])
 
@@ -799,7 +783,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/upload',
           method: 'post',
           definition: {
-            operation: 'createUpload',
             body: {
               'application/json': z.object({ name: z.string() }),
               'multipart/form-data': z.object({ name: z.string() }),
@@ -820,7 +803,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/export',
           method: 'get',
           definition: {
-            operation: 'exportUsers',
             responses: { 200: { media: ['text/csv', 'application/json'] } },
           },
         },
@@ -836,7 +818,7 @@ describe('createOpenApiDocument', () => {
         {
           path: '/api/export',
           method: 'get',
-          definition: { operation: 'exportUsers', responses: { 200: { media: 'text/csv' } } },
+          definition: { responses: { 200: { media: 'text/csv' } } },
         },
       ])
 
@@ -849,7 +831,6 @@ describe('createOpenApiDocument', () => {
           path: '/api/users',
           method: 'post',
           definition: {
-            operation: 'createUser',
             body: z.object({ name: z.string() }),
             responses: {
               201: z.object({ id: z.string() }),

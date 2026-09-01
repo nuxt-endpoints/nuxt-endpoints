@@ -10,7 +10,6 @@ const SerializedErrorResponse = z.object({
 })
 
 export default defineRouteHandler({
-  operation: 'getSerialized',
   validate: {
     query: z.object({ fail: z.literal('true').optional() }),
     response: { 200: SerializedResponse, 422: SerializedErrorResponse },

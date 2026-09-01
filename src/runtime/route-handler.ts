@@ -49,7 +49,6 @@ type CapturedRouteHandler<DEFINITION extends EndpointDefinition, ACTUAL_RETURN> 
 ) => ACTUAL_RETURN | Promise<ACTUAL_RETURN>
 
 type RouteHandlerInput<
-  OPERATION,
   PARAMS,
   QUERY,
   HEADERS,
@@ -62,7 +61,6 @@ type RouteHandlerInput<
   DEFINITION extends EndpointDefinition,
   ACTUAL_RETURN,
 > = {
-  operation?: OPERATION
   params?: PARAMS
   validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
   summary?: SUMMARY
@@ -73,7 +71,6 @@ type RouteHandlerInput<
 }
 
 type RuntimeMethodMetadata = {
-  operation?: string
   summary?: string
   description?: string
   tags?: string[]
@@ -116,7 +113,6 @@ type ValidationPropertyOf<Value, Key extends PropertyKey> = PropertyOf<
 >
 
 type EndpointDefinitionOf<Method, Params> = {
-  operation: PropertyOf<Method, 'operation'>
   params: Params
   query: ValidationPropertyOf<Method, 'query'>
   headers: ValidationPropertyOf<Method, 'headers'>
@@ -143,7 +139,6 @@ type ResolvedRuntimeMethodDefinition<
   Metadata extends RuntimeMethodMetadata,
   Validation extends RuntimeMethodValidation,
 > = {
-  operation: PropertyOf<Metadata, 'operation'>
   params: Params
   query: PropertyOf<Validation, 'query'>
   headers: PropertyOf<Validation, 'headers'>
@@ -227,7 +222,6 @@ export type EndpointRouteMethodsEventHandler<
  * keeps only NE's application-level context, idempotency, and response policy.
  */
 export function defineRouteHandler<
-  const OPERATION extends string | undefined = undefined,
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -239,7 +233,6 @@ export function defineRouteHandler<
   const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
     undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointContract<
-    OPERATION,
     PARAMS,
     QUERY,
     HEADERS,
@@ -256,7 +249,6 @@ export function defineRouteHandler<
 >(
   definition: ROUTE_DEFINITION &
     RouteHandlerInput<
-      OPERATION,
       PARAMS,
       QUERY,
       HEADERS,
@@ -272,7 +264,6 @@ export function defineRouteHandler<
 ): EndpointRouteEventHandler<
   ROUTE_DEFINITION &
     RouteHandlerInput<
-      OPERATION,
       PARAMS,
       QUERY,
       HEADERS,

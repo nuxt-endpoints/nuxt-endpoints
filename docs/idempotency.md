@@ -117,8 +117,8 @@ The storage lookup identity is a composite value:
 endpoint identity + trusted scope + client idempotency key
 ```
 
-Endpoint identity uses the actual HTTP method and normalized route identity,
-not only an optional operation name. This prevents two endpoints from sharing a
+Endpoint identity uses the actual HTTP method and normalized route identity.
+This prevents two endpoints from sharing a
 record accidentally. The Nuxt module must inject this route template and method
 into the runtime handler whenever idempotency is enabled, independently of
 whether OpenAPI generation is enabled. The raw request URL is not a substitute
@@ -224,56 +224,89 @@ response already declared for the same status, without replacing it.
 
 ## Public API decision
 
-The canonical API separates build-time contract metadata from request-time
-infrastructure while keeping one route definition:
+Three declaration shapes were considered.
+
+### A. Add idempotency to `defineEndpoint` runtime options
 
 ```ts
-export default defineRouteHandler(
-  {
-    operation: 'grantPoints',
-    validate: {
-      body: GrantPointsBody,
-      response: { 201: GrantPointsResult },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => respond(201, grantPoints(body)),
-  },
-  {
-    idempotency: {
-      storage: () => idempotencyStorage,
-      scope: ({ event }) => event.context.tenant.id,
-      authorization: ({ event }) => requirePermission(event, 'points:grant'),
-      fingerprint: ({ params, query, body, headers }) => ({
-        params,
-        query,
-        body,
-        currency: headers?.['x-currency'],
-      }),
-      leaseTtlMs: 60_000,
-      replayTtlMs: 86_400_000,
-      replayStatuses: [201],
-    },
-  },
-)
+defineEndpoint(definition, {
+  idempotency: { storage, scope },
+})
 ```
 
-The first argument is the handler-free graph consumed by build tooling.
-`enabled`, `headerName`, and `required` are enough for generated client and
-OpenAPI projections. The second argument is runtime-only; storage, scope,
-authorization, fingerprint functions, TTLs, and replay policy never enter
-generated types or the build-time contract provider.
+This resembles the existing response-validation option, but the generated
+client and OpenAPI need a type-level marker on the endpoint definition. Keeping
+the marker only in runtime options makes build-time discovery reconstruct state
+from a separate object, while exposing the whole runtime option would leak
+server-only storage callbacks into generated types.
 
-Literal `headerName` and `required` types are preserved, which lets generated
-calls distinguish required and optional keys. Build and server startup verify
-that idempotency metadata has matching runtime policy, so untyped JavaScript
-cannot make generated clients claim protection while leaving the handler
-unprotected.
+### B. Put the full configuration in the endpoint definition
 
-The callback context contains validated `event`, `params`, `query`,
+```ts
+defineEndpoint({
+  ...definition,
+  idempotency: { storage, scope },
+})
+```
+
+This is easy for discovery, but mixes infrastructure functions into the HTTP
+contract. The endpoint definition is imported during build and referenced by
+generated client types, so storage wiring should not become part of that
+surface.
+
+### C. Add an immutable endpoint method
+
+```ts
+export const endpoint = defineEndpoint({
+  body: GrantPointsBody,
+  responses: {
+    201: GrantPointsResult,
+  },
+}).idempotency({
+  storage: ({ event }) => event.context.idempotencyStorage,
+  scope: ({ event }) => event.context.tenant.id,
+  authorization: ({ event }) => requirePermission(event, 'points:grant'),
+  fingerprint: ({ params, query, body, headers }) => ({
+    params,
+    query,
+    body,
+    currency: headers?.['x-currency'],
+  }),
+  required: true,
+  leaseTtlMs: 60_000,
+  replayTtlMs: 86_400_000,
+  replayStatuses: [201],
+})
+```
+
+Decision: adopt C. `DefinedEndpoint.idempotency()` returns a new endpoint and
+does not mutate the original. The returned definition gains only serializable,
+client-safe metadata:
+
+```ts
+type EndpointIdempotencyMetadata<HeaderName extends string, Required extends boolean> = {
+  enabled: true
+  headerName: HeaderName
+  required: Required
+}
+```
+
+The method return type preserves the configured string and boolean literals;
+omitting `required` normalizes its metadata type to `false` rather than
+`boolean`. This is what lets generated calls distinguish required and optional
+keys.
+
+The storage resolver, scope resolver, authorization policy, fingerprint
+projection, TTLs, and replay-status policy stay in private server runtime
+options. This gives discovery enough information for generated client and
+OpenAPI output without exposing infrastructure callbacks.
+
+The metadata is method-generated and cannot be supplied directly to
+`defineEndpoint()`. Build and server startup also verify that metadata has a
+matching private runtime policy, so untyped JavaScript cannot make generated
+clients/OpenAPI claim idempotency while leaving the handler unprotected.
+
+The callback context contains the already validated `event`, `params`, `query`,
 `headers`, and `body`. Execution order is fixed:
 
 ```text
@@ -286,24 +319,148 @@ request validation
 -> handler only when acquired
 ```
 
-Central policy may provide runtime defaults; route-specific second-argument
-options override them. Contract metadata always stays with the route.
+Storage resolution must return an existing application-owned adapter; it must
+not open a connection per request. Applications can share one policy object or
+resolver across endpoints, while every endpoint remains explicitly opted in.
+
+Defaults:
+
+- `headerName`: `Idempotency-Key`;
+- `required`: `false`;
+- `leaseTtlMs`: `60_000`;
+- `replayTtlMs`: `86_400_000`;
+- `replayStatuses`: every successful `2xx` result returned by the handler;
+- `fingerprint`: validated params, query, and body with no headers/event state.
+
+`authorization` has no implicit default. Every idempotent endpoint must either
+supply a callback that runs on every request, including replay, or explicitly
+set `authorization: 'middleware'` to assert that Nitro middleware already made
+the full authorization decision. Authentication alone is not that assertion.
+
+When behavior depends on headers or other request state, `fingerprint` becomes
+an application requirement.
+
+The generated client accepts `idempotencyKey` outside the ordinary `headers`
+schema and maps it to the configured header. It is required in the client type
+when endpoint metadata says `required: true`, otherwise optional. The client
+never generates a key automatically because a retry must reuse the caller's
+same key rather than create one per HTTP attempt.
+
+Every generated runtime route, including the query adapter's route tables,
+carries `{ headerName, required }`. Declaring the configured header again in the
+ordinary endpoint `headers` schema is a case-insensitive discovery error; doing
+so would otherwise create two incompatible client inputs for one wire header.
+For an idempotent endpoint, a `headers` validator must therefore expose a
+JSON-Schema-convertible object with inspectable fixed properties; opaque
+Standard Schema validators are rejected because collision safety cannot be
+proved.
+The client also throws before sending if an untyped caller supplies both
+`idempotencyKey` and the configured header inside `headers`.
+
+TanStack Query and Infinite Query include `idempotencyKey` in their request key
+segment. This both preserves required keys when a getter request is reconstructed
+from its query key and prevents two different idempotent attempts from sharing
+one exact cache entry.
+
+When `required` is `true`, generated client options require `idempotencyKey`.
+When it is `false`, the field is optional; if the endpoint has no other required
+request input, the entire options argument remains optional.
+
+The automatic Problem Details response has this stable shape:
+
+```ts
+type IdempotencyProblem = {
+  type: 'about:blank'
+  title: string
+  status: 400 | 409 | 422
+  detail: string
+  code:
+    | 'IDEMPOTENCY_KEY_REQUIRED'
+    | 'IDEMPOTENCY_KEY_INVALID'
+    | 'IDEMPOTENCY_REQUEST_IN_FLIGHT'
+    | 'IDEMPOTENCY_KEY_REUSED'
+    | 'IDEMPOTENCY_LEASE_LOST'
+}
+```
+
+Because these problems use `type: 'about:blank'`, `title` is the standard HTTP
+status phrase (`Bad Request`, `Conflict`, or `Unprocessable Content`). The
+stable `code` and `detail` distinguish the idempotency-specific condition.
+
+The helper's `400`, `409`, and `422` failures are framework-managed request
+failures, like schema-validation `400` responses. They are deliberately not
+merged into the declared awaited result union. OpenAPI lists
+their `application/problem+json` representation while preserving any declared
+application response with the same status and a different media type.
+
+### Central runtime policy
+
+Decision (2026-08-15): the runtime options of `.idempotency()` are optional and
+resolve per item as endpoint override → central policy → library default.
+
+The original shape required `storage`, `scope`, and `authorization` on every
+endpoint. Those are application-wide in practice, and repeating them per route
+multiplies opportunities for security-relevant mistakes such as a mistyped
+scope resolver. It also pulled infrastructure references into contract-defining
+modules, which conflicts with build-time discovery evaluating those modules
+(see the contract-file separation decision in type-generation.md).
+
+The central policy is a convention file, `server/endpoints/idempotency.ts`,
+default-exporting `defineIdempotencyPolicy({ storage, scope, authorization,
+leaseTtlMs?, replayTtlMs? })`. The path can be overridden through the module
+option `endpoints.idempotency.policy`. The file is Nitro runtime code: it is
+bundled into the server and never evaluated by build-time discovery, so it can
+create real storage connections. `nuxt.config.ts` was rejected as the policy
+location because module options reach the runtime only through JSON
+serialization and cannot carry functions or closures; this matches the Nuxt
+convention split used by `app/router.options.ts`.
+
+Layering is deliberate:
+
+- Contract-side metadata stays endpoint-only: `headerName`, `required`,
+  `replayStatuses`, and `fingerprint` affect generated client types, OpenAPI,
+  or route-specific behavior. The policy cannot set them.
+- Runtime wiring is policy-defaulted and endpoint-overridable: `storage`,
+  `scope`, `authorization`, `leaseTtlMs`, `replayTtlMs`. Authorization remains
+  required at the policy level, so "no implicit authorization default" is
+  preserved — the explicitness moves to exactly one reviewed place, and
+  route-specific permission checks stay available as endpoint overrides.
+
+The "metadata implies a matching runtime policy" guarantee is enforced at
+Nitro startup. The route-contract registry contains portable metadata, not
+runtime callbacks, so the server plugin resolves the endpoint override and
+central policy together and fails before serving when `storage`, `scope`, or
+`authorization` is still missing, or when the policy file does not
+default-export a valid policy.
+Supplying idempotency metadata directly to `defineEndpoint()` remains
+rejected for the same reasons as before.
+
+Deferred extensions, recorded as open questions: an application-wide
+`headerName` default (conflicts with literal-type inference from the method),
+a policy-level `fingerprint` default (invites implicit global behavior), and
+multiple named policies (endpoint-level overrides cover the known cases).
 
 ## Runtime route metadata
 
-The always-installed server plugin resolves canonical route handlers at Nitro
-startup and attaches `{ method, routeTemplate }` through a private adapter
-hook. This runs even when OpenAPI is disabled. The hook is an implementation
-detail of the Nitro 2 compatibility layer and is not part of route authoring.
+The always-installed Nuxt Endpoints server plugin resolves endpoint handlers at
+Nitro startup and attaches `{ method, routeTemplate }` to the event-handler
+closure returned by `DefinedEndpoint.handler()`, not to the reusable endpoint
+definition. This attachment runs even when OpenAPI is disabled. If the same
+handler function is registered for two route identities, startup fails instead
+of overwriting metadata. Two handlers independently created from one endpoint
+definition remain valid because each has its own closure.
 
 Runtime execution refuses an idempotent request if metadata is missing rather
 than falling back to the raw URL and silently changing storage identity. During
-build-time discovery on Nitro 2, each canonical route module must be evaluated
-successfully. If Jiti evaluation fails or the default export does not expose
-metadata, the module reports a build error. Contract imports must therefore be
-deterministic; storage clients and request-time callbacks belong in the second
-argument or central runtime policy. Nitro 3 replaces this evaluation with its
-handler-free route-contract provider.
+build-time discovery, the module that defines each endpoint contract must be
+evaluated successfully — the route module for co-located contracts, or only
+the imported contract module when the route uses a separate contract file. If
+Jiti evaluation fails, or evaluated exports do not expose endpoint metadata,
+the module reports a build error because callbacks and metadata cannot be
+reconstructed safely from source text. Contract-defining modules may import
+resolver functions but must not create storage clients or connections at top
+level; with a central policy, contract-side `.idempotency()` arguments are
+fully serializable and this constraint becomes easy to satisfy.
 
 ## Completion and failure policy
 

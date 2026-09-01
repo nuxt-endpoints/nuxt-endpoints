@@ -52,11 +52,10 @@ source, playground examples, and tests before being used in this ledger.
 | DevTools endpoint inspector       | Adopt after APIs stabilize            | Show discovered contracts without sensitive payloads                               |
 | HMR type updates                  | Already part of generated-client work | Optional adapter templates must share the regeneration path                        |
 | CLI action scaffold               | Low priority                          | Revisit after endpoint and adapter APIs stabilize                                  |
-| Grouped action namespace          | No immediate need                     | Named endpoint operations provide the main ergonomics                              |
+| Grouped action namespace          | No immediate need                     | Typed path-and-method endpoint calls provide the main ergonomics                   |
 
 The product-level outcomes are maintained in the
-[Nuxt Endpoints roadmap](./roadmap.md). TanStack-specific decisions are in the
-[TanStack Query adapter design](./tanstack-query-adapter.md).
+[Nuxt Endpoints roadmap](./roadmap.md). Vue Query usage is documented in the public guide.
 
 ## Verified streaming findings
 

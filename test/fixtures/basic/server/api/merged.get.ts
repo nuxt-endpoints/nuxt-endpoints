@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { defineRouteHandler } from '../../../../../src/runtime'
 
 export default defineRouteHandler({
-  operation: 'getMerged',
   validate: {
     query: z.object({ id: z.coerce.number<string>() }),
     response: {

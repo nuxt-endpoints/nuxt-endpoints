@@ -90,9 +90,7 @@ describe('defineEndpoint handler types', () => {
       },
     })
 
-    const broadlyTyped: import('../../src/runtime').EndpointDefinition = {
-      operation: 'broad-definition',
-    }
+    const broadlyTyped: import('../../src/runtime').EndpointDefinition = {}
     defineEndpoint(broadlyTyped)
   })
 
@@ -111,7 +109,6 @@ describe('defineEndpoint handler types', () => {
 
   it('types request context from validator outputs', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: schema<{ id: string }, { id: number }>(),
       query: schema<{ include?: string }>(),
       responses: { 200: schema<{ id: number; name: string }>() },
@@ -127,7 +124,6 @@ describe('defineEndpoint handler types', () => {
 
   it('exposes the H3 event and normalized web request in the handler context', () => {
     const endpoint = defineEndpoint({
-      operation: 'getCurrentUser',
       responses: { 200: schema<{ id: number }>() },
     })
 
@@ -141,7 +137,6 @@ describe('defineEndpoint handler types', () => {
 
   it('accepts plain returns as the 200 response', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: { 200: schema<{ id: number; name: string }>() },
     })
 
@@ -152,7 +147,6 @@ describe('defineEndpoint handler types', () => {
 
   it('rejects plain returns that do not match the 200 response', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: { 200: schema<{ id: number; name: string }>() },
     })
 
@@ -164,7 +158,6 @@ describe('defineEndpoint handler types', () => {
 
   it('accepts declared non-200 responses', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -178,7 +171,6 @@ describe('defineEndpoint handler types', () => {
 
   it('preserves the success return type for Nitro InternalApi generation', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -197,7 +189,6 @@ describe('defineEndpoint handler types', () => {
 
   it('rejects undeclared response statuses', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -212,7 +203,6 @@ describe('defineEndpoint handler types', () => {
 
   it('rejects non-200 response bodies that do not match the declared response', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -227,7 +217,6 @@ describe('defineEndpoint handler types', () => {
 
   it('does not require handlers to exhaust every declared response', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       responses: {
         200: schema<{ id: number; name: string }>(),
         400: schema<{ message: string }>(),
@@ -242,7 +231,6 @@ describe('defineEndpoint handler types', () => {
 
   it('allows handler-inferred responses when no response contract is declared', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: schema<{ id: string }, { id: number }>(),
     })
 
@@ -253,7 +241,6 @@ describe('defineEndpoint handler types', () => {
 
   it('allows inferred status responses when no response contract is declared', () => {
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: schema<{ id: string }, { id: number }>(),
     })
 

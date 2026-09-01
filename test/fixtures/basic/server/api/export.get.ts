@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { defineRouteHandler } from '../../../../../src/runtime'
 
 export default defineRouteHandler({
-  operation: 'exportUsers',
   validate: {
     query: z.object({ delimiter: z.string().optional() }),
     response: {

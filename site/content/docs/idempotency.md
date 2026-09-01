@@ -12,7 +12,6 @@ The canonical route definition contains serializable build-time metadata:
 
 ```ts
 export default defineRouteHandler({
-  operation: 'grantPoints',
   validate: {
     body: z.object({
       userId: z.string(),
@@ -77,7 +76,6 @@ handler that reads undeclared input:
 
 ```ts
 export default defineRouteHandler({
-  operation: 'publishItem',
   params: z.object({ id: z.string() }),
   idempotency: {
     enabled: true,

@@ -33,7 +33,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(html).toContain('query-user: Tom')
       expect(payload).toContain('nuxt-endpoints-vue-query')
       expect(payload).toContain('queryHash')
-      expect(payload).toContain('getUser')
+      expect(payload).toContain('\\u002Fapi\\u002Fusers\\u002F:id')
       expect(payload).toContain('Tom')
     })
 

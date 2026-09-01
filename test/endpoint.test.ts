@@ -96,7 +96,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: numberParams,
       responses: { 200: userResponse },
     })
@@ -114,7 +113,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint } = await import('./internal-runtime')
 
     const handler = defineEndpoint({
-      operation: 'getMergedUser',
       params: numberParams,
       responses: { 200: userResponse },
       handler: ({ params }) => ({ id: params.id, name: 'Tom' }),
@@ -129,7 +127,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
-      operation: 'getSplitUser',
       params: numberParams,
       responses: { 200: userResponse },
     })
@@ -148,7 +145,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
-      operation: 'getCurrentUser',
       responses: { 200: userResponse },
     })
     const requestEvent = createEvent({})
@@ -166,7 +162,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: numberParams,
       responses: {
         200: userResponse,
@@ -190,7 +185,6 @@ describe('DefinedEndpoint', () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 
     const endpoint = defineEndpoint({
-      operation: 'getUser',
       params: numberParams,
       responses: { 200: userResponse },
     })
@@ -217,7 +211,6 @@ describe('DefinedEndpoint', () => {
 
     const endpoint = defineEndpoint(
       {
-        operation: 'getUser',
         responses: { 200: strictUserResponse },
       },
       { validation: { response: true } },
@@ -245,7 +238,6 @@ describe('DefinedEndpoint', () => {
     // definition time as well.
     expect(() =>
       defineEndpoint({
-        operation: 'getUser',
         response: userResponse,
       } as never),
     ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
@@ -279,7 +271,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: 'text/csv', body: userResponse } as never,
         },
@@ -292,7 +283,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: [] },
         },
@@ -305,7 +295,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { media: ['text/csv', ''] },
         },
@@ -384,7 +373,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { body: userResponse, contentType: 123 as never },
         },
@@ -397,7 +385,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { body: userResponse, contentType: 'text/csv' },
         },
@@ -406,7 +393,6 @@ describe('DefinedEndpoint', () => {
 
     expect(() =>
       defineEndpoint({
-        operation: 'exportUsers',
         responses: {
           200: { body: userResponse, contentType: 'text/csv' },
         },
