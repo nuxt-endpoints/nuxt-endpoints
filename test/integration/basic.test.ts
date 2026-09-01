@@ -124,10 +124,26 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       // a local route never does.
       const body = new FormData()
       body.append('name', 'Multipart')
+      body.append('file', new File(['contents'], 'upload.txt', { type: 'text/plain' }))
 
       await expect($fetch('/api/upload', { method: 'POST', body })).resolves.toEqual({
         name: 'Multipart',
         bodyMediaType: 'multipart/form-data',
+      })
+    })
+
+    it('documents a Zod file as a constrained binary multipart field', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const file =
+        schema.paths['/api/upload'].post.requestBody.content['multipart/form-data'].schema
+          .properties.file
+
+      expect(file).toMatchObject({
+        type: 'string',
+        format: 'binary',
+        contentEncoding: 'binary',
+        contentMediaType: 'text/plain',
+        maxLength: 5000,
       })
     })
 

@@ -53,7 +53,7 @@ describe('createOpenApiDocument', () => {
         name: 'includeAge',
         in: 'query',
         required: false,
-        schema: { type: ['boolean', 'null'] },
+        schema: { type: 'boolean' },
       },
     ])
     expect(document.paths['/api/users/{id}'].get.responses[200]).toMatchObject({
@@ -104,6 +104,7 @@ describe('createOpenApiDocument', () => {
         'application/json': {
           schema: {
             type: 'object',
+            additionalProperties: false,
             required: ['name'],
             properties: {
               name: { type: 'string', minLength: 1 },
@@ -137,6 +138,7 @@ describe('createOpenApiDocument', () => {
         'application/json': {
           schema: {
             type: 'object',
+            additionalProperties: false,
             required: ['name'],
             properties: { name: { type: 'string' } },
           },
@@ -144,6 +146,7 @@ describe('createOpenApiDocument', () => {
         'multipart/form-data': {
           schema: {
             type: 'object',
+            additionalProperties: false,
             required: ['name', 'tag'],
             properties: {
               name: { type: 'string' },
@@ -224,10 +227,12 @@ describe('createOpenApiDocument', () => {
   })
 
   it('emits components for named Zod schemas', () => {
+    const Profile = z.object({ displayName: z.string() }).meta({ id: 'Profile' })
     const User = z
       .object({
         id: z.string().uuid(),
         name: z.string(),
+        profile: Profile,
       })
       .meta({ id: 'User' })
 
@@ -249,11 +254,17 @@ describe('createOpenApiDocument', () => {
     })
     expect(document.components?.schemas?.User).toMatchObject({
       type: 'object',
-      required: ['id', 'name'],
+      required: ['id', 'name', 'profile'],
       properties: {
         id: { type: 'string', format: 'uuid' },
         name: { type: 'string' },
+        profile: { $ref: '#/components/schemas/Profile' },
       },
+    })
+    expect(document.components?.schemas?.Profile).toMatchObject({
+      type: 'object',
+      required: ['displayName'],
+      properties: { displayName: { type: 'string' } },
     })
   })
 
@@ -651,6 +662,7 @@ describe('createOpenApiDocument', () => {
 
       expect(document.paths['/api/export'].get.responses[200].content['text/csv'].schema).toEqual({
         type: 'object',
+        additionalProperties: false,
         required: ['id', 'name'],
         properties: {
           id: { type: 'string' },
@@ -702,6 +714,7 @@ describe('createOpenApiDocument', () => {
       expect(content['text/csv'].schema).toEqual({ type: 'string', contentEncoding: 'binary' })
       expect(content['application/json'].schema).toEqual({
         type: 'object',
+        additionalProperties: false,
         required: ['id', 'name'],
         properties: {
           id: { type: 'string' },
