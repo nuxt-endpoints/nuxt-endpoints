@@ -446,9 +446,9 @@ type EndpointAcceptClientOptions<DEFINITION extends EndpointDefinition> = [
 type EndpointIdempotencyClientOptions<DEFINITION extends EndpointDefinition> = DEFINITION extends {
   idempotency: { required: true }
 }
-  ? { idempotencyKey: string }
+  ? { idempotencyKey?: string | true }
   : DEFINITION extends { idempotency: EndpointIdempotencyMetadata }
-    ? { idempotencyKey?: string }
+    ? { idempotencyKey?: string | true }
     : {}
 
 type InferOutputOrUndefined<SCHEMA> = SCHEMA extends ValidatorSchema

@@ -13,6 +13,8 @@ export type {
   EndpointAsyncDataState,
   EndpointAsyncDataStatus,
   EndpointCall,
+  EndpointCallMutationOptions,
+  EndpointCallQueryOptions,
   EndpointCallRuntime,
   EndpointClient,
   EndpointClientFeatureOptions,
@@ -106,8 +108,8 @@ export { defineRouteHandler } from './route-handler'
 export type {
   EndpointDefinitionFromRoute,
   EndpointHandlerReturnFromRoute,
+  EndpointRouteEvent,
   EndpointRouteMethodsEventHandler,
-  RouteHandlerRuntimeOptions,
 } from './route-handler'
 export { defineEndpointRuntime } from './endpoint-runtime'
 export type { EndpointOpenApiRuntime, EndpointRuntime } from './endpoint-runtime'

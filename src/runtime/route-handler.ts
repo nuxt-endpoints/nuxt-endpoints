@@ -1,5 +1,4 @@
 import type {
-  CapturedEndpointHandler,
   DeepReadonly,
   EndpointBodyMediaTypeMap,
   EndpointContext,
@@ -16,7 +15,6 @@ import {
   type AssembledEndpointContract,
   type DefinedEndpoint,
   type EndpointHandlerSuccessBody,
-  type EndpointIdempotencyOptions,
   type EndpointRuntimeOptions,
   validateEndpointDefinition,
 } from './endpoint'
@@ -36,6 +34,19 @@ type RouteContractIdempotency = {
   scope?: never
   authorization?: never
 }
+
+export type EndpointRouteEvent<DEFINITION extends EndpointDefinition = EndpointDefinition> =
+  RuntimeEvent & {
+    readonly routeDef: DEFINITION
+    readonly validated: Pick<EndpointContext<DEFINITION>, 'params' | 'query' | 'headers' | 'body'>
+    readonly respond: EndpointContext<DEFINITION>['respond']
+    readonly bodyMediaType: EndpointContext<DEFINITION>['bodyMediaType']
+    readonly responseMediaType: EndpointContext<DEFINITION>['responseMediaType']
+  }
+
+type CapturedRouteHandler<DEFINITION extends EndpointDefinition, ACTUAL_RETURN> = (
+  event: EndpointRouteEvent<DEFINITION>,
+) => ACTUAL_RETURN | Promise<ACTUAL_RETURN>
 
 type RouteHandlerInput<
   OPERATION,
@@ -58,7 +69,7 @@ type RouteHandlerInput<
   description?: DESCRIPTION
   tags?: TAGS
   idempotency?: IDEMPOTENCY & RouteContractIdempotency
-  handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
+  handler: CapturedRouteHandler<DEFINITION, ACTUAL_RETURN>
 }
 
 type RuntimeMethodMetadata = {
@@ -78,14 +89,7 @@ type RuntimeMethodValidation = RouteValidation<
 
 type RuntimeMethodDefinition = RuntimeMethodMetadata & {
   validate?: RuntimeMethodValidation
-  handler: (context: RuntimeMethodContext) => unknown
-}
-
-type RuntimeMethodContext = EndpointContext<any> & {
-  params: any
-  query: any
-  headers: any
-  body: any
+  handler: (event: EndpointRouteEvent<any>) => unknown
 }
 
 type RuntimeMethodsDefinition = {
@@ -158,7 +162,7 @@ type InferredRuntimeMethod<
   ActualReturn,
 > = Metadata & {
   validate?: Validation
-  handler: CapturedEndpointHandler<
+  handler: CapturedRouteHandler<
     ResolvedRuntimeMethodDefinition<Params, Metadata, Validation>,
     ActualReturn
   >
@@ -209,11 +213,6 @@ export type EndpointHandlerReturnFromRoute<
 type EndpointRouteEventHandler<Definition, Return> = ((event: RuntimeEvent) => Promise<Return>) & {
   readonly '~routeDef': Definition
 }
-
-export type RouteHandlerRuntimeOptions<Definition extends EndpointDefinition = EndpointDefinition> =
-  EndpointRuntimeOptions<Definition> & {
-    idempotency?: EndpointIdempotencyOptions<Definition>
-  }
 
 export type EndpointRouteMethodsEventHandler<
   Definition,
@@ -270,7 +269,6 @@ export function defineRouteHandler<
       DEFINITION,
       ACTUAL_RETURN
     >,
-  options?: RouteHandlerRuntimeOptions<DEFINITION>,
 ): EndpointRouteEventHandler<
   ROUTE_DEFINITION &
     RouteHandlerInput<
@@ -344,7 +342,6 @@ export function defineRouteHandler<
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
     delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
   },
-  options?: RouteHandlerRuntimeOptions,
 ): EndpointRouteMethodsEventHandler<
   Definition & {
     params?: Params
@@ -358,23 +355,27 @@ export function defineRouteHandler<
 >
 export function defineRouteHandler(
   definition: RuntimeMethodsDefinition | (RuntimeMethodDefinition & { params?: ValidatorSchema }),
-  options?: RouteHandlerRuntimeOptions,
 ): unknown {
   if ('handler' in definition && typeof definition.handler === 'function') {
-    const endpoint = createEndpoint(toEndpointDefinition(definition), options)
-    return Object.assign(defineEndpointHandler(endpoint, definition.handler), {
-      '~routeDef': definition,
-    })
+    const contract = toEndpointDefinition(definition)
+    const endpoint = createEndpoint(contract)
+    return Object.assign(
+      defineEndpointHandler(endpoint, (context) =>
+        definition.handler(toEndpointRouteEvent(context, contract)),
+      ),
+      { '~routeDef': definition },
+    )
   }
 
   const methodsDefinition = definition as RuntimeMethodsDefinition
   const endpoints: Record<string, unknown> = {}
-  const handlers: Record<string, (context: RuntimeMethodContext) => unknown> = {}
+  const handlers: Record<string, (context: EndpointContext<any>) => unknown> = {}
   for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
     const entry = methodsDefinition[method]
     if (!entry) continue
-    endpoints[method] = createEndpoint(toEndpointDefinition(entry, definition.params), options)
-    handlers[method] = entry.handler
+    const contract = toEndpointDefinition(entry, definition.params)
+    endpoints[method] = createEndpoint(contract)
+    handlers[method] = (context) => entry.handler(toEndpointRouteEvent(context, contract))
   }
   return Object.assign(
     defineEndpointMethodHandlers(defineEndpointMethods(endpoints as never), handlers as never),
@@ -382,20 +383,41 @@ export function defineRouteHandler(
   ) as EndpointRouteMethodsEventHandler<RuntimeMethodsDefinition>
 }
 
-function createEndpoint(
-  definition: EndpointDefinition,
-  options: RouteHandlerRuntimeOptions | undefined,
-): DefinedEndpoint<EndpointDefinition> {
+function toEndpointRouteEvent<DEFINITION extends EndpointDefinition>(
+  context: EndpointContext<DEFINITION>,
+  routeDef: DEFINITION,
+): EndpointRouteEvent<DEFINITION> {
+  return Object.assign(context.event, {
+    routeDef,
+    validated: {
+      params: context.params,
+      query: context.query,
+      headers: context.headers,
+      body: context.body,
+    },
+    respond: context.respond,
+    bodyMediaType: context.bodyMediaType,
+    responseMediaType: context.responseMediaType,
+  })
+}
+
+function createEndpoint(definition: EndpointDefinition): DefinedEndpoint<EndpointDefinition> {
   validateEndpointDefinition(definition)
+  const options = routeHandlerRuntimeOptions(definition)
   const { idempotency, ...contract } = definition
   const endpoint = defineEndpoint(contract, options)
   return idempotency
     ? endpoint.idempotency({
-        ...options?.idempotency,
         headerName: idempotency.headerName,
         required: idempotency.required,
       })
     : endpoint
+}
+
+function routeHandlerRuntimeOptions(definition: EndpointDefinition): EndpointRuntimeOptions {
+  return {
+    validation: { response: definition.responses !== undefined },
+  }
 }
 
 function toEndpointDefinition(

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import * as publicRuntime from '../src/runtime'
 import { defineRouteHandler } from '../src/runtime'
+import type { EndpointRouteEvent } from '../src/runtime'
 
 async function requestRoute(
   handler: Parameters<ReturnType<typeof createRouter>['use']>[1],
@@ -24,7 +25,9 @@ describe('canonical defineRouteHandler compatibility adapter', () => {
       validate: {
         response: { 200: z.object({ id: z.number() }) },
       },
-      handler: ({ params }: { params: { id: number } }) => ({ id: params.id }),
+      handler: (event: EndpointRouteEvent<any>) => ({
+        id: (event.validated.params as { id: number }).id,
+      }),
     }
     const handler = defineRouteHandler(definition)
 
@@ -44,7 +47,7 @@ describe('canonical defineRouteHandler compatibility adapter', () => {
           body: z.object({ value: z.string() }),
           response: { 201: z.object({ value: z.string() }) },
         },
-        handler: ({ body, respond }) => respond(201, { value: body.value }),
+        handler: (event) => event.respond(201, { value: event.validated.body.value }),
       },
     })
 

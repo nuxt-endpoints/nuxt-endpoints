@@ -13,7 +13,7 @@ export default defineRouteHandler({
       200: z.object({ id: z.string(), source: z.literal('custom-route') }),
     },
   },
-  handler: ({ query, respond }) => {
-    return respond(200, { id: query.id, source: 'custom-route' })
+  handler: (event) => {
+    return event.respond(200, { id: event.validated.query.id, source: 'custom-route' })
   },
 })

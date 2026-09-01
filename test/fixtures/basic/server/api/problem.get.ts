@@ -12,8 +12,8 @@ export default defineRouteHandler({
       },
     },
   },
-  handler: ({ respond }) =>
-    respond(404, {
+  handler: (event) =>
+    event.respond(404, {
       type: 'https://example.com/probs/not-found',
       title: 'Not Found',
       status: 404,

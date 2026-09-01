@@ -7,6 +7,7 @@ import type {
   EndpointFetcherRuntime,
   EndpointOperation,
   EndpointOperationAliasKey,
+  EndpointRequestFunctions,
   EndpointResultData,
   EndpointRouteEntry,
   RouteResponseBody,
@@ -427,20 +428,49 @@ function buildMutationOptionsObject(
   const fetcher = clientOptions.fetcher ?? clientOptions.captureFetcher?.()
   const operation = route.operation as string
   const mutationKey: EndpointQueryKey = requestKeyPrefix(operation, mode)
+  const requests = new WeakMap<object, EndpointRequestFunctions>()
+  let voidRequest: EndpointRequestFunctions | undefined
 
   const mutationFn = (variables: unknown) => {
     const requestOptions = (variables as Record<string, unknown>) ?? {}
-    const request = createEndpointRequest(route, requestOptions, { fetcher })
+    const variableIdentity =
+      (typeof variables === 'object' && variables !== null) || typeof variables === 'function'
+        ? (variables as object)
+        : undefined
+    const request = variableIdentity
+      ? (requests.get(variableIdentity) ??
+        createEndpointRequest(route, requestOptions, { fetcher }))
+      : (voidRequest ?? createEndpointRequest(route, requestOptions, { fetcher }))
 
-    if (mode === 'result') {
-      return request.result().then((result) => ({
-        status: result.status,
-        ok: result.ok,
-        body: result.body,
-      }))
+    if (variableIdentity) {
+      requests.set(variableIdentity, request)
+    } else {
+      voidRequest = request
     }
 
-    return request.data()
+    const release = () => {
+      if (variableIdentity) {
+        requests.delete(variableIdentity)
+      } else if (voidRequest === request) {
+        voidRequest = undefined
+      }
+    }
+
+    if (mode === 'result') {
+      return request.result().then((result) => {
+        release()
+        return {
+          status: result.status,
+          ok: result.ok,
+          body: result.body,
+        }
+      })
+    }
+
+    return request.data().then((data) => {
+      release()
+      return data
+    })
   }
 
   return { mutationKey, mutationFn }

@@ -19,5 +19,6 @@ export default defineRouteHandler({
       201: User,
     },
   },
-  handler: ({ body, respond }) => respond(201, { id: 101, name: body.name, age: body.age }),
+  handler: (event) =>
+    event.respond(201, { id: 101, name: event.validated.body.name, age: event.validated.body.age }),
 })

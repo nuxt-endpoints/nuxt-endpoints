@@ -73,6 +73,25 @@ describe('DefinedEndpoint', () => {
     setHeaders.mockClear()
   })
 
+  it('passes a validated H3 event through defineRouteHandler', async () => {
+    const { defineRouteHandler } = await import('../src/runtime')
+    const definition = {
+      params: numberParams,
+      handler: (event: any) => ({
+        id: event.validated.params.id,
+        ownsContract: event.routeDef.params === numberParams,
+        isEvent: !('event' in event),
+      }),
+    }
+
+    const handler = defineRouteHandler(definition)
+    await expect(handler(createEvent({ params: { id: '42' } }))).resolves.toEqual({
+      id: 42,
+      ownsContract: true,
+      isEvent: true,
+    })
+  })
+
   it('passes validated request data into the handler', async () => {
     const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
 

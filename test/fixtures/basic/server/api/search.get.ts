@@ -12,5 +12,5 @@ export default defineRouteHandler({
       }),
     },
   },
-  handler: ({ query }) => ({ items: [query.q] }),
+  handler: (event) => ({ items: [event.validated.query.q] }),
 })

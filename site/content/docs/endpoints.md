@@ -21,9 +21,10 @@ export default defineRouteHandler({
       404: z.object({ message: z.string() }),
     },
   },
-  handler: ({ params, query, respond }) => {
+  handler: (event) => {
+    const { params, query } = event.validated
     const user = findUser(params.id, query.include)
-    return user ?? respond(404, { message: 'Not found' })
+    return user ?? event.respond(404, { message: 'Not found' })
   },
 })
 ```
@@ -73,8 +74,8 @@ export default defineRouteHandler({
     validate: {
       response: { 200: User, 404: z.object({ message: z.string() }) },
     },
-    handler: ({ params, respond }) => {
-      return findUser(params.id) ?? respond(404, { message: 'Not found' })
+    handler: (event) => {
+      return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
     },
   },
   put: {
@@ -83,7 +84,7 @@ export default defineRouteHandler({
       body: z.object({ name: z.string() }),
       response: { 200: User },
     },
-    handler: ({ params, body }) => updateUser(params.id, body),
+    handler: (event) => updateUser(event.validated.params.id, event.validated.body),
   },
 })
 ```
@@ -93,16 +94,15 @@ form in a bare file such as `users.ts`. Mixing a multi-method definition with
 a method-suffixed filename fails generation because the remaining methods
 would be unreachable.
 
-## Handler context
+## Handler event
 
-The compatibility adapter currently supplies:
+The handler receives the native H3 event, extended with the endpoint contract:
 
-- `params`, `query`, `headers`, and `body`: parsed schema outputs.
-- `bodyMediaType`: selected request media type for a body map.
-- `responseMediaType`: negotiated media response type.
-- `respond(status, body, options?)`: typed status response.
-- `event`: the native H3 event.
-- `request`: a normalized Web `Request`.
+- `event.validated.params`, `.query`, `.headers`, and `.body`: parsed schema outputs.
+- `event.bodyMediaType`: selected request media type for a body map.
+- `event.responseMediaType`: negotiated media response type.
+- `event.respond(status, body, options?)`: typed status response.
+- the usual H3 event context and request properties remain directly available.
 
 ```ts
 export default defineRouteHandler({
@@ -113,11 +113,12 @@ export default defineRouteHandler({
       409: z.object({ message: z.string() }),
     },
   },
-  handler: async ({ body, respond }) => {
+  handler: async (event) => {
+    const { body } = event.validated
     if (await nameExists(body.name)) {
-      return respond(409, { message: 'Already exists' })
+      return event.respond(409, { message: 'Already exists' })
     }
-    return respond(201, await createUser(body))
+    return event.respond(201, await createUser(body))
   },
 })
 ```
@@ -128,21 +129,16 @@ response contract.
 
 ## Response validation
 
-Response schemas always drive types and OpenAPI. Runtime response validation is
-opt-in because it adds parsing work to every response:
+Response schemas drive types, OpenAPI, and runtime response validation. A
+declared response is validated automatically before it is serialized:
 
 ```ts
-export default defineRouteHandler(
-  {
-    validate: {
-      response: { 200: z.object({ createdAt: z.date() }) },
-    },
-    handler: () => ({ createdAt: new Date() }),
+export default defineRouteHandler({
+  validate: {
+    response: { 200: z.object({ createdAt: z.date() }) },
   },
-  {
-    validation: { response: true },
-  },
-)
+  handler: () => ({ createdAt: new Date() }),
+})
 ```
 
 The server value is validated as `Date`; generated HTTP clients see the JSON
@@ -163,8 +159,8 @@ export default defineRouteHandler({
     },
     response: { 201: z.object({ ok: z.literal(true) }) },
   },
-  handler: ({ body, bodyMediaType, respond }) => {
-    return respond(201, { ok: true })
+  handler: (event) => {
+    return event.respond(201, { ok: true })
   },
 })
 ```
@@ -185,10 +181,10 @@ export default defineRouteHandler({
       404: z.object({ message: z.string() }),
     },
   },
-  handler: ({ responseMediaType, respond }) => {
+  handler: (event) => {
     const body =
-      responseMediaType === 'application/json' ? JSON.stringify(rows) : createCsvStream(rows)
-    return respond(200, body)
+      event.responseMediaType === 'application/json' ? JSON.stringify(rows) : createCsvStream(rows)
+    return event.respond(200, body)
   },
 })
 ```
@@ -198,34 +194,28 @@ Use `.raw()` for routes whose live stream or headers matter. See
 
 ## Idempotency metadata and runtime policy
 
-The first argument contains build-time metadata only. Request-time functions
-belong in the optional second argument or the application-wide endpoint
-runtime file:
+The route definition contains build-time metadata only. Request-time functions
+belong in the application-wide endpoint runtime file:
 
 ```ts
-export default defineRouteHandler(
-  {
-    operation: 'createPayment',
-    validate: {
-      body: PaymentInput,
-      response: { 201: Payment },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => respond(201, createPayment(body)),
+export default defineRouteHandler({
+  operation: 'createPayment',
+  validate: {
+    body: PaymentInput,
+    response: { 201: Payment },
   },
-  {
-    idempotency: {
-      storage: () => storage,
-      scope: ({ event }) => event.context.user.id,
-      authorization: 'middleware',
-    },
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
   },
-)
+  handler: (event) => event.respond(201, createPayment(event.validated.body)),
+})
 ```
+
+The central policy supplies `storage`, `scope`, and `authorization`. Putting
+those callbacks in the route definition is rejected so contract discovery
+never evaluates application runtime dependencies during the build.
 
 For application-wide policy and production storage requirements, see
 [Idempotency](/docs/idempotency).
@@ -252,8 +242,8 @@ export default defineRouteHandler({
   operation: userContract.operation,
   params: userContract.params,
   validate: { response: userContract.responses },
-  handler: ({ params, respond }) => {
-    return findUser(params.id) ?? respond(404, { message: 'Not found' })
+  handler: (event) => {
+    return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
   },
 })
 ```

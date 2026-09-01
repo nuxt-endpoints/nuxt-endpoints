@@ -33,15 +33,15 @@ export default defineRouteHandler({
       404: ErrorResponse,
     },
   },
-  handler: ({ params, query, headers, respond }) => {
-    const user = users[params.id as keyof typeof users]
+  handler: (event) => {
+    const user = users[event.validated.params.id as keyof typeof users]
 
-    if (!user) return respond(404, { message: 'User not found' })
+    if (!user) return event.respond(404, { message: 'User not found' })
     return {
       id: user.id,
       name: user.name,
-      age: query.includeAge ? user.age : undefined,
-      clientVersion: headers['x-client-version'],
+      age: event.validated.query.includeAge ? user.age : undefined,
+      clientVersion: event.validated.headers['x-client-version'],
     }
   },
 })

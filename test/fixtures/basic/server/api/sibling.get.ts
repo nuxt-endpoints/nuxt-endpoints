@@ -7,5 +7,5 @@ export default defineRouteHandler({
     query: siblingContract.query,
     response: siblingContract.responses,
   },
-  handler: ({ query }) => ({ name: query.name, sibling: true }),
+  handler: (event) => ({ name: event.validated.query.name, sibling: true }),
 })

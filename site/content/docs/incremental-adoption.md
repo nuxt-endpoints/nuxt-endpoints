@@ -44,8 +44,8 @@ export default defineRouteHandler({
       }),
     },
   },
-  handler: ({ params }) => {
-    return { id: params.id, name: 'Tom' }
+  handler: (event) => {
+    return { id: event.validated.params.id, name: 'Tom' }
   },
 })
 ```

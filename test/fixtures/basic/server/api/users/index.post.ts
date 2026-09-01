@@ -18,10 +18,10 @@ export default defineRouteHandler({
       201: User,
     },
   },
-  handler: ({ body, respond }) => {
-    return respond(201, {
+  handler: (event) => {
+    return event.respond(201, {
       id: 1,
-      name: body.name,
+      name: event.validated.body.name,
     })
   },
 })

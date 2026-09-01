@@ -13,7 +13,10 @@ export default defineRouteHandler({
       201: z.object({ name: z.string(), bodyMediaType: z.string() }),
     },
   },
-  handler: ({ body, bodyMediaType, respond }) => {
-    return respond(201, { name: body.name, bodyMediaType })
+  handler: (event) => {
+    return event.respond(201, {
+      name: event.validated.body.name,
+      bodyMediaType: event.bodyMediaType,
+    })
   },
 })

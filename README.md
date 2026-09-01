@@ -29,9 +29,10 @@ export default defineRouteHandler({
       404: z.object({ message: z.string() }),
     },
   },
-  handler: ({ params, respond }) => {
+  handler: (event) => {
+    const { params } = event.validated
     const user = findUser(params.id) // params.id is a number — already validated and coerced
-    if (!user) return respond(404, { message: 'Not found' })
+    if (!user) return event.respond(404, { message: 'Not found' })
     return user
   },
 })
@@ -45,17 +46,11 @@ That single definition gives you:
 
 ```vue
 <script setup lang="ts">
-// Success-body call: request options and response are inferred
-const user = await $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '1' },
-})
-
-// Status-typed call: branch on declared responses
+// The lazy request resolves to the declared status union.
 const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '1' },
-}).result()
+})
 
 if (result.status === 404) {
   result.body.message // typed as the 404 schema
@@ -72,8 +67,8 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Schema-agnostic: Zod v4, Valibot, and Effect Schema (Standard Schema based)
 - ✅ Request validation for `params`, `query`, `headers`, and `body`
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
-- ✅ Generated `$endpoint` client: success-body calls, `.result()`, `.raw()`
-- ✅ `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
+- ✅ Lazy `$endpoint` request objects: status unions, `.raw()`, `.queryOptions()`, `.mutationOptions()`
+- ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
 - ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the query factories forward the request the way `useFetch` does
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Optional named operations (`$endpoint.getUser(...)`) and importable types from `#endpoints`
@@ -117,7 +112,7 @@ Guides:
 - [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started) — install, configure, and what gets generated
 - [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
-- [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — success-body, `.result()`, and `.raw()` call shapes
+- [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — status-aware and raw response shapes
 - [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — generated TanStack Vue Query option factories and SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics

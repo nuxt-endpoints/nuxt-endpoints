@@ -16,7 +16,7 @@ Nuxt already infers server route return types for `$fetch`. What it does not pro
 
 Nuxt Endpoints keeps that workflow — routes stay ordinary files under `server/api`, and plain `$fetch` continues to work — and adds the contract on top for the routes that opt in. See [Incremental Adoption](/docs/incremental-adoption).
 
-On the current Nitro 2 support line, Nuxt Endpoints generates its richer contract types independently, then applies Nitro's JSON wire mapping to client responses. Integration tests compare every generated endpoint success body directly with Nitro's generated `InternalApi`. Status-specific non-2xx bodies remain available through `.result()` and `.raw()` because they are outside `InternalApi`'s success-return model.
+On the current Nitro 2 support line, Nuxt Endpoints generates its richer contract types independently, then applies Nitro's JSON wire mapping to client responses. Integration tests compare every generated endpoint success body directly with Nitro's generated `InternalApi`. Awaited `$endpoint` requests preserve status-specific non-2xx bodies outside `InternalApi`'s success-return model, and `.raw()` exposes the native response.
 
 ## Nuxt typed fetch and fetchdts
 

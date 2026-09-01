@@ -32,7 +32,7 @@ defineRouteHandler({
       }),
     },
   },
-  handler: ({ params }) => ({ id: params.id, name: 'Tom' }),
+  handler: (event) => ({ id: event.validated.params.id, name: 'Tom' }),
 })
 ```
 
@@ -52,7 +52,7 @@ defineRouteHandler({
     body: v.object({ id: Id }), // OpenAPI request schema: string
     response: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number
   },
-  handler: ({ body }) => ({ id: body.id }),
+  handler: (event) => ({ id: event.validated.body.id }),
 })
 ```
 

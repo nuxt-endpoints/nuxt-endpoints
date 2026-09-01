@@ -270,16 +270,15 @@ describe('single-define endpoint types', () => {
       (typeof merged)['__endpoint_contract__']['definition']['idempotency']
     >().toEqualTypeOf<{ enabled: true; headerName: 'X-Request-Key'; required: true }>()
 
-    // `required: true` is what makes the client's key mandatory, so the client
-    // option types must follow from the merged definition too.
+    // Required endpoints generate a key unless the caller supplies one.
     type Options = EndpointClientOptions<(typeof merged)['__endpoint_contract__']['definition']>
     expectTypeOf<Options>().toMatchTypeOf<{
       body: { amount: number }
-      idempotencyKey: string
+      idempotencyKey?: string | true
     }>()
     expectTypeOf<
       {} extends Pick<Options, 'idempotencyKey'> ? 'optional' : 'required'
-    >().toEqualTypeOf<'required'>()
+    >().toEqualTypeOf<'optional'>()
   })
 
   it('P: a typo in a slot name is rejected (the two-call form accepts it)', () => {

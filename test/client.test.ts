@@ -14,6 +14,15 @@ describe('createEndpointClient', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     fetchRawMock.mockReset()
+    fetchRawMock.mockImplementation(async (path: string, options: Record<string, unknown> = {}) => {
+      const { ignoreResponseError: _ignoreResponseError, ...dataOptions } = options
+      return {
+        status: 200,
+        ok: true,
+        headers: new Headers(),
+        _data: await fetchMock(path, dataOptions),
+      }
+    })
     vi.stubGlobal('$fetch', Object.assign(fetchMock, { raw: fetchRawMock }))
   })
 
@@ -186,6 +195,93 @@ describe('createEndpointClient', () => {
     })
   })
 
+  it('generates one stable key when required idempotency is omitted', async () => {
+    fetchMock.mockResolvedValue({ id: 1 })
+    const client = createEndpointClient([
+      {
+        path: '/api/items',
+        method: 'post',
+        operation: 'createItem',
+        idempotency: { headerName: 'Idempotency-Key', required: true },
+      },
+    ])
+
+    const request = client('createItem', { body: { amount: 100 } })
+    await request
+    await request
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>
+    expect(headers['Idempotency-Key']).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    )
+  })
+
+  it('generates a key on demand for optional idempotency', async () => {
+    fetchMock.mockResolvedValue({ ok: true })
+    const client = createEndpointClient([
+      {
+        path: '/api/check',
+        method: 'post',
+        operation: 'check',
+        idempotency: { headerName: 'Idempotency-Key', required: false },
+      },
+    ])
+
+    await client('check', { idempotencyKey: true })
+
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>
+    expect(headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i)
+  })
+
+  it('connects one request object to queryOptions', async () => {
+    fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
+    const client = createEndpointClient([
+      { path: '/api/users/:id', method: 'get', operation: 'getUser' },
+    ])
+    const request = client('getUser', { params: { id: 123 } })
+    const options = request.queryOptions()
+
+    expect(options.queryKey).toEqual([
+      'nuxt-endpoints',
+      'v2',
+      'get',
+      '/api/users/:id',
+      { params: { id: 123 } },
+    ])
+    await expect(options.queryFn({ signal: new AbortController().signal })).resolves.toEqual({
+      status: 200,
+      ok: true,
+      body: { id: 123, name: 'Tom' },
+    })
+  })
+
+  it('reuses an automatically generated key across mutation retries', async () => {
+    fetchMock.mockResolvedValue({ id: 1 })
+    const client = createEndpointClient([
+      {
+        path: '/api/items',
+        method: 'post',
+        operation: 'createItem',
+        idempotency: { headerName: 'Idempotency-Key', required: true },
+      },
+    ])
+    const request = client('createItem', { body: { amount: 100 } })
+    const options = request.mutationOptions()
+
+    await options.mutationFn()
+    await options.mutationFn()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const firstHeaders = fetchMock.mock.calls[0]![1].headers as Record<string, string>
+    const secondHeaders = fetchMock.mock.calls[1]![1].headers as Record<string, string>
+    expect(firstHeaders['Idempotency-Key']).toBe(secondHeaders['Idempotency-Key'])
+    expect(options.mutationKey.at(-1)).toEqual({
+      body: { amount: 100 },
+      idempotencyKey: firstHeaders['Idempotency-Key'],
+    })
+  })
+
   it('enforces generated idempotency metadata for untyped callers', async () => {
     const requiredClient = createEndpointClient([
       {
@@ -196,7 +292,6 @@ describe('createEndpointClient', () => {
       },
     ])
 
-    expect(() => requiredClient('createItem')).toThrow(/idempotencyKey is required/i)
     expect(() => requiredClient('createItem', { idempotencyKey: '' })).toThrow(/non-empty string/i)
     expect(() => requiredClient('createItem', { idempotencyKey: 'one,two' })).toThrow(
       /without commas/i,
@@ -655,7 +750,17 @@ describe('createEndpointClient', () => {
     }
 
     function createFetcher(data: ReturnType<typeof vi.fn>) {
-      return Object.assign(data, { raw: vi.fn() }) as never
+      return Object.assign(data, {
+        raw: vi.fn(async (path: string, options: Record<string, unknown> = {}) => {
+          const { ignoreResponseError: _ignoreResponseError, ...dataOptions } = options
+          return {
+            status: 200,
+            ok: true,
+            headers: new Headers(),
+            _data: await data(path, dataOptions),
+          }
+        }),
+      }) as never
     }
 
     it('uses the value returned by captureFetcher', async () => {

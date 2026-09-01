@@ -51,8 +51,8 @@ export default defineRouteHandler({
   validate: {
     response: { 200: z.object({ id: z.number(), name: z.string() }) },
   },
-  handler: ({ params }) => {
-    return { id: params.id, name: 'Tom' } // params.id is a number — validated and coerced
+  handler: (event) => {
+    return { id: event.validated.params.id, name: 'Tom' } // params.id is a number — validated and coerced
   },
 })
 ```
@@ -61,12 +61,12 @@ Call it from any component. Request options and the response type are inferred �
 
 ```vue
 <script setup lang="ts">
-const user = await $endpoint('/api/users/:id', {
+const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '1' },
 })
 
-user.name.toUpperCase()
+if (result.status === 200) result.body.name.toUpperCase()
 </script>
 ```
 

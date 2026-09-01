@@ -1,33 +1,23 @@
 import { z } from 'zod'
-import { createMemoryIdempotencyStorage, defineRouteHandler } from '../../../../../src/runtime'
+import { defineRouteHandler } from '../../../../../src/runtime'
 
-const storage = createMemoryIdempotencyStorage()
 let executionCount = 0
 
-export default defineRouteHandler(
-  {
-    operation: 'createIdempotentItem',
-    validate: {
-      body: z.object({ amount: z.number().positive() }),
-      response: {
-        201: z.object({ id: z.number(), amount: z.number() }),
-      },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => {
-      executionCount += 1
-      return respond(201, { id: executionCount, amount: body.amount })
+export default defineRouteHandler({
+  operation: 'createIdempotentItem',
+  validate: {
+    body: z.object({ amount: z.number().positive() }),
+    response: {
+      201: z.object({ id: z.number(), amount: z.number() }),
     },
   },
-  {
-    idempotency: {
-      storage: () => storage,
-      scope: () => 'integration-fixture',
-      authorization: 'middleware',
-    },
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
   },
-)
+  handler: (event) => {
+    executionCount += 1
+    return event.respond(201, { id: executionCount, amount: event.validated.body.amount })
+  },
+})

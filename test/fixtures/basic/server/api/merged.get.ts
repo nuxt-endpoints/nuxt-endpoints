@@ -10,10 +10,10 @@ export default defineRouteHandler({
       404: z.object({ message: z.string() }),
     },
   },
-  handler: ({ query, respond }) => {
-    if (query.id === 0) {
-      return respond(404, { message: 'Not found' })
+  handler: (event) => {
+    if (event.validated.query.id === 0) {
+      return event.respond(404, { message: 'Not found' })
     }
-    return { id: query.id, name: 'Merged' }
+    return { id: event.validated.query.id, name: 'Merged' }
   },
 })

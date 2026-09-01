@@ -14,7 +14,7 @@ body. Request validation still applies; callers should use `.raw()`.
 ```ts
 export default defineRouteHandler({
   params: z.object({ id: z.string() }),
-  handler: ({ params }) => new Response(`raw response for ${params.id}`),
+  handler: (event) => new Response(`raw response for ${event.validated.params.id}`),
 })
 ```
 
@@ -42,9 +42,9 @@ export default defineRouteHandler({
       200: { media: 'application/pdf', description: 'Invoice PDF' },
     },
   },
-  handler: async ({ params, respond }) => {
-    const file = await loadFile(params.id)
-    return respond(200, file.bytes, {
+  handler: async (event) => {
+    const file = await loadFile(event.validated.params.id)
+    return event.respond(200, file.bytes, {
       headers: { 'content-disposition': `attachment; filename="${file.name}"` },
     })
   },
@@ -75,11 +75,11 @@ export default defineRouteHandler({
     },
     response: { 201: z.object({ ok: z.literal(true) }) },
   },
-  handler: ({ body, bodyMediaType, respond }) => {
-    if (bodyMediaType === 'application/pdf') {
-      return respond(201, { ok: savePdf(body) })
+  handler: (event) => {
+    if (event.bodyMediaType === 'application/pdf') {
+      return event.respond(201, { ok: savePdf(event.validated.body) })
     }
-    return respond(201, { ok: saveForm(body) })
+    return event.respond(201, { ok: saveForm(event.validated.body) })
   },
 })
 ```
@@ -96,10 +96,10 @@ export default defineRouteHandler({
   validate: {
     query: z.object({ to: z.string().startsWith('/') }),
   },
-  handler: ({ query }) =>
+  handler: (event) =>
     new Response(null, {
       status: 302,
-      headers: { location: query.to },
+      headers: { location: event.validated.query.to },
     }),
 })
 ```
@@ -114,11 +114,11 @@ route actually reads and validates the upstream body:
 ```ts
 export default defineRouteHandler({
   params: z.object({ path: z.string() }),
-  handler: ({ request, params }) => {
-    return fetch(new URL(params.path, 'https://upstream.example'), {
-      method: request.method,
-      headers: request.headers,
-      signal: request.signal,
+  handler: (event) => {
+    return fetch(new URL(event.validated.params.path, 'https://upstream.example'), {
+      method: event.req.method,
+      headers: event.req.headers,
+      signal: event.req.signal,
     })
   },
 })
@@ -136,7 +136,7 @@ export default defineRouteHandler({
       204: { media: 'application/octet-stream', description: 'Deleted' },
     },
   },
-  handler: ({ respond }) => respond(204, new Uint8Array()),
+  handler: (event) => event.respond(204, new Uint8Array()),
 })
 ```
 

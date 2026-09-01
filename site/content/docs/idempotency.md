@@ -27,15 +27,15 @@ export default defineRouteHandler({
     headerName: 'Idempotency-Key',
     required: true,
   },
-  handler: ({ body, respond }) => {
-    return respond(201, { balance: grantPoints(body.userId, body.amount) })
+  handler: (event) => {
+    const { body } = event.validated
+    return event.respond(201, { balance: grantPoints(body.userId, body.amount) })
   },
 })
 ```
 
-`required: true` makes `idempotencyKey` required in the generated client
-request. The client never creates a key automatically because a retry must
-reuse exactly the same value.
+With `required: true`, the client automatically creates an idempotency key when
+the `$endpoint(...)` request object is created unless the caller supplies one.
 
 ## Central runtime policy
 
@@ -66,62 +66,27 @@ The runtime file is server code and is not evaluated during contract discovery.
 It may therefore reference infrastructure connections. Configure a different
 location with `endpoints.runtime.path`.
 
-## Route-specific runtime policy
-
-The optional second argument contains request-time functions. This keeps them
-outside the handler-free contract graph:
-
-```ts
-export default defineRouteHandler(
-  {
-    operation: 'grantPoints',
-    validate: {
-      body: GrantPoints,
-      response: { 201: Balance },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => respond(201, grantPoints(body)),
-  },
-  {
-    idempotency: {
-      storage: () => storage,
-      scope: ({ event }) => event.context.auth.tenantId,
-      authorization: ({ event }) => requirePermission(event, 'points:grant'),
-      replayStatuses: [201],
-    },
-  },
-)
-```
-
-Each runtime option resolves route → central policy → library default. One of
-those layers must provide `storage`, `scope`, and `authorization`.
+Runtime callbacks do not belong in the route definition. They are rejected by
+both TypeScript and runtime definition validation because Nitro evaluates the
+serializable definition during build. Put `storage`, `scope`, and
+`authorization` in the central runtime policy.
 
 For an operation without a body contract, supply `fingerprint` explicitly so
 the implementation cannot confuse an intentionally input-free operation with a
 handler that reads undeclared input:
 
 ```ts
-export default defineRouteHandler(
-  {
-    operation: 'publishItem',
-    params: z.object({ id: z.string() }),
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ params }) => publishItem(params.id),
+export default defineRouteHandler({
+  operation: 'publishItem',
+  params: z.object({ id: z.string() }),
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
+    fingerprint: ({ params }) => ({ params }),
   },
-  {
-    idempotency: {
-      fingerprint: ({ params }) => ({ params }),
-    },
-  },
-)
+  handler: (event) => publishItem(event.validated.params.id),
+})
 ```
 
 ## HTTP behavior
@@ -132,16 +97,25 @@ export default defineRouteHandler(
 - Same key after completion: replay the recorded response.
 
 Framework-generated failures use `application/problem+json`. They are not
-inserted into the route's declared `.result()` union.
+inserted into the route's declared response union.
 
 ## Client usage
 
+When idempotency is required, omitting `idempotencyKey` generates a UUID at
+request-object creation. For an optional endpoint, use `idempotencyKey: true`
+to opt into automatic generation. Supply a string when the logical operation
+must survive a page reload, process restart, or queue handoff.
+
 ```ts
-await $endpoint('grantPoints', {
-  idempotencyKey: crypto.randomUUID(),
+const request = $endpoint('grantPoints', {
   body: { userId: 'u_1', amount: 10 },
 })
+
+const mutation = useMutation(request.mutationOptions())
 ```
+
+The key belongs to `request`. TanStack retries perform fresh HTTP attempts with
+that same key, and the resolved key is included in mutation identity.
 
 ## Storage requirements
 

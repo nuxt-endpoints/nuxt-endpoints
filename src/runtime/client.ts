@@ -97,11 +97,11 @@ export type UseEndpointPathCaller<
   const PATH extends EndpointPath<ROUTES>,
   const METHOD extends EndpointRouteMethod<ROUTES, PATH>,
   ROUTE extends Extract<ROUTES, { path: PATH; method: METHOD }>,
-  DATA = RouteResponseBody<ROUTE>,
+  DATA = EndpointResultData<ROUTE>,
   DEFAULT = undefined,
 >(
   path: PATH,
-  options: UseEndpointClientOptions<ROUTE, RouteResponseBody<ROUTE>, DATA, DEFAULT> & {
+  options: UseEndpointClientOptions<ROUTE, EndpointResultData<ROUTE>, DATA, DEFAULT> & {
     method: METHOD
   },
 ) => EndpointAsyncData<DATA | DEFAULT>
@@ -118,10 +118,10 @@ export type UseEndpointOperationCaller<
 > = <
   const OPERATION extends EndpointOperation<ROUTES>,
   ROUTE extends Extract<ROUTES, { operation: OPERATION }>,
-  DATA = RouteResponseBody<ROUTE>,
+  DATA = EndpointResultData<ROUTE>,
   DEFAULT = undefined,
 >(
-  ...args: UseEndpointOperationArgs<OPERATION, ROUTE, RouteResponseBody<ROUTE>, DATA, DEFAULT>
+  ...args: UseEndpointOperationArgs<OPERATION, ROUTE, EndpointResultData<ROUTE>, DATA, DEFAULT>
 ) => EndpointAsyncData<DATA | DEFAULT>
 
 export type UseEndpointResultPathCaller<
@@ -220,9 +220,9 @@ type EndpointOperationAliasReservedKey = (typeof reservedEndpointOperationAliasL
 export type UseEndpointClientMethod<
   ROUTE extends EndpointRouteEntry,
   _FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <DATA = RouteResponseBody<ROUTE>, DEFAULT = undefined>(
+> = <DATA = EndpointResultData<ROUTE>, DEFAULT = undefined>(
   path: ROUTE['path'],
-  options: UseEndpointClientOptions<ROUTE, RouteResponseBody<ROUTE>, DATA, DEFAULT> & {
+  options: UseEndpointClientOptions<ROUTE, EndpointResultData<ROUTE>, DATA, DEFAULT> & {
     method: ROUTE['method']
   },
 ) => EndpointAsyncData<DATA | DEFAULT>
@@ -289,10 +289,36 @@ export type UseEndpointResultOperationArgs<
 export type EndpointCall<
   ROUTE extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = PromiseLike<RouteResponseBody<ROUTE>> &
-  Pick<Promise<RouteResponseBody<ROUTE>>, 'catch' | 'finally'> &
+> = PromiseLike<EndpointResult<ROUTE>> &
+  Pick<Promise<EndpointResult<ROUTE>>, 'catch' | 'finally'> &
   EndpointResultCallFeature<ROUTE, FEATURES> &
-  EndpointRawCallFeature<ROUTE, FEATURES>
+  EndpointRawCallFeature<ROUTE, FEATURES> &
+  EndpointQueryCallFeature<ROUTE> &
+  EndpointMutationCallFeature<ROUTE>
+
+export type EndpointCallQueryOptions<ROUTE extends EndpointRouteEntry> = {
+  queryKey: readonly unknown[]
+  queryFn: (context: { signal: AbortSignal }) => Promise<EndpointResultData<ROUTE>>
+}
+
+export type EndpointCallMutationOptions<ROUTE extends EndpointRouteEntry> = {
+  mutationKey: readonly unknown[]
+  mutationFn: () => Promise<EndpointResultData<ROUTE>>
+}
+
+type EndpointQueryCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['method'] extends
+  | 'get'
+  | 'head'
+  ? { queryOptions: () => EndpointCallQueryOptions<ROUTE> }
+  : {}
+
+type EndpointMutationCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['method'] extends
+  | 'delete'
+  | 'patch'
+  | 'post'
+  | 'put'
+  ? { mutationOptions: () => EndpointCallMutationOptions<ROUTE> }
+  : {}
 
 type EndpointResultCallFeature<
   ROUTE extends EndpointRouteEntry,
@@ -600,6 +626,7 @@ export type EndpointRequestFunctions = {
   data: EndpointRequestRuntime<unknown>
   result: EndpointRequestRuntime<EndpointResultRuntime>
   raw: EndpointRequestRuntime<Response>
+  options: Record<string, unknown>
 }
 
 export type EndpointRequestRuntimeOptions = {
@@ -685,7 +712,15 @@ export function createUseEndpoint(
   const client = ((request: string, callOptions = {}) => {
     const { route, endpointOptions } = resolveEndpointRoute(routes, request, callOptions)
     const fetcher = options.fetcher ?? options.captureFetcher?.()
-    return createUseEndpointCall(route, endpointOptions, useAsyncData, features, fetcher, 'data')
+    return createUseEndpointCall(
+      route,
+      endpointOptions,
+      useAsyncData,
+      features,
+      fetcher,
+      'result',
+      'data',
+    )
   }) as UseEndpointClientRuntimeValue
 
   return client
@@ -711,6 +746,14 @@ type EndpointCallRuntimeValue = PromiseLike<unknown> &
   Pick<Promise<unknown>, 'catch' | 'finally'> & {
     result: () => Promise<EndpointResultRuntime>
     raw: () => Promise<Response>
+    queryOptions: () => {
+      queryKey: readonly unknown[]
+      queryFn: (context: { signal: AbortSignal }) => Promise<EndpointResultDataRuntime>
+    }
+    mutationOptions: () => {
+      mutationKey: readonly unknown[]
+      mutationFn: () => Promise<EndpointResultDataRuntime>
+    }
     [endpointCallRuntimeSymbol]: EndpointCallRuntime
     [key: string]: unknown
   }
@@ -825,7 +868,8 @@ export function createEndpointRequest(
   options: Record<string, unknown> = {},
   runtimeOptions: EndpointRequestRuntimeOptions = {},
 ): EndpointRequestFunctions {
-  const { params, idempotencyKey, mediaType, accept, ...fetchOptions } = options
+  const resolvedOptions = resolveIdempotencyClientOptions(route, options)
+  const { params, idempotencyKey, mediaType, accept, ...fetchOptions } = resolvedOptions
   applyIdempotencyClientOptions(route, fetchOptions, idempotencyKey)
   applyAcceptClientOptions(fetchOptions, accept)
   // `mediaType` is a client-only selector for a media-type-map `body`
@@ -872,7 +916,22 @@ export function createEndpointRequest(
     )
   }
 
-  return { data, result, raw }
+  return { data, result, raw, options: resolvedOptions }
+}
+
+function resolveIdempotencyClientOptions(
+  route: EndpointClientRouteConfig,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const metadata = route.idempotency
+  const key = options.idempotencyKey
+  if (!metadata || (key === undefined && !metadata.required)) {
+    return options
+  }
+  if (key === true || key === undefined) {
+    return { ...options, idempotencyKey: createIdempotencyKey() }
+  }
+  return options
 }
 
 /**
@@ -957,9 +1016,6 @@ function applyIdempotencyClientOptions(
   }
 
   if (idempotencyKey === undefined) {
-    if (metadata.required) {
-      throw new Error(`idempotencyKey is required for ${route.method.toUpperCase()} ${route.path}`)
-    }
     return
   }
   if (
@@ -1006,6 +1062,13 @@ function applyIdempotencyClientOptions(
     throwDuplicateIdempotencyHeader(metadata.headerName)
   }
   fetchOptions.headers = { ...headerRecord, [metadata.headerName]: idempotencyKey }
+}
+
+function createIdempotencyKey(): string {
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw new Error('Automatic idempotency keys require crypto.randomUUID()')
+  }
+  return globalThis.crypto.randomUUID()
 }
 
 function applyMediaTypeClientOptions(
@@ -1123,13 +1186,13 @@ function createEndpointCall(
       onfulfilled: Parameters<Promise<unknown>['then']>[0],
       onrejected: Parameters<Promise<unknown>['then']>[1],
     ) {
-      return data().then(onfulfilled, onrejected)
+      return result().then(onfulfilled, onrejected)
     },
     catch(onrejected: Parameters<Promise<unknown>['catch']>[0]) {
-      return data().catch(onrejected)
+      return result().catch(onrejected)
     },
     finally(onfinally: Parameters<Promise<unknown>['finally']>[0]) {
-      return data().finally(onfinally)
+      return result().finally(onfinally)
     },
   } as unknown as EndpointCallRuntimeValue
   call[endpointCallRuntimeSymbol] = callRuntime
@@ -1140,8 +1203,34 @@ function createEndpointCall(
   if (features.raw) {
     call.raw = raw
   }
+  if (route.method === 'get' || route.method === 'head') {
+    call.queryOptions = () => ({
+      queryKey: createRequestQueryKey(route, request.options),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        request.result(signal).then(toEndpointResultData),
+    })
+  }
+  if (['delete', 'patch', 'post', 'put'].includes(route.method)) {
+    call.mutationOptions = () => ({
+      mutationKey: createRequestQueryKey(route, request.options),
+      mutationFn: () => request.result().then(toEndpointResultData),
+    })
+  }
 
   return call
+}
+
+function createRequestQueryKey(
+  route: EndpointClientRouteConfig,
+  options: Record<string, unknown>,
+): readonly unknown[] {
+  const request: Record<string, unknown> = {}
+  for (const key of ['params', 'query', 'body', 'mediaType', 'accept', 'idempotencyKey'] as const) {
+    if (options[key] !== undefined) {
+      request[key] = options[key]
+    }
+  }
+  return ['nuxt-endpoints', 'v2', route.method, route.path, normalizeEndpointRequestKey(request)]
 }
 
 function createUseEndpointCall(
@@ -1151,11 +1240,12 @@ function createUseEndpointCall(
   features: EndpointClientFeatureOptions,
   fetcher: EndpointFetcherRuntime | undefined,
   requestMode: UseEndpointKeyKind,
+  keyKind: UseEndpointKeyKind = requestMode,
 ) {
   const { endpointOptions, asyncDataOptions, key } = splitUseEndpointOptions(
     route,
     options,
-    requestMode,
+    keyKind,
   )
   const call = createEndpointCall(route, endpointOptions, features, fetcher)
   const runtime = call[endpointCallRuntimeSymbol]
