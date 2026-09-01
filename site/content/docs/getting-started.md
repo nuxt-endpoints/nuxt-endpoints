@@ -17,6 +17,10 @@ module will adopt them behind that UX and retain only the missing integration.
 Upstream APIs are evolving, so necessary changes remain possible, but preserving
 application code is an explicit design goal.
 
+The experimental implementation is developed in public. See
+[Nuxt 5 integration progress](/docs/nuxt5-progress) for the Nuxt Endpoints
+branch and its matching H3, Nitro, and fetchdts forks.
+
 This section is the single source for the supported platform line; other pages link here instead of restating it.
 
 ## Install

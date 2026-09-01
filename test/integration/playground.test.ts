@@ -239,10 +239,10 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
           'Valibot transforms the query string',
         )
         await expect(output.locator('pre').textContent()).resolves.toContain(
-          'Run the selected operation',
+          'Run the selected request',
         )
 
-        await page.getByRole('button', { name: /\$endpoint\.createUser/ }).click()
+        await page.getByRole('button', { name: /\$endpoint\('\/api\/users'\)/ }).click()
         await page.getByLabel('Name').fill('')
         await page.getByLabel('Age').fill('-1')
         await page.getByRole('button', { name: 'Create user' }).click()
@@ -255,7 +255,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
         await expect(output.locator('pre').textContent()).resolves.toContain('"status": 201')
 
-        await page.getByRole('button', { name: /\$endpoint\.searchUsers/ }).click()
+        await page.getByRole('button', { name: /api\/users\/search/ }).click()
         await page.getByLabel('Query').fill('ja')
         await page.getByLabel('Limit').fill('1')
         await page.getByRole('button', { name: 'Search users' }).click()

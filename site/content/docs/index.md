@@ -59,11 +59,13 @@ Adding the module changes nothing by itself. Only routes that directly default-e
 > Nuxt Endpoints supports Nuxt 4.5+ today and is designed to adopt the
 > route-contract primitives being developed for the Nuxt 5 generation. The
 > `$endpoint` / `useEndpoint` UX remains the stable boundary while lower-level
-> implementation moves upstream. See [Compatibility](/docs/getting-started#compatibility).
+> implementation moves upstream. See [Compatibility](/docs/getting-started#compatibility)
+> and follow the [Nuxt 5 integration progress](/docs/nuxt5-progress).
 
 ## Next steps
 
 - [Getting Started](/docs/getting-started) — install the module and define your first endpoint.
+- [Nuxt 5 Progress](/docs/nuxt5-progress) — follow the public integration branches and current status.
 - [Define Endpoints](/docs/endpoints) — the full contract surface: request parts, multiple responses, validation options.
 - [Generated Client](/docs/client) — everything `$endpoint` and `useEndpoint` can do.
 

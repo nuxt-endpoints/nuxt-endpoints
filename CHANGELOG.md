@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 - 2026-09-02
 
 ### Changed
 
@@ -30,6 +30,8 @@
   and Nuxt primitives replace internal plumbing over time.
 - Updated the README, documentation site, browser type playground, local
   playground, architecture notes, and package smoke fixture to the current API.
+- Added a public Nuxt 5 integration progress page linking the working branches
+  for Nuxt Endpoints, H3, Nitro, and fetchdts.
 
 ## 0.7.2 - 2026-08-29
 

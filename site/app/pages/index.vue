@@ -335,6 +335,7 @@ const stackItems = [
             internal plumbing while <code>$endpoint</code> and <code>useEndpoint</code> stay the
             application-facing UX —
             <NuxtLink to="/docs/getting-started#compatibility">how compatibility works</NuxtLink>
+            · <NuxtLink to="/docs/nuxt5-progress">Nuxt 5 integration progress</NuxtLink>
           </span>
         </p>
 
