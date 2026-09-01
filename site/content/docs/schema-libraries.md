@@ -7,7 +7,7 @@ Runtime parsing follows Standard Schema-style contracts where possible. OpenAPI 
 
 ## Zod v4
 
-Zod schemas are converted through `@asteasolutions/zod-to-openapi`. Zod v4 is the target; Zod v3 is intentionally outside the compatibility surface.
+Zod schemas are converted through Zod's native `toJSONSchema`. Classic Zod 4.2 or newer is the target; Zod Mini and Zod v3 are intentionally outside the compatibility surface. Native schemas such as `z.file()` retain their JSON Schema constraints in the generated OpenAPI document.
 
 ## Valibot
 

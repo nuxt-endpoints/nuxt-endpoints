@@ -76,7 +76,6 @@
     "release": "node scripts/release.mjs"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@nuxt/kit": "^4.5.0",
     "@nuxt/schema": "^4.5.0",
     "@valibot/to-json-schema": "^1.7.1",
@@ -118,7 +117,7 @@
     "effect": "^3.21.0",
     "nuxt": "^4.5.0",
     "valibot": "^1.4.0",
-    "zod": "^4.0.0"
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@tanstack/vue-query": {

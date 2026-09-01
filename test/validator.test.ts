@@ -168,7 +168,9 @@ describe('toJsonSchema', () => {
         active: { type: 'boolean' },
         tags: { type: 'array', items: { type: 'string' }, minItems: 1 },
         role: { type: 'string', enum: ['admin', 'member'] },
-        deletedAt: { type: ['string', 'null'], format: 'date-time' },
+        deletedAt: {
+          anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+        },
       },
     })
   })
@@ -211,6 +213,24 @@ describe('toJsonSchema', () => {
       properties: {
         id: { type: 'string', format: 'uuid' },
         count: { type: 'integer', minimum: 1 },
+      },
+    })
+  })
+
+  it('converts Zod files with their binary constraints', () => {
+    expect(toJsonSchema(z.file().max(5000).mime('text/plain'))).toMatchObject({
+      type: 'string',
+      format: 'binary',
+      contentEncoding: 'binary',
+      contentMediaType: 'text/plain',
+      maxLength: 5000,
+    })
+  })
+
+  it('documents Zod dates as their JSON wire representation', () => {
+    expect(toJsonSchema(z.object({ createdAt: z.date() }))).toMatchObject({
+      properties: {
+        createdAt: { type: 'string', format: 'date-time' },
       },
     })
   })

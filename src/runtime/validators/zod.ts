@@ -1,7 +1,7 @@
-import { OpenApiGeneratorV31, OpenAPIRegistry } from '@asteasolutions/zod-to-openapi'
 import {
   isJsonSchema,
   isObject,
+  stripRootJsonSchemaDialect,
   type InferOutput,
   type JsonSchema,
   type JsonSchemaConversionContext,
@@ -19,6 +19,11 @@ export type ZodV4SchemaLike = ZodLike & {
   }
   readonly description?: string
   isOptional?: () => boolean
+  meta?: () => unknown
+  toJSONSchema?: (options: {
+    unrepresentable: 'any'
+    override: (context: { zodSchema: ZodV4SchemaLike; jsonSchema: Record<string, unknown> }) => void
+  }) => unknown
 }
 
 export function isZodV4SchemaLike(schema: unknown): schema is ZodV4SchemaLike {
@@ -76,52 +81,102 @@ export function zodV4ToOpenApiSchema(
   schema: ZodV4SchemaLike,
   context: JsonSchemaConversionContext,
 ): JsonSchema {
-  const path = '/__endpoints_schema'
-  const registry = new OpenAPIRegistry()
-  registry.registerPath({
-    method: 'get',
-    path,
-    responses: {
-      200: {
-        description: 'Schema',
-        content: {
-          'application/json': {
-            schema: schema as never,
-          },
-        },
-      },
+  if (typeof schema.toJSONSchema !== 'function') {
+    throw new Error(
+      'Zod JSON Schema conversion requires a classic Zod schema from zod 4.2 or newer.',
+    )
+  }
+
+  const converted = schema.toJSONSchema({
+    unrepresentable: 'any',
+    override({ zodSchema, jsonSchema }) {
+      if (zodSchema._zod?.def?.type === 'date') {
+        Object.assign(jsonSchema, { type: 'string', format: 'date-time' })
+      }
     },
   })
 
-  const document = new OpenApiGeneratorV31(registry.definitions).generateDocument({
-    openapi: '3.1.0',
-    info: { title: 'Endpoint Schema', version: '0.1.0' },
-  })
+  if (!isJsonSchema(converted)) {
+    return {}
+  }
 
-  mergeGeneratedComponents(context, document.components)
-
-  const pathItem = document.paths?.[path]
-  const operation = isObject(pathItem?.get) ? pathItem.get : {}
-  const responses = isObject(operation.responses) ? operation.responses : {}
-  const response = responses[200] || responses['200']
-  const content = isObject(response) && isObject(response.content) ? response.content : {}
-  const media = isObject(content['application/json']) ? content['application/json'] : {}
-  return isJsonSchema(media.schema) ? media.schema : {}
+  const metadata = schema.meta?.()
+  const componentName =
+    isObject(metadata) && typeof metadata.id === 'string' ? metadata.id : undefined
+  return normalizeZodJsonSchema(converted, context, componentName)
 }
 
-function mergeGeneratedComponents(context: JsonSchemaConversionContext, components: unknown): void {
-  if (!isObject(components) || !isObject(components.schemas)) {
-    return
+function normalizeZodJsonSchema(
+  converted: JsonSchema,
+  context: JsonSchemaConversionContext,
+  componentName: string | undefined,
+): JsonSchema {
+  const withoutDialect = stripRootJsonSchemaDialect(converted)
+  if (!isObject(withoutDialect)) {
+    return withoutDialect
   }
+
+  const definitions = isObject(withoutDialect.$defs)
+    ? withoutDialect.$defs
+    : isObject(withoutDialect.definitions)
+      ? withoutDialect.definitions
+      : undefined
+  const root = { ...withoutDialect }
+  delete root.$defs
+  delete root.definitions
 
   context.components ||= {}
   context.components.schemas ||= {}
 
-  for (const [name, schema] of Object.entries(components.schemas)) {
-    if (isJsonSchema(schema)) {
-      context.components.schemas[name] = schema
+  if (definitions) {
+    for (const [name, definition] of Object.entries(definitions)) {
+      if (isJsonSchema(definition)) {
+        context.components.schemas[name] = rewriteZodReferences(definition)
+      }
     }
   }
+
+  const normalizedRoot = rewriteZodReferences(root, componentName)
+  if (!componentName) {
+    return normalizedRoot
+  }
+
+  context.components.schemas[componentName] = normalizedRoot
+  return { $ref: componentReference(componentName) }
+}
+
+function rewriteZodReferences(schema: JsonSchema, rootComponentName?: string): JsonSchema {
+  return rewriteValue(schema, rootComponentName) as JsonSchema
+}
+
+function rewriteValue(value: unknown, rootComponentName?: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteValue(item, rootComponentName))
+  }
+  if (!isObject(value)) {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      if (key === '$ref' && typeof item === 'string') {
+        if (item === '#' && rootComponentName) {
+          return [key, componentReference(rootComponentName)]
+        }
+        if (item.startsWith('#/$defs/')) {
+          return [key, `#/components/schemas/${item.slice('#/$defs/'.length)}`]
+        }
+        if (item.startsWith('#/definitions/')) {
+          return [key, `#/components/schemas/${item.slice('#/definitions/'.length)}`]
+        }
+      }
+      return [key, rewriteValue(item, rootComponentName)]
+    }),
+  )
+}
+
+function componentReference(name: string): string {
+  return `#/components/schemas/${name.replaceAll('~', '~0').replaceAll('/', '~1')}`
 }
 
 function normalizeSafeParseResult<OUTPUT>(

@@ -6,7 +6,10 @@ export default defineRouteHandler({
     body: {
       'application/json': z.object({ name: z.string() }),
       'application/x-www-form-urlencoded': z.object({ name: z.string() }),
-      'multipart/form-data': z.object({ name: z.string() }),
+      'multipart/form-data': z.object({
+        name: z.string(),
+        file: z.file().max(5000).mime('text/plain'),
+      }),
     },
     response: {
       201: z.object({ name: z.string(), bodyMediaType: z.string() }),
