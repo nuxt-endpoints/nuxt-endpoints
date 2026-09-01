@@ -482,3 +482,110 @@ A capability moves out of Nuxt Endpoints only when all of these hold:
 
 A capability stays downstream when the boundary argues for it, not merely
 because the local implementation already works.
+
+## What Nuxt Endpoints becomes
+
+The integration experiment answered its own question: most of what this module
+did belongs upstream, and it is now there. This section records the direction
+the remainder takes, so the split is a decision rather than a drift.
+
+### The contract graduated; the projections stay
+
+`defineEndpoint`'s value was never that one function did everything. It was that
+**one declaration was read by everything** — validation, client types, OpenAPI,
+idempotency, cache keys. That declaration still exists, and it is still one. It
+moved upstream: Nitro's macro extracts it, `getRouteContracts()` exposes it at
+build time, and `InternalRouteSchema` carries its types.
+
+So this module is not losing a source of truth. It is losing ownership of one it
+should never have owned. What is left is the set of things that read the
+contract and project it somewhere else:
+
+```text
+route contract (owned upstream)
+  -> OpenAPI document          projection
+  -> per-status client types    projection
+  -> cache keys and factories   projection
+  -> file() lives inside the contract as a schema
+  -> withIdempotency() reads the contract's metadata
+```
+
+That is one idea with several outputs, not a utility grab bag. The unifying
+sentence is: **write the route contract once, then add only the projections you
+need.**
+
+### Add, never overlay
+
+Two shapes are available for every capability here, and only one is acceptable
+going forward.
+
+- **Additive**: the caller uses the upstream API directly and opts into the
+  extra capability at the point of use. Removing it leaves working code. There
+  is no mandatory entry point.
+- **Overlay**: everything must pass through an entry point of ours that
+  re-implements or intercepts what upstream does. Removing it requires a
+  rewrite.
+
+This module is currently an overlay, and it pays for it. Its
+`defineRouteHandler` shares h3's identifier and first-argument grammar but never
+calls h3's implementation, so request validation, method dispatch, HEAD/OPTIONS
+handling and media-type body reading are all duplicated locally. Behaviour has
+already forked in both directions: our JSON media-type predicate is stricter
+than h3's, and an h3 bug we did not share (repeated form fields collapsing)
+existed for a while in only one of the two.
+
+The additive forms are known for each remaining capability:
+
+| Capability          | Additive shape                                         | Already upstream                                                 |
+| ------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| File uploads        | `file({ maxSize, accept })` as a Standard Schema       | `parseFormData` already hands `File` through; `true` streams raw |
+| Idempotency         | `withIdempotency(options, handler)` wrapping a handler | nothing — this is the most differentiated code here              |
+| WebSocket payloads  | `withSchema(schema, hook)` wrapping one hook           | `defineWebSocket` / `defineWebSocketHandler`                     |
+| OpenAPI             | build-time `contracts -> meta.openAPI`                 | Nitro owns the `meta.openAPI` slot and serves `/_openapi.json`   |
+| Status-aware result | `resultOf()` over an existing raw response             | `.raw()`, `InternalRouteSchema`, `TypedFetchMetadataField`       |
+
+`withIdempotency` matters beyond its own feature: h3 wires `middleware` outside
+`runValidatedHandler`, so middleware cannot see coerced values, but wrapping the
+`handler` itself can. That removes the need to ask h3 for a post-validation hook
+phase. The one thing it cannot do is apply a policy application-wide without
+touching each route, which is an accepted cost of being additive.
+
+### The status-aware client shrinks
+
+Measured, the genuinely status-aware logic is 212 lines — 198 of types and 14 of
+runtime. The rest of the current client is fetch plumbing, caller-signature
+types, a copy of Nuxt's `AsyncData` shape, and a reconstruction of a native
+`Response` from ofetch's wrapper. Since `TypedFetchMetadataField` is keyed by
+route template and method, the types need no client of ours at all.
+
+Reducing it to a helper over `$fetch.raw()` deletes the `$endpoint` entry point,
+which is the overlay in this area.
+
+It is unlikely to be absorbed upstream. ofetch#364 and ofetch#370 are open and
+point at a two-way `{ data, error }` split with one shared error type, not
+per-status discrimination, and the maintainer's own comment on #370 prefers
+keeping that on `$fetch.raw` rather than branching `$fetch`'s return type.
+Nuxt's `ServerRoutes` carries one response type per route and method, and
+fetchdts deliberately refuses status semantics while providing
+`RouteMetadataExtension` so a consumer can carry them itself. Three layers drew
+the same line independently.
+
+### Two capabilities belong upstream, not here
+
+- **Content negotiation.** Grepping h3 for `406`, `negotiat` and `quality`
+  returns nothing; it owns the `{ media: [...] }` response contract shape and
+  performs no negotiation on it. Whoever owns the declaration should own the
+  negotiation.
+- **`respond()` / `StatusResponse`.** `validate.response` lets an author declare
+  statuses; h3 offers no way to produce one. A client-side result API needs this
+  server-side counterpart to discriminate against.
+
+### Consequence for packaging
+
+Splitting means each piece competes on its own merits and can be proposed
+upstream on its own. For a reference implementation that is the point, not a
+regression — a single package can only say "adopt this module", while separate
+pieces can each be offered to the layer that should own them. If the name
+survives, it is most honest as documentation that shows how the projections
+compose, not as a package that co-locates code which no longer needs to be
+co-located.
