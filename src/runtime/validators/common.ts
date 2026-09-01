@@ -4,7 +4,7 @@ export type ValidationIssue = {
   code?: string
 }
 
-export type ValidationPathSegment = string | number | symbol | { readonly key: unknown }
+export type ValidationPathSegment = PropertyKey | { readonly key: PropertyKey }
 
 export type JsonSchemaPrimitive = string | number | boolean | null
 
