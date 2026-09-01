@@ -874,8 +874,7 @@ export function defineEndpoint(
   // generic parameter's property can't leak into `DEFINITION` inference for
   // the `return` below.
   const { handler, idempotency, ...contract } = definition
-  validateEndpointBodyDefinition(contract.body)
-  validateEndpointResponseDefinitions(contract)
+  validateEndpointDefinition(contract)
   const base = new DefinedEndpoint(contract, options)
   // Routing the merged form's `idempotency` slot through the builder method is
   // deliberate: `.idempotency()` already normalizes the options, asserts the
@@ -886,6 +885,28 @@ export function defineEndpoint(
   // same `__endpoint_contract__` marker discovery already reads off a route
   // module's default export.
   return handler === undefined ? endpoint : endpoint.handler(handler as never)
+}
+
+// Shared only with the H3-compatible route-handler adapter. It deliberately
+// stays out of runtime/index.ts so it does not become application API.
+export function validateEndpointDefinition(contract: EndpointDefinition): void {
+  validateEndpointIdempotencyDefinition(contract.idempotency)
+  validateEndpointBodyDefinition(contract.body)
+  validateEndpointResponseDefinitions(contract)
+}
+
+function validateEndpointIdempotencyDefinition(
+  idempotency: EndpointDefinition['idempotency'],
+): void {
+  if (typeof idempotency !== 'object' || idempotency === null) return
+
+  for (const runtimeOption of idempotencyRuntimeOptionKeys) {
+    if (runtimeOption in idempotency) {
+      throw new TypeError(
+        `Runtime-only idempotency option \`${runtimeOption}\` cannot be declared in a route contract. Keep only enabled, headerName, and required in the contract.`,
+      )
+    }
+  }
 }
 
 function validateEndpointBodyDefinition(body: EndpointDefinition['body']): void {

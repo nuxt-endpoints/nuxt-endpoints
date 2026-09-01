@@ -88,4 +88,38 @@ describe('defineRouteHandler multi-method inference', () => {
       get: { handler: ({ params }) => ({ id: params.id }) },
     })
   })
+
+  it('rejects runtime-only idempotency options in the route contract', () => {
+    const metadata = { enabled: true, headerName: 'Idempotency-Key', required: true } as const
+    const withStorage = { ...metadata, storage: () => ({}) }
+    const withScope = { ...metadata, scope: () => 'public' }
+    const withAuthorization = { ...metadata, authorization: 'middleware' as const }
+    const withRuntimeMethod = { idempotency: withStorage, handler: () => ({ ok: true }) }
+
+    defineRouteHandler({ idempotency: metadata, handler: () => ({ ok: true }) })
+    defineRouteHandler({ post: { idempotency: metadata, handler: () => ({ ok: true }) } })
+
+    defineRouteHandler({
+      // @ts-expect-error storage belongs to the runtime implementation, not the route contract.
+      idempotency: withStorage,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error scope belongs to the runtime implementation, not the route contract.
+      idempotency: withScope,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error authorization belongs to the runtime implementation, not the route contract.
+      idempotency: withAuthorization,
+      handler: () => ({ ok: true }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error method entries are route contracts too.
+      post: withRuntimeMethod,
+    })
+  })
 })

@@ -232,6 +232,29 @@ describe('DefinedEndpoint', () => {
     ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
   })
 
+  it('rejects runtime-only idempotency options in route contracts', async () => {
+    const { defineRouteHandler } = await import('../src/runtime')
+    const metadata = { enabled: true, headerName: 'Idempotency-Key', required: true }
+
+    for (const runtimeOption of ['storage', 'scope', 'authorization'] as const) {
+      expect(() =>
+        defineRouteHandler({
+          idempotency: { ...metadata, [runtimeOption]: () => undefined },
+          handler: () => ({ ok: true }),
+        } as never),
+      ).toThrow(new RegExp(`Runtime-only idempotency option.*${runtimeOption}`))
+    }
+
+    expect(() =>
+      defineRouteHandler({
+        post: {
+          idempotency: { ...metadata, storage: () => undefined },
+          handler: () => ({ ok: true }),
+        },
+      } as never),
+    ).toThrow(/Runtime-only idempotency option.*storage/)
+  })
+
   it('rejects a declared response that mixes media with body', async () => {
     const { defineEndpoint } = await import('./internal-runtime')
 

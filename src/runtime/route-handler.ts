@@ -18,6 +18,7 @@ import {
   type EndpointHandlerSuccessBody,
   type EndpointIdempotencyOptions,
   type EndpointRuntimeOptions,
+  validateEndpointDefinition,
 } from './endpoint'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './endpoint-methods'
 import type { RuntimeEvent } from './platform'
@@ -28,6 +29,12 @@ type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
   headers?: HEADERS
   body?: BODY
   response?: RESPONSES
+}
+
+type RouteContractIdempotency = {
+  storage?: never
+  scope?: never
+  authorization?: never
 }
 
 type RouteHandlerInput<
@@ -50,7 +57,7 @@ type RouteHandlerInput<
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
-  idempotency?: IDEMPOTENCY
+  idempotency?: IDEMPOTENCY & RouteContractIdempotency
   handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
 }
 
@@ -59,7 +66,7 @@ type RuntimeMethodMetadata = {
   summary?: string
   description?: string
   tags?: string[]
-  idempotency?: EndpointIdempotencyMetadata
+  idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
 }
 
 type RuntimeMethodValidation = RouteValidation<
@@ -230,7 +237,8 @@ export function defineRouteHandler<
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const IDEMPOTENCY extends EndpointIdempotencyMetadata | undefined = undefined,
+  const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
+    undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointContract<
     OPERATION,
     PARAMS,
@@ -327,6 +335,7 @@ export function defineRouteHandler<
 >(
   definition: Definition & {
     params?: Params
+    idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
     /** Request validation is per method: declare it inside each method entry. */
     validate?: never
     get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn>
@@ -377,6 +386,7 @@ function createEndpoint(
   definition: EndpointDefinition,
   options: RouteHandlerRuntimeOptions | undefined,
 ): DefinedEndpoint<EndpointDefinition> {
+  validateEndpointDefinition(definition)
   const { idempotency, ...contract } = definition
   const endpoint = defineEndpoint(contract, options)
   return idempotency
