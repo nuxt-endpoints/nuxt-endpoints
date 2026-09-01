@@ -83,6 +83,7 @@ type RuntimeMethodContext = EndpointContext<any> & {
 
 type RuntimeMethodsDefinition = {
   params?: ValidatorSchema
+  validate?: never
   get?: RuntimeMethodDefinition
   post?: RuntimeMethodDefinition
   put?: RuntimeMethodDefinition
@@ -326,6 +327,8 @@ export function defineRouteHandler<
 >(
   definition: Definition & {
     params?: Params
+    /** Request validation is per method: declare it inside each method entry. */
+    validate?: never
     get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn>
     post?: InferredRuntimeMethod<Params, PostMetadata, PostValidation, PostReturn>
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
