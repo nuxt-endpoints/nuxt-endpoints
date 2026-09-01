@@ -14,8 +14,8 @@ Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and
 ```ts
 export default defineEndpoint({
   params: z.object({ id: z.string() }),
-  handler: ({ params }) => {
-    return new Response(`raw response for ${params.id}`)
+  handler: (event) => {
+    return new Response(`raw response for ${event.validated.params.id}`)
   },
 })
 ```
@@ -42,10 +42,10 @@ export default defineEndpoint({
   responses: {
     200: { media: 'application/pdf', description: 'Invoice PDF' },
   },
-  handler: async ({ params, respond }) => {
-    const file = await loadFile(params.id)
+  handler: async (event) => {
+    const file = await loadFile(event.validated.params.id)
 
-    return respond(200, file.bytes, {
+    return event.respond(200, file.bytes, {
       headers: { 'content-disposition': `attachment; filename="${file.name}"` },
     })
   },
@@ -53,7 +53,11 @@ export default defineEndpoint({
 ```
 
 ```ts
-const blob = await $endpoint('downloadFile', { params: { id: 'invoice-1' }, responseType: 'blob' })
+const result = await $endpoint('downloadFile', {
+  params: { id: 'invoice-1' },
+  responseType: 'blob',
+})
+const blob = result.body
 ```
 
 When the content type varies per file and cannot be declared, drop the response contract and return a native `Response` instead, reading the body from `.raw()` on the client.
@@ -62,8 +66,8 @@ When the content type varies per file and cannot be declared, drop the response 
 // server/api/files/[id].get.ts
 export default defineEndpoint({
   params: z.object({ id: z.string() }),
-  handler: async ({ params }) => {
-    const file = await loadFile(params.id)
+  handler: async (event) => {
+    const file = await loadFile(event.validated.params.id)
 
     return new Response(file.bytes, {
       headers: {
@@ -138,20 +142,21 @@ export default defineEndpoint({
   responses: {
     200: { media: 'text/event-stream' },
   },
-  handler: ({ respond }) => {
+  handler: (event) => {
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode('data: ready\n\n'))
       },
     })
 
-    return respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
+    return event.respond(200, stream, { headers: { 'cache-control': 'no-cache' } })
   },
 })
 ```
 
 ```ts
-const reader = (await $endpoint('streamEvents')).getReader()
+const result = await $endpoint('streamEvents')
+const reader = result.body.getReader()
 ```
 
 An undeclared streaming route still works — return a native `Response` and use
@@ -180,11 +185,11 @@ For API redirects, return a native redirect response. Browser fetch follows redi
 // server/api/auth/callback.get.ts
 export default defineEndpoint({
   query: z.object({ next: z.string().optional() }),
-  handler: ({ query }) => {
+  handler: (event) => {
     return new Response(null, {
       status: 302,
       headers: {
-        location: query.next ?? '/dashboard',
+        location: event.validated.query.next ?? '/dashboard',
       },
     })
   },
@@ -212,8 +217,8 @@ Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `
 // server/api/proxy/[id].get.ts
 export default defineEndpoint({
   params: z.object({ id: z.string() }),
-  handler: async ({ params }) => {
-    return await fetch(`https://api.example.com/files/${params.id}`)
+  handler: async (event) => {
+    return await fetch(`https://api.example.com/files/${event.validated.params.id}`)
   },
 })
 ```
@@ -261,15 +266,15 @@ export default defineEndpoint({
   responses: {
     204: z.undefined(),
   },
-  handler: ({ respond }) => {
+  handler: (event) => {
     clearSession()
-    return respond(204, undefined)
+    return event.respond(204, undefined)
   },
 })
 ```
 
 ```ts
-const result = await $endpoint('/api/sessions/current', { method: 'delete' }).result()
+const result = await $endpoint('/api/sessions/current', { method: 'delete' })
 
 if (result.status === 204) {
   result.body // undefined

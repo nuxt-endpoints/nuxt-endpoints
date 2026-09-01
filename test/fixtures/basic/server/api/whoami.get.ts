@@ -11,7 +11,7 @@ export default defineRouteHandler({
       }),
     },
   },
-  handler: async ({ event }) => {
+  handler: async (event) => {
     const user = getCookie(event, 'session') ?? 'anonymous'
 
     // Keep concurrent SSR requests overlapping long enough to exercise

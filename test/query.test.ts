@@ -98,6 +98,20 @@ type Routes =
       }
     }
   | {
+      path: '/api/payments'
+      method: 'post'
+      operation: 'createPayment'
+      definition: {
+        operation: 'createPayment'
+        body: Schema<{ amount: number }>
+        idempotency: {
+          enabled: true
+          headerName: 'Idempotency-Key'
+          required: true
+        }
+      }
+    }
+  | {
       path: '/api/retry-status'
       method: 'get'
       operation: 'retryStatus'
@@ -121,6 +135,12 @@ const routesConfig = [
   { path: '/api/then', method: 'get', operation: 'then' },
   { path: '/api/ctor', method: 'post', operation: 'constructor' },
   { path: '/api/ping', method: 'post', operation: 'ping' },
+  {
+    path: '/api/payments',
+    method: 'post',
+    operation: 'createPayment',
+    idempotency: { headerName: 'Idempotency-Key', required: true },
+  },
   {
     path: '/api/retry-status',
     method: 'get',
@@ -633,6 +653,26 @@ describe('TanStack Query adapter', () => {
       await mutationOptions.ping().mutationFn(undefined)
 
       expect(fetchMock).toHaveBeenCalledWith('/api/ping', { method: 'post' })
+    })
+
+    it('reuses an automatic idempotency key for retries and rotates it after success', async () => {
+      fetchMock
+        .mockRejectedValueOnce(new Error('network failure'))
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({ ok: true })
+      const mutation = mutationOptions.createPayment()
+      const variables = { body: { amount: 1000 } }
+
+      await expect(mutation.mutationFn(variables)).rejects.toThrow('network failure')
+      await mutation.mutationFn(variables)
+      await mutation.mutationFn(variables)
+
+      const keys = fetchMock.mock.calls.map(
+        ([, options]) => (options.headers as Record<string, string>)['Idempotency-Key'],
+      )
+      expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
+      expect(keys[1]).toBe(keys[0])
+      expect(keys[2]).not.toBe(keys[1])
     })
   })
 

@@ -26,7 +26,8 @@ export default defineEndpoint({
     includePosts: z.coerce.boolean().optional(),
   }),
   responses: { 200: User },
-  handler: ({ params, query }) => {
+  handler: (event) => {
+    const { params, query } = event.validated
     return {
       id: params.id,
       name: query.includePosts ? 'Tom with posts' : 'Tom',
@@ -52,7 +53,7 @@ export default defineEndpoint({
   operation: 'getUser',
   params: UserParams,
   responses: { 200: User },
-  handler: ({ params }) => findUser(params.id),
+  handler: (event) => findUser(event.validated.params.id),
 })
 
 await $endpoint('getUser', { params: { id: '123' } })
@@ -139,12 +140,14 @@ export default defineEndpoint({
     }),
   },
   responses: { 201: User },
-  handler: ({ body, bodyMediaType, respond }) => {
+  handler: (event) => {
+    const { body } = event.validated
+    const { bodyMediaType } = event
     // body is the union of member outputs; bodyMediaType narrows which one matched
     if (bodyMediaType === 'multipart/form-data') {
       // body.avatar is a File here
     }
-    return respond(201, createUser(body.name))
+    return event.respond(201, createUser(body.name))
   },
 })
 ```
@@ -330,9 +333,9 @@ The same event and its middleware context are available alongside the Web reques
 ```ts
 export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  handler: ({ event, request, params }) => {
-    const requestId = request.headers.get('x-request-id')
-    return findUser(event.context.user.accountId, params.id, requestId)
+  handler: (event) => {
+    const requestId = event.req.headers.get('x-request-id')
+    return findUser(event.context.user.accountId, event.validated.params.id, requestId)
   },
 })
 ```
@@ -369,9 +372,10 @@ export default defineEndpoint({
     200: User,
     404: ErrorBody,
   },
-  handler: ({ params, respond }) => {
+  handler: (event) => {
+    const { params } = event.validated
     if (params.id === 404) {
-      return respond(404, { message: 'Not found' })
+      return event.respond(404, { message: 'Not found' })
     }
 
     return { id: params.id, name: 'Tom' }
@@ -391,8 +395,8 @@ export default defineEndpoint({
     200: { media: 'text/csv', description: 'CSV export' },
     404: ErrorBody,
   },
-  handler: ({ query, respond }) => {
-    return respond(200, toCsvStream(query.delimiter ?? ','))
+  handler: (event) => {
+    return event.respond(200, toCsvStream(event.validated.query.delimiter ?? ','))
   },
 })
 ```
@@ -443,9 +447,12 @@ export default defineEndpoint({
     200: { media: ['text/csv', 'application/json'], description: 'User export' },
     404: ErrorBody,
   },
-  handler: ({ responseMediaType, respond }) => {
+  handler: (event) => {
     // narrowed to 'text/csv' | 'application/json'
-    return respond(200, responseMediaType === 'text/csv' ? toCsv(rows) : JSON.stringify(rows))
+    return event.respond(
+      200,
+      event.responseMediaType === 'text/csv' ? toCsv(rows) : JSON.stringify(rows),
+    )
   },
 })
 ```
@@ -465,7 +472,7 @@ Every response of a negotiating endpoint carries `Vary: Accept` — including th
 On the client, `accept` asks for one of the declared types and is typed to them:
 
 ```ts
-const json = await $endpoint('exportUsers', { accept: 'application/json' })
+const result = await $endpoint('exportUsers', { accept: 'application/json' })
 ```
 
 It is optional — omitting it takes the endpoint's preference — and it is part of the TanStack Query cache key, so two calls that differ only in `accept` are two cached values.
@@ -500,8 +507,8 @@ it sends what the handler returns and documents that media type.
 A route with any media response is unparsed end to end: the generated client tells the fetcher not to read the body, so what you get back is the live stream rather than a decoded copy of it once it has all arrived.
 
 ```ts
-const stream = await $endpoint('exportUsers', { query: { delimiter: ';' } })
-const reader = stream.getReader()
+const result = await $endpoint('exportUsers', { query: { delimiter: ';' } })
+const reader = result.body.getReader()
 
 // or, when you need the status and headers too
 const response = await $endpoint('exportUsers', { query: {} }).raw()
@@ -515,24 +522,18 @@ Two consequences follow from the client never parsing the response:
 Pass an explicit `responseType` when you want the fetcher to decode after all, which is the usual choice for a file download:
 
 ```ts
-const blob = await $endpoint('downloadInvoice', { responseType: 'blob' })
+const result = await $endpoint('downloadInvoice', { responseType: 'blob' })
+const blob = result.body
 ```
 
 ## Response validation
 
-Response validation is opt-in so production handlers can decide how strict their output boundary should be.
+Declared response schemas are validated automatically before the handler value is serialized.
 
 ```ts
-export const endpoint = defineEndpoint(
-  {
-    responses: { 200: User },
-  },
-  {
-    validation: {
-      response: true,
-    },
-  },
-)
+export const endpoint = defineEndpoint({
+  responses: { 200: User },
+})
 ```
 
 ## Routes registered by configuration
@@ -562,8 +563,8 @@ export default defineEndpoint({
   responses: {
     200: z.object({ id: z.string(), source: z.literal('custom-route') }),
   },
-  handler: ({ query, respond }) => {
-    return respond(200, { id: query.id, source: 'custom-route' })
+  handler: (event) => {
+    return event.respond(200, { id: event.validated.query.id, source: 'custom-route' })
   },
 })
 ```

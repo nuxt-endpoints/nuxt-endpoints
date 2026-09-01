@@ -42,40 +42,40 @@ type TypeScriptModule = typeof import('typescript')
 const defaultServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
   responses: { 200: z.object({ id: z.number(), name: z.string() }) },
-  handler: ({ params }) => {
-    return { id: params.id, name: 'Ada' }
+  handler: (event) => {
+    return { id: event.validated.params.id, name: 'Ada' }
   },
 })`
 
-const defaultClientCode = `const user = await $endpoint('/api/users/:id', {
+const defaultClientCode = `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
 })
 
-console.log(\`id: \${user.id}, name: \${user.name}\`)`
+console.log(\`id: \${result.body.id}, name: \${result.body.name}\`)`
 
 const inferServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  handler: ({ params }) => {
+  handler: (event) => {
     // no response schema: the client's type is inferred from this return
-    return { id: params.id, name: 'Ada', role: 'admin' }
+    return { id: event.validated.params.id, name: 'Ada', role: 'admin' }
   },
 })`
 
-const inferClientCode = `const user = await $endpoint('/api/users/:id', {
+const inferClientCode = `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
 })
 
-console.log(\`\${user.name} (\${user.role})\`)`
+console.log(\`\${result.body.name} (\${result.body.role})\`)`
 
 const schemaServerCode = `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
   responses: { 200: z.object({ id: z.number(), name: z.string(), role: z.string() }) },
-  handler: ({ params }) => {
+  handler: (event) => {
     // error: the schema declares \`role\`, so this return no longer satisfies it
-    return { id: params.id, name: 'Ada' }
-    // fix: return { id: params.id, name: 'Ada', role: 'admin' }
+    return { id: event.validated.params.id, name: 'Ada' }
+    // fix: return { id: event.validated.params.id, name: 'Ada', role: 'admin' }
   },
 })`
 
@@ -107,25 +107,25 @@ const presets: PlaygroundPreset[] = [
     hint: 'The path literal is checked against the known routes, so a typo in the URL fails to compile. Apply the fix in the comment and the error disappears.',
     clientCode: `// error: '/api/user/:id' is not a known route
 // fix: '/api/users/:id'
-const user = await $endpoint('/api/user/:id', {
+const result = await $endpoint('/api/user/:id', {
   method: 'get',
   params: { id: '123' },
 })
 
-console.log(\`id: \${user.id}, name: \${user.name}\`)`,
+console.log(\`id: \${result.body.id}, name: \${result.body.name}\`)`,
   },
   {
     label: 'Bad response',
     description: 'Read a field not declared by the endpoint.',
-    hint: 'The client reads user.email, but the contract only declares id and name — the read fails in TypeScript. Apply the fix in the comment and the error disappears.',
-    clientCode: `const user = await $endpoint('/api/users/:id', {
+    hint: 'The client reads result.body.email, but the contract only declares id and name — the read fails in TypeScript. Apply the fix in the comment and the error disappears.',
+    clientCode: `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
 })
 
 // error: the contract declares \`name\`, not \`email\`
-// fix: user.name
-console.log(\`id: \${user.id}, name: \${user.email}\`)`,
+// fix: result.body.name
+console.log(\`id: \${result.body.id}, name: \${result.body.email}\`)`,
   },
 ]
 
@@ -594,7 +594,7 @@ declare function defineEndpoint<
   operation?: string
   params?: Params
   responses?: Responses
-  handler?: (event: { params: ParamsOutput<Params> }) => Return
+  handler?: (event: { validated: { params: ParamsOutput<Params> } }) => Return
 }): Endpoint<Params, Responses, AwaitedLike<Return>>
 declare function defineEndpointHandler<
   Params,
@@ -604,12 +604,17 @@ declare function defineEndpointHandler<
     | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
 >(
   endpoint: Endpoint<Params, Responses, unknown>,
-  handler: (event: { params: ParamsOutput<Params> }) => Return,
+  handler: (event: { validated: { params: ParamsOutput<Params> } }) => Return,
 ): Endpoint<Params, Responses, AwaitedLike<Return>>
 declare function $endpoint(
   path: '/api/users/:id',
   options: EndpointRequest<typeof import('./server').default> & { method: 'get' },
-): Promise<ClientBody<typeof import('./server').default>>
+): Promise<{
+  status: 200
+  ok: true
+  body: ClientBody<typeof import('./server').default>
+  headers: Headers
+}>
 `
 </script>
 

@@ -65,17 +65,26 @@ declare const useResultClient: UseResultClient
 describe('endpoint JSON wire response types', () => {
   it('serializes declared success bodies like Nitro InternalApi', async () => {
     const call = client('getSerialized')
-    expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<WireOutput>()
-    const body = await call
-    expectTypeOf(body.createdAt).toEqualTypeOf<string>()
-    expectTypeOf(body.tags).toEqualTypeOf<Record<string, never>>()
-    expectTypeOf(body.readonlyDates).toEqualTypeOf<string[]>()
-    expectTypeOf(body.custom).toEqualTypeOf<{ token: string }>()
-    // @ts-expect-error JSON serialization omits function-valued object properties.
-    void body.nested.omitted
+    expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<
+      | { status: 200; ok: true; body: WireOutput; headers: Headers }
+      | { status: 422; ok: false; body: { rejectedAt: string }; headers: Headers }
+    >()
+    const response = await call
+    if (response.status === 200) {
+      expectTypeOf(response.body.createdAt).toEqualTypeOf<string>()
+      expectTypeOf(response.body.tags).toEqualTypeOf<Record<string, never>>()
+      expectTypeOf(response.body.readonlyDates).toEqualTypeOf<string[]>()
+      expectTypeOf(response.body.custom).toEqualTypeOf<{ token: string }>()
+      // @ts-expect-error JSON serialization omits function-valued object properties.
+      void response.body.nested.omitted
+    }
 
     const state = useClient('getSerialized')
-    expectTypeOf(state.data.value).toEqualTypeOf<WireOutput | undefined>()
+    expectTypeOf(state.data.value).toEqualTypeOf<
+      | { status: 200; ok: true; body: WireOutput }
+      | { status: 422; ok: false; body: { rejectedAt: string } }
+      | undefined
+    >()
 
     const raw = await call.raw()
     if (raw.status === 200) {
@@ -98,7 +107,11 @@ describe('endpoint JSON wire response types', () => {
 
   it('serializes inferred handler and status-response bodies', async () => {
     const call = client('getInferredSerialized')
-    expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<WireOutput | { acceptedAt: string }>()
+    expectTypeOf<Awaited<typeof call>>().toEqualTypeOf<
+      | { status: 200; ok: true; body: WireOutput; headers: Headers }
+      | { status: 202; ok: true; body: { acceptedAt: string }; headers: Headers }
+      | { status: 400; ok: false; body: { rejectedAt: string }; headers: Headers }
+    >()
 
     const result = await call.result()
     if (result.status === 200) {

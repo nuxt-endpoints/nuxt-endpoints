@@ -7,20 +7,22 @@ Nuxt Endpoints generates `$endpoint` and `#endpoints` types from discovered endp
 
 ## Client calls
 
-The primary call uses the route path and HTTP method. The default call returns the success body. Request options are inferred from the endpoint request schemas, and the returned body follows the JSON wire representation of the endpoint response schema.
+The primary call uses the route path and HTTP method. It creates a lazy request object whose awaited value is the endpoint's declared status union. Request options are inferred from the endpoint request schemas, and response bodies follow the JSON wire representation of the endpoint response schema.
 
 Response validation uses the schema output on the server before HTTP serialization. The client sees the parsed JSON value, so a schema output such as `Date` is typed as `string` on `$endpoint`, `useEndpoint`, and Vue Query clients.
 
 ```vue
 <script setup lang="ts">
-const user = await $endpoint('/api/users/:id', {
+const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
   query: { includePosts: true },
 })
 
-user.id.toFixed()
-user.name.toUpperCase()
+if (result.status === 200) {
+  result.body.id.toFixed()
+  result.body.name.toUpperCase()
+}
 </script>
 ```
 
@@ -31,7 +33,7 @@ It forwards Nuxt async-data options such as `key`, `lazy`, `server`, `watch`, an
 ```vue
 <script setup lang="ts">
 const {
-  data: user,
+  data: result,
   pending,
   error,
   refresh,
@@ -41,13 +43,16 @@ const {
   key: 'user:123',
 })
 
-user.value?.name.toUpperCase()
+if (result.value?.status === 200) {
+  result.value.body.name.toUpperCase()
+}
 </script>
 ```
 
-Use the optional [Vue Query](/docs/tanstack-query) adapter when the same
-endpoint needs shared server-state caching, retries, invalidation, optimistic
-updates, prefetching, or infinite-query state.
+The same request object exposes `.queryOptions()` for `GET`/`HEAD` and
+`.mutationOptions()` for unsafe methods. Pass those ordinary options to the
+optional [Vue Query](/docs/tanstack-query) adapter when the request needs
+shared server-state caching, retries, invalidation, or optimistic updates.
 
 ## Request forwarding during SSR
 
@@ -56,14 +61,14 @@ two primitives differently:
 
 | Client                                      | Incoming cookies and headers during SSR | Mirrors    |
 | ------------------------------------------- | --------------------------------------- | ---------- |
-| `useEndpoint`, `useEndpointResult`          | Forwarded                               | `useFetch` |
+| `useEndpoint`                               | Forwarded                               | `useFetch` |
 | [Vue Query](/docs/tanstack-query) factories | Forwarded                               | `useFetch` |
 | `$endpoint`                                 | Not forwarded                           | `$fetch`   |
 
 `useFetch` swaps plain `$fetch` for `useRequestFetch()` when the path is
-relative, so a session cookie reaches the internal route. `useEndpoint` and
-`useEndpointResult` capture the same request-aware fetcher, per call rather than
-once, so concurrent SSR requests never share one another's credentials.
+relative, so a session cookie reaches the internal route. `useEndpoint`
+captures the same request-aware fetcher per call, so concurrent SSR requests
+never share one another's credentials.
 
 `$fetch` does not forward, and neither does `$endpoint`. Calling a
 cookie-authenticated endpoint through `$endpoint` during SSR reaches the route

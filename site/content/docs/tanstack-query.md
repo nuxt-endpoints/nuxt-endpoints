@@ -1,13 +1,48 @@
 ---
 title: Vue Query
-description: Generate typed query, mutation, and infinite-query options for Vue Query from named endpoints, with optional Nuxt SSR setup.
+description: Use typed endpoint requests as Vue Query queries and mutations, with optional generated factories and Nuxt SSR setup.
 ---
 
-Nuxt Endpoints can generate ordinary Vue Query options from named endpoint contracts. Endpoint input and output types stay in Nuxt Endpoints; Vue Query owns caching, retries, invalidation, optimistic updates, polling, and infinite-query state.
+Nuxt Endpoints request objects produce ordinary Vue Query options. Endpoint input, request identity, and status-aware output stay in Nuxt Endpoints; Vue Query owns caching, retries, invalidation, optimistic updates, polling, and infinite-query state.
 
 Use [Generated Client](/docs/client) or `useEndpoint` when a request does not need Vue Query's server-state features.
 
-## Install and enable
+## Direct request bridge
+
+Create the request once and pass its options directly to Vue Query:
+
+```ts
+import { useQuery } from '@tanstack/vue-query'
+
+const request = $endpoint('/api/users/:id', {
+  method: 'get',
+  params: { id: '123' },
+})
+
+const user = useQuery(request.queryOptions())
+
+if (user.data.value?.status === 200) {
+  user.data.value.body.name
+}
+```
+
+`GET` and `HEAD` requests expose `.queryOptions()`. `POST`, `PUT`, `PATCH`, and `DELETE` requests expose `.mutationOptions()`:
+
+```ts
+const request = $endpoint('/api/payments', {
+  method: 'post',
+  body: { amount: 1000 },
+})
+
+const payment = useMutation(request.mutationOptions())
+payment.mutate()
+```
+
+One request object represents one logical mutation. Query retries execute fresh HTTP attempts from that object, while its normalized input and idempotency key remain fixed. Create a new `$endpoint(...)` object for a separate user operation. Use the generated variable-driven factories below for a long-lived mutation that accepts different input on each `mutate(...)` call.
+
+Direct request options cache serializable `{ status, ok, body }` data. Declared non-2xx statuses therefore remain typed data; transport failures reject.
+
+## Install and optional factory generation
 
 Install Vue Query as an optional peer dependency:
 
@@ -130,7 +165,7 @@ if (user.data.value?.status === 404) {
 }
 ```
 
-Result-mode cache data is serializable and contains only `{ status, ok, body }`. Native response headers are deliberately excluded from the Query cache and SSR payload. Use the low-level `$endpoint(...).result()` API when response headers are required.
+Result-mode cache data is serializable and contains only `{ status, ok, body }`. Native response headers are deliberately excluded from the Query cache and SSR payload. Directly await `$endpoint(...)` when response headers are required.
 
 Transport failures reject in both data and result modes.
 

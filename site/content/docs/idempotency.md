@@ -50,8 +50,9 @@ export default defineEndpoint({
     required: true,
     replayStatuses: [201],
   },
-  handler: ({ body, respond }) => {
-    return respond(201, { balance: grantPoints(body.userId, body.amount) })
+  handler: (event) => {
+    const { body } = event.validated
+    return event.respond(201, { balance: grantPoints(body.userId, body.amount) })
   },
 })
 ```
@@ -118,20 +119,31 @@ If an idempotent endpoint ends up without `storage`, `scope`, or `authorization`
 - Same key and same fingerprint still running: `409 Conflict`.
 - Same key and completed fingerprint: replay the recorded response.
 
-These framework-generated failures use a stable `application/problem+json` Problem Details body. They are not added to the endpoint's declared `.result()` response union.
+These framework-generated failures use a stable `application/problem+json` Problem Details body. They are not added to the endpoint's declared response union.
 
 ## Client usage
 
-The generated client accepts a typed `idempotencyKey` request option, separate from `headers`, mapped to the configured header. It is required in the client type when `required: true`, and optional otherwise. The client never auto-generates a key: a retry must reuse the caller's same key.
+The generated client accepts a typed `idempotencyKey` request option, separate from `headers`, mapped to the configured header.
+
+When `required: true`, omitting the option generates a UUID when the `$endpoint(...)` request object is created. For an optional endpoint, pass `idempotencyKey: true` to request the same automatic behavior. An explicit string always wins and is useful when a logical operation must survive a page reload, process restart, or queue handoff.
 
 ```ts
 await $endpoint('grantPoints', {
-  idempotencyKey: crypto.randomUUID(),
   body: { userId: 'u_1', amount: 10 },
 })
 ```
 
-TanStack Query and Infinite Query include `idempotencyKey` in the cache key segment.
+The generated key belongs to the request object, not to an individual fetch attempt. Directly awaiting the object is memoized, while a TanStack mutation retry performs a fresh HTTP attempt with the same key:
+
+```ts
+const request = $endpoint('grantPoints', {
+  body: { userId: 'u_1', amount: 10 },
+})
+
+const mutation = useMutation(request.mutationOptions())
+```
+
+Query and mutation keys include the resolved `idempotencyKey` in their request-identity segment.
 
 ## Storage
 

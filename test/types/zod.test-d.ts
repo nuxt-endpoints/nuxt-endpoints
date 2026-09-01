@@ -77,8 +77,10 @@ describe('Zod support', () => {
     client('getUser', { params: { id: 1 } })
 
     expectTypeOf<Awaited<typeof user>>().toEqualTypeOf<{
-      id: number
-      name: string
+      status: 200
+      ok: true
+      body: { id: number; name: string }
+      headers: Headers
     }>()
   })
 })

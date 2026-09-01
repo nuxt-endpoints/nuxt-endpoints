@@ -14,14 +14,16 @@ declare const useResultClient: $UseEndpointResult
 
 async function checkClient() {
   const user = await client('/api/users/:id', { method: 'get', params: { id: '1' } })
-  user.id.toFixed()
-  user.name.toUpperCase()
+  if (user.status === 200) {
+    user.body.id.toFixed()
+    user.body.name.toUpperCase()
+  }
 
   const userAlias = await client('getUser', { params: { id: '1' } })
-  userAlias.name.toUpperCase()
+  if (userAlias.status === 200) userAlias.body.name.toUpperCase()
 
   const userPropertyAlias = await client.getUser({ params: { id: '1' } })
-  userPropertyAlias.name.toUpperCase()
+  if (userPropertyAlias.status === 200) userPropertyAlias.body.name.toUpperCase()
 
   const userResult = await client('/api/users/:id', {
     method: 'get',
@@ -50,53 +52,53 @@ async function checkClient() {
   await client('/api/users/:id', { method: 'get', params: { id: 1 } })
 
   const created = await client('/api/users', { method: 'post', body: { name: 'Sid' } })
-  created.id.toFixed()
+  created.body.id.toFixed()
 
   const createdByMethod = await client('createUser', { body: { name: 'Sid' } })
-  createdByMethod.id.toFixed()
+  createdByMethod.body.id.toFixed()
 
   const idempotent = await client('createIdempotentItem', {
     body: { amount: 100 },
     idempotencyKey: 'request-1',
   })
-  idempotent.id.toFixed()
+  idempotent.body.id.toFixed()
 
-  // @ts-expect-error idempotencyKey is required by endpoint metadata.
   await client('createIdempotentItem', { body: { amount: 100 } })
 
   const idempotentCentral = await client('createIdempotentCentralItem', {
     body: { amount: 100 },
     idempotencyKey: 'request-1',
   })
-  idempotentCentral.id.toFixed()
+  idempotentCentral.body.id.toFixed()
 
-  // @ts-expect-error idempotencyKey is required by endpoint metadata.
   await client('createIdempotentCentralItem', { body: { amount: 100 } })
 
   // @ts-expect-error body.name is required.
   await client('/api/users', { method: 'post', body: {} })
 
   const search = await client('/api/search', { method: 'get', query: { q: 'nuxt' } })
-  search.items[0]?.toUpperCase()
+  search.body.items[0]?.toUpperCase()
 
   const separated = await client('/api/separated', {
     method: 'get',
     query: { name: 'nuxt' },
   })
-  separated.name.toUpperCase()
-  separated.separated.valueOf()
+  separated.body.name.toUpperCase()
+  separated.body.separated.valueOf()
 
   const separatedByOperation = await client('getSeparated', { query: { name: 'nuxt' } })
-  separatedByOperation.name.toUpperCase()
+  separatedByOperation.body.name.toUpperCase()
 
   const sibling = await client('getSibling', { query: { name: 'nuxt' } })
-  sibling.name.toUpperCase()
-  sibling.sibling.valueOf()
+  sibling.body.name.toUpperCase()
+  sibling.body.sibling.valueOf()
 
   const serialized = await client('getSerialized', { query: {} })
-  serialized.createdAt.toUpperCase()
-  // @ts-expect-error Date is serialized to a string on the HTTP wire.
-  serialized.createdAt.getTime()
+  if (serialized.status === 200) {
+    serialized.body.createdAt.toUpperCase()
+    // @ts-expect-error Date is serialized to a string on the HTTP wire.
+    serialized.body.createdAt.getTime()
+  }
 
   const serializedError = await client('getSerialized', { query: { fail: 'true' } }).result()
   if (serializedError.status === 422) {
@@ -112,8 +114,8 @@ async function checkClient() {
     method: 'post',
     body: { name: 'Sid' },
   })
-  uploadedByDefault.name.toUpperCase()
-  uploadedByDefault.bodyMediaType.toUpperCase()
+  uploadedByDefault.body.name.toUpperCase()
+  uploadedByDefault.body.bodyMediaType.toUpperCase()
 
   // Selecting `multipart/form-data` types `body` as the wire value (FormData)
   // rather than the member schema's input.
@@ -121,14 +123,14 @@ async function checkClient() {
     mediaType: 'multipart/form-data',
     body: new FormData(),
   })
-  uploadedByMultipart.bodyMediaType.toUpperCase()
+  uploadedByMultipart.body.bodyMediaType.toUpperCase()
 
   const userState = await useClient('/api/users/:id', {
     method: 'get',
     params: { id: '1' },
     key: 'user:1',
   })
-  userState.data.value?.name.toUpperCase()
+  if (userState.data.value?.status === 200) userState.data.value.body.name.toUpperCase()
   userState.pending.value.valueOf()
   await userState.refresh()
 
@@ -136,7 +138,9 @@ async function checkClient() {
     params: { id: '1' },
     key: 'user-operation:1',
   })
-  userOperationState.data.value?.name.toUpperCase()
+  if (userOperationState.data.value?.status === 200) {
+    userOperationState.data.value.body.name.toUpperCase()
+  }
 
   const userResultState = await useResultClient('/api/users/:id', {
     method: 'get',
@@ -160,16 +164,16 @@ async function checkClient() {
   // Multi-method group: every declared method is callable on the one path,
   // and each carries its own request and response contract.
   const multiGet = await client('/api/multi', { method: 'get', query: { name: 'nuxt' } })
-  multiGet.name.toUpperCase()
+  multiGet.body.name.toUpperCase()
 
   const multiPut = await client('/api/multi', { method: 'put', body: { name: 'nuxt' } })
-  multiPut.name.toUpperCase()
+  multiPut.body.name.toUpperCase()
 
   const multiGetByOperation = await client('getMulti', { query: { name: 'nuxt' } })
-  multiGetByOperation.name.toUpperCase()
+  multiGetByOperation.body.name.toUpperCase()
 
   const multiPutByOperation = await client('putMulti', { body: { name: 'nuxt' } })
-  multiPutByOperation.name.toUpperCase()
+  multiPutByOperation.body.name.toUpperCase()
 
   // @ts-expect-error delete is not declared on the group.
   await client('/api/multi', { method: 'delete' })
@@ -181,7 +185,7 @@ async function checkClient() {
   // fetcher not to parse this route, so every status arrives as the live
   // stream - including the validated 404 the contract still declares.
   const exported = await client('exportUsers', { query: {} })
-  exported.getReader()
+  exported.body.getReader()
 
   const exportedResult = await client('/api/export', { method: 'get', query: {} }).result()
   exportedResult.body.getReader()
@@ -191,8 +195,8 @@ async function checkClient() {
   // A route registered through `nitro.handlers` is typed exactly like a
   // scanned one - the generated client cannot tell them apart.
   const customReport = await client('getCustomReport', { query: { id: 'r_1' } })
-  customReport.id.toUpperCase()
-  customReport.source.toUpperCase()
+  customReport.body.id.toUpperCase()
+  customReport.body.source.toUpperCase()
 
   // @ts-expect-error query.id is required by the endpoint contract.
   await client('getCustomReport', { query: {} })
@@ -202,24 +206,32 @@ async function checkClient() {
     query: { q: 'nuxt' },
     key: 'search:nuxt',
   })
-  searchState.data.value?.items[0]?.toUpperCase()
+  searchState.data.value?.body.items[0]?.toUpperCase()
 
   // @ts-expect-error useEndpoint keeps endpoint request options strict.
   await useClient('/api/users/:id', { method: 'get', params: { id: 1 } })
 }
 
 const userResponse: $EndpointResponse<'getUser'> = {
-  id: 1,
-  name: 'Tom',
+  status: 200,
+  ok: true,
+  body: { id: 1, name: 'Tom' },
+  headers: new Headers(),
 }
 
 const userPathResponse: $EndpointPathResponse<'/api/users/:id', 'get'> = {
-  id: 1,
-  name: 'Tom',
+  status: 200,
+  ok: true,
+  body: { id: 1, name: 'Tom' },
+  headers: new Headers(),
 }
 
-const exportPathResponse: $EndpointPathResponse<'/api/export', 'get'> =
-  new ReadableStream<Uint8Array>()
+const exportPathResponse: $EndpointPathResponse<'/api/export', 'get'> = {
+  status: 200,
+  ok: true,
+  body: new ReadableStream<Uint8Array>(),
+  headers: new Headers(),
+}
 
 const searchPath: EndpointPath = '/api/search'
 const searchMethod: EndpointMethod<'/api/search'> = 'get'
@@ -230,39 +242,57 @@ const multiGetMethod: EndpointMethod<'/api/multi'> = 'get'
 const multiPutMethod: EndpointMethod<'/api/multi'> = 'put'
 
 const invalidUserResponse: $EndpointResponse<'getUser'> = {
-  // @ts-expect-error response id is generated from the endpoint response schema and must be a number.
-  id: 'wrong',
-  name: 'Tom',
+  status: 200,
+  ok: true,
+  body: {
+    // @ts-expect-error response id is generated from the endpoint response schema and must be a number.
+    id: 'wrong',
+    name: 'Tom',
+  },
+  headers: new Headers(),
 }
 
 // PROTOTYPE: the single-define (merged) form must reach the generated client
 // surface exactly like the two-call form does.
 const mergedResponse: $EndpointResponse<'getMerged'> = {
-  id: 1,
-  name: 'Merged',
+  status: 200,
+  ok: true,
+  body: { id: 1, name: 'Merged' },
+  headers: new Headers(),
 }
 
 const mergedPathResponse: $EndpointPathResponse<'/api/merged', 'get'> = {
-  id: 1,
-  name: 'Merged',
+  status: 200,
+  ok: true,
+  body: { id: 1, name: 'Merged' },
+  headers: new Headers(),
 }
 
 const invalidMergedResponse: $EndpointResponse<'getMerged'> = {
-  // @ts-expect-error the merged form's 200 body still comes from its schema.
-  id: 'wrong',
-  name: 'Merged',
+  status: 200,
+  ok: true,
+  body: {
+    // @ts-expect-error the merged form's 200 body still comes from its schema.
+    id: 'wrong',
+    name: 'Merged',
+  },
+  headers: new Headers(),
 }
 
 // No declared responses: the client body comes from the widened handler return.
 const mergedInferredResponse: $EndpointResponse<'getMergedInferred'> = {
-  name: 'Tom',
-  count: 1,
+  status: 200,
+  ok: true,
+  body: { name: 'Tom', count: 1 },
+  headers: new Headers(),
 }
 
 async function checkMergedClient() {
   const merged = await client('getMerged', { query: { id: '1' } })
-  merged.id.toFixed()
-  merged.name.toUpperCase()
+  if (merged.status === 200) {
+    merged.body.id.toFixed()
+    merged.body.name.toUpperCase()
+  }
 
   const mergedResult = await client('getMerged', { query: { id: '1' } }).result()
   if (mergedResult.status === 404) {

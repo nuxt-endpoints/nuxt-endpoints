@@ -7,5 +7,5 @@ export default defineRouteHandler({
     query: separatedContract.query,
     response: separatedContract.responses,
   },
-  handler: ({ query }) => ({ name: query.name, separated: true }),
+  handler: (event) => ({ name: event.validated.query.name, separated: true }),
 })

@@ -6,7 +6,6 @@ import {
   defineEndpoint,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
-  defineRouteHandler,
 } from '../src/runtime'
 import { defineRuntimeHandler } from '../src/runtime/platform'
 
@@ -217,30 +216,6 @@ describe('defineEndpointMethods dispatch over real requests', () => {
 })
 
 describe('defineEndpointMethods route identity and idempotency policy forwarding', () => {
-  it('applies defineRouteHandler options to every grouped method', async () => {
-    const wrapped: string[] = []
-    const handler = defineRouteHandler(
-      {
-        get: { handler: () => ({ method: 'get' }) },
-        put: { handler: () => ({ method: 'put' }) },
-      },
-      {
-        wrapHandler: async (_context, next) => {
-          const response = await next()
-          wrapped.push((response.body as { method: string }).method)
-          return response
-        },
-      },
-    )
-
-    await requestThroughH3(handler as never, '/api/items', 'http://test.local/api/items')
-    await requestThroughH3(handler as never, '/api/items', 'http://test.local/api/items', {
-      method: 'PUT',
-    })
-
-    expect(wrapped).toEqual(['get', 'put'])
-  })
-
   it('throws when a route identity is attached for a method the group does not declare', () => {
     const endpoints = defineEndpointMethods({
       get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),

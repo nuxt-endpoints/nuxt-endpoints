@@ -200,7 +200,6 @@ describe('EndpointQueryOptionsClient / EndpointMutationOptionsClient types', () 
 
     const retryPingMutation = mutationClient.retryPing()
     retryPingMutation.mutationFn({ idempotencyKey: 'request-1' })
-    // @ts-expect-error required idempotency key is part of mutation variables.
     retryPingMutation.mutationFn()
 
     queryClient.retryHealth()

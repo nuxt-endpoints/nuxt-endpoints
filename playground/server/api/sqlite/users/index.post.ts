@@ -6,30 +6,21 @@ const PlaygroundUser = z.object({
   createdAt: z.string(),
 })
 
-export default defineRouteHandler(
-  {
-    operation: 'createSqliteUser',
-    summary: 'Persist a user in the playground SQLite database',
-    validate: {
-      body: z.object({
-        name: z.string().trim().min(1).max(80),
-      }),
-      response: {
-        201: PlaygroundUser,
-      },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => respond(201, createPlaygroundUser(body.name)),
-  },
-  {
-    idempotency: {
-      storage: () => getPlaygroundIdempotencyStorage(),
-      scope: () => 'sqlite-playground',
-      authorization: 'middleware',
+export default defineRouteHandler({
+  operation: 'createSqliteUser',
+  summary: 'Persist a user in the playground SQLite database',
+  validate: {
+    body: z.object({
+      name: z.string().trim().min(1).max(80),
+    }),
+    response: {
+      201: PlaygroundUser,
     },
   },
-)
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
+  },
+  handler: (event) => event.respond(201, createPlaygroundUser(event.validated.body.name)),
+})

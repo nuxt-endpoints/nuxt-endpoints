@@ -12,15 +12,15 @@ export default defineRouteHandler({
       404: z.object({ message: z.string() }),
     },
   },
-  handler: ({ query, responseMediaType, respond }) => {
-    const delimiter = query.delimiter ?? ','
+  handler: (event) => {
+    const delimiter = event.validated.query.delimiter ?? ','
     const rows = [
       ['id', 'name'],
       ['u_1', 'Tom'],
     ]
 
-    if (responseMediaType === 'application/json') {
-      return respond(200, JSON.stringify(rows))
+    if (event.responseMediaType === 'application/json') {
+      return event.respond(200, JSON.stringify(rows))
     }
 
     const stream = new ReadableStream({
@@ -33,6 +33,6 @@ export default defineRouteHandler({
       },
     })
 
-    return respond(200, stream)
+    return event.respond(200, stream)
   },
 })

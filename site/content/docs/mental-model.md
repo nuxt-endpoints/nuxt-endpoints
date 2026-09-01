@@ -15,11 +15,11 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options, a default success-body call, typed result helpers, and raw Web Response helpers. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
+Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. Add `operation` only when a named call target such as `$endpoint.getUser(...)` is useful.
 
 ## 4. Response handling is explicit
 
-Use the default call when app code only needs the success body. Use `.result()` for typed status and body handling, and `.raw()` only when code needs a low-level Web `Response`.
+Await the request to receive a typed status union. Use `.raw()` only when code needs a low-level Web `Response`. `useEndpoint` and the TanStack bridge keep the same status-aware data shape while omitting native headers.
 
 ## 5. OpenAPI is generated from the same source
 

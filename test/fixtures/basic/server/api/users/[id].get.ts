@@ -21,13 +21,13 @@ export default defineRouteHandler({
       404: ErrorResponse,
     },
   },
-  handler: ({ params, respond }) => {
-    if (params.id === '404') {
-      return respond(404, { message: 'Not found' })
+  handler: (event) => {
+    if (event.validated.params.id === '404') {
+      return event.respond(404, { message: 'Not found' })
     }
 
     return {
-      id: Number(params.id),
+      id: Number(event.validated.params.id),
       name: 'Tom',
     }
   },

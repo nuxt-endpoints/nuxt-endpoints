@@ -24,9 +24,10 @@ export default defineEndpoint({
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: ({ params, respond }) => {
+  handler: (event) => {
+    const { params } = event.validated
     const user = findUser(params.id) // params.id is a number — validated and coerced
-    if (!user) return respond(404, { message: 'Not found' })
+    if (!user) return event.respond(404, { message: 'Not found' })
     return user
   },
 })
@@ -39,7 +40,7 @@ Every component can now call it with full inference — including typed error br
 const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '1' },
-}).result()
+})
 
 if (result.status === 404) {
   result.body.message // typed as the 404 schema

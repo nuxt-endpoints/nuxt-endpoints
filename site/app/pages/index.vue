@@ -31,11 +31,11 @@ const queryPitch = {
   key: 'query',
   title: 'Your contract,',
   titleAccent: 'now query-ready.',
-  lead: 'After installing @tanstack/vue-query, generated option factories plug named endpoints directly into Vue Query. There is no second request model to maintain: Vue Query owns server-state behavior while Nuxt Endpoints keeps every request and response aligned with the server contract.',
+  lead: 'After installing @tanstack/vue-query, the same $endpoint request object plugs directly into Vue Query. Vue Query owns server-state behavior while Nuxt Endpoints keeps request identity, retries, and response types aligned with the server contract.',
   points: [
     {
       icon: 'lucide:list-checks',
-      text: 'GET and HEAD become typed query and infinite-query options; mutations keep typed variables',
+      text: 'GET and HEAD expose query options; unsafe methods expose mutation options',
     },
     {
       icon: 'lucide:repeat',
@@ -47,7 +47,7 @@ const queryPitch = {
     },
     {
       icon: 'lucide:cookie',
-      text: 'Every client forwards the SSR request: useEndpoint, useEndpointResult, and the query factories carry the incoming cookies to the internal route',
+      text: 'useEndpoint and query options carry incoming cookies to internal routes during SSR',
     },
   ],
   cta: { label: 'Use Vue Query', to: '/docs/tanstack-query' },
@@ -68,16 +68,14 @@ const queryPitch = {
       title: 'pages/users/[id].vue',
       lang: 'ts',
       code: `import { useQuery } from '@tanstack/vue-query'
-import { endpointQueryOptions } from '#endpoints/query'
 
 const route = useRoute()
-const user = useQuery(
-  endpointQueryOptions.getUser(() => ({
-    params: { id: String(route.params.id) },
-  })),
-)
+const request = $endpoint.getUser({ params: { id: String(route.params.id) } })
+const user = useQuery(request.queryOptions())
 
-user.data.value?.name // User`,
+if (user.data.value?.status === 200) {
+  user.data.value.body.name // User
+}`,
     },
   ],
 } as const
@@ -120,12 +118,12 @@ export const endpoint = defineEndpoint({
       {
         title: 'app code — nothing to import',
         lang: 'ts',
-        code: `const user = await $endpoint('/api/users/:id', {
+        code: `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '1' },
 })
 
-user.name // User — inferred from the contract`,
+if (result.status === 200) result.body.name // User`,
       },
     ],
   },
@@ -155,8 +153,8 @@ user.name // User — inferred from the contract`,
         lang: 'ts',
         code: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  handler: ({ params }) => {
-    return findUser(params.id)
+  handler: (event) => {
+    return findUser(event.validated.params.id)
     // client types are inferred from this return value
   },
 })`,
@@ -186,7 +184,7 @@ user.name // User — inferred from the contract`,
       },
       {
         icon: 'lucide:split',
-        text: '.result() narrows the response body by status',
+        text: 'Awaiting the request narrows the response body by status',
       },
       {
         icon: 'lucide:file-json',
@@ -201,7 +199,7 @@ user.name // User — inferred from the contract`,
         code: `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
-}).result()
+})
 
 if (result.status === 200) {
   result.body.name // User

@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
   EndpointClient,
   StatusResponse,
@@ -224,29 +225,54 @@ describe('EndpointClient', () => {
     const inferredUserByOperation = client('getInferredUser', { params: { id: '1' } })
 
     expectTypeOf<Awaited<typeof getUserByPath>>().toEqualTypeOf<{
-      id: number
-      name: string
+      status: 200
+      ok: true
+      body: { id: number; name: string }
+      headers: Headers
     }>()
-    expectTypeOf<Awaited<typeof getUserByOperation>>().toEqualTypeOf<{
-      id: number
-      name: string
-    }>()
-    expectTypeOf<Awaited<typeof getUserByAlias>>().toEqualTypeOf<{
-      id: number
-      name: string
-    }>()
+    expectTypeOf<Awaited<typeof getUserByOperation>>().toEqualTypeOf<
+      Awaited<typeof getUserByPath>
+    >()
+    expectTypeOf<Awaited<typeof getUserByAlias>>().toEqualTypeOf<Awaited<typeof getUserByPath>>()
 
     expectTypeOf<Awaited<typeof createUserByPath>>().toEqualTypeOf<
-      { id: number; name: string } | { jobId: string }
+      | { status: 201; ok: true; body: { id: number; name: string }; headers: Headers }
+      | { status: 202; ok: true; body: { jobId: string }; headers: Headers }
+      | { status: 400; ok: false; body: { message: string }; headers: Headers }
     >()
     expectTypeOf<Awaited<typeof inferredUserByPath>>().toEqualTypeOf<{
-      id: number
-      name: string
+      status: 200
+      ok: true
+      body: { id: number; name: string }
+      headers: Headers
     }>()
-    expectTypeOf<Awaited<typeof inferredUserByOperation>>().toEqualTypeOf<{
-      id: number
-      name: string
-    }>()
+    expectTypeOf<Awaited<typeof inferredUserByOperation>>().toEqualTypeOf<
+      Awaited<typeof inferredUserByPath>
+    >()
+  })
+
+  it('connects endpoint request objects to TanStack Query', () => {
+    const query = useQuery(
+      client('/api/users/:id', { method: 'get', params: { id: '1' } }).queryOptions(),
+    )
+    expectTypeOf(query.data.value).toEqualTypeOf<
+      { status: 200; ok: true; body: { id: number; name: string } } | undefined
+    >()
+
+    const mutation = useMutation(
+      client('/api/users', { method: 'post', body: { name: 'Tom' } }).mutationOptions(),
+    )
+    expectTypeOf(mutation.data.value).toEqualTypeOf<
+      | { status: 201; ok: true; body: { id: number; name: string } }
+      | { status: 202; ok: true; body: { jobId: string } }
+      | { status: 400; ok: false; body: { message: string } }
+      | undefined
+    >()
+
+    // @ts-expect-error GET requests do not expose mutation options.
+    client('getUser', { params: { id: '1' } }).mutationOptions()
+    // @ts-expect-error POST requests do not expose query options.
+    client('createUser', { body: { name: 'Tom' } }).queryOptions()
   })
 
   it('types endpoint results by declared status', async () => {
@@ -360,27 +386,25 @@ describe('EndpointClient', () => {
   })
 
   it('types required and optional idempotency keys independently of request schemas', () => {
+    client('/api/payments', { method: 'post' })
     client('/api/payments', { method: 'post', idempotencyKey: 'request-1' })
+    client('/api/payments', { method: 'post', idempotencyKey: true })
+    client('createPayment')
     client('createPayment', { idempotencyKey: 'request-1' })
+    client.createPayment()
     client.createPayment({ idempotencyKey: 'request-1' })
 
-    // @ts-expect-error idempotencyKey is required by endpoint metadata.
-    client('/api/payments', { method: 'post' })
-    // @ts-expect-error idempotencyKey is required by endpoint metadata.
-    client('createPayment')
-    // @ts-expect-error idempotencyKey is required by endpoint metadata.
-    client.createPayment()
-
     client('/api/retryable-health', { method: 'post' })
+    client('/api/retryable-health', { method: 'post', idempotencyKey: true })
     client('/api/retryable-health', { method: 'post', idempotencyKey: 'request-1' })
     client('retryableHealth')
     client('retryableHealth', { idempotencyKey: 'request-1' })
     client.retryableHealth()
     client.retryableHealth({ idempotencyKey: 'request-1' })
 
-    useClient('createPayment', { idempotencyKey: 'request-1' })
-    // @ts-expect-error idempotencyKey remains required in useEndpoint.
     useClient('createPayment')
+    useClient('createPayment', { idempotencyKey: true })
+    useClient('createPayment', { idempotencyKey: 'request-1' })
     useClient('retryableHealth')
     useClient('retryableHealth', { idempotencyKey: 'request-1' })
   })
@@ -393,7 +417,9 @@ describe('EndpointClient', () => {
       lazy: true,
     })
 
-    expectTypeOf(userState.data.value).toEqualTypeOf<{ id: number; name: string } | undefined>()
+    expectTypeOf(userState.data.value).toEqualTypeOf<
+      { status: 200; ok: true; body: { id: number; name: string } } | undefined
+    >()
     expectTypeOf(userState.pending.value).toEqualTypeOf<boolean>()
     expectTypeOf(userState.refresh()).toEqualTypeOf<Promise<void>>()
 
@@ -402,7 +428,7 @@ describe('EndpointClient', () => {
       lazy: true,
     })
     expectTypeOf(userOperationState.data.value).toEqualTypeOf<
-      { id: number; name: string } | undefined
+      { status: 200; ok: true; body: { id: number; name: string } } | undefined
     >()
 
     // @ts-expect-error useEndpoint does not expose property aliases.
@@ -411,7 +437,7 @@ describe('EndpointClient', () => {
     const transformedState = useClient('/api/users/:id', {
       method: 'get',
       params: { id: '1' },
-      transform: (user) => user.name,
+      transform: (result) => result.body.name,
     })
     expectTypeOf(transformedState.data.value).toEqualTypeOf<string | undefined>()
 
@@ -419,7 +445,9 @@ describe('EndpointClient', () => {
       params: { id: '1' },
       lazy: true,
     })
-    expectTypeOf(inferredState.data.value).toEqualTypeOf<{ id: number; name: string } | undefined>()
+    expectTypeOf(inferredState.data.value).toEqualTypeOf<
+      { status: 200; ok: true; body: { id: number; name: string } } | undefined
+    >()
 
     useClient('/api/health', { method: 'get', key: 'health' })
     useClient('health')
@@ -516,9 +544,9 @@ describe('EndpointClient', () => {
       body: new FormData(),
     })
 
-    expectTypeOf(byDefault).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
-    expectTypeOf(byExplicitJson).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
-    expectTypeOf(byMultipart).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+    expectTypeOf(byDefault.body).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+    expectTypeOf(byExplicitJson.body).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
+    expectTypeOf(byMultipart.body).toEqualTypeOf<{ name: string; bodyMediaType: string }>()
 
     // @ts-expect-error body must be FormData once multipart/form-data is selected.
     client('/api/upload', {
@@ -547,7 +575,7 @@ describe('EndpointClient', () => {
 
   it('hands back the live stream for a route that declares one', async () => {
     const report = await client('streamReport')
-    expectTypeOf(report).toEqualTypeOf<ReadableStream<Uint8Array>>()
+    expectTypeOf(report.body).toEqualTypeOf<ReadableStream<Uint8Array>>()
 
     // Every status of a streaming route arrives unparsed, including the
     // validated 404 the contract still declares for OpenAPI.
@@ -563,7 +591,7 @@ describe('EndpointClient', () => {
     // The body is the live stream either way: `accept` chooses a
     // representation, it does not change how the response is delivered.
     const csv = await client('streamReport', { accept: 'text/csv' })
-    expectTypeOf(csv).toEqualTypeOf<ReadableStream<Uint8Array>>()
+    expectTypeOf(csv.body).toEqualTypeOf<ReadableStream<Uint8Array>>()
 
     client('streamReport', { accept: 'application/json' })
     client('streamReport')

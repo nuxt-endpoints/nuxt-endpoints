@@ -31,8 +31,8 @@ export const contractSteps = [
     ],
     serverCode: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  handler: ({ params }) => {
-    const userId = params.id // number — validated & coerced
+  handler: (event) => {
+    const userId = event.validated.params.id // number — validated & coerced
   },
 })`,
     clientCode: '',
@@ -49,27 +49,27 @@ export const contractSteps = [
     title: 'Use a type-safe client call.',
     description: [
       { text: 'Client calls are checked for path, method, and params. The ' },
-      { text: 'returned data is inferred from server code', tone: 'client' },
+      { text: 'returned status data is inferred from server code', tone: 'client' },
       { text: ', so unknown fields fail in TypeScript.' },
     ],
     serverCode: `export default defineEndpoint({
   params: z.object({ id: z.coerce.number() }),
-  handler: async ({ params }) => {
-    const user = await findUserById(params.id)
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
     return user // client types are inferred from here
   },
 })`,
-    clientCode: `const user = await $endpoint('/api/users/:id', {
+    clientCode: `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
-}) // user: typed from the handler return
-console.log(\`id: \${user.id}, name: \${user.name}\`)`,
+}) // result.body: typed from the handler return
+console.log(\`id: \${result.body.id}, name: \${result.body.name}\`)`,
     highlightLines: {
       serverCode: [3, 4, 5],
       clientCode: [1, 2, 3, 4, 5],
     },
-    serverEffect: 'The handler return becomes the inferred success body.',
-    clientEffect: 'The generated client uses the inferred success body type.',
+    serverEffect: 'The handler return becomes the inferred status-200 body.',
+    clientEffect: 'The generated client uses it in the status-aware result.',
     runtimeEffect: 'No response schema is required for this lightweight path.',
   },
   {
@@ -86,23 +86,23 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: async ({ params, respond }) => {
-    const user = await findUserById(params.id)
-    return user ?? respond(404, { message: 'User not found' })
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `const user = await $endpoint('/api/users/:id', {
+    clientCode: `const result = await $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
 })
-console.log(\`id: \${user.id}, name: \${user.name}\`)`,
+if (result.status === 200) console.log(result.body.name)`,
     highlightLines: {
       serverCode: [3, 4, 5, 6, 9],
       clientCode: [],
     },
     serverEffect: '`responses` turns the inferred shape into explicit 200 and 404 contracts.',
     clientEffect: 'The client keeps the same call shape and response type.',
-    runtimeEffect: 'Runtime response validation can be enabled from the same schemas.',
+    runtimeEffect: 'Runtime response validation uses the same schemas automatically.',
   },
   {
     shortTitle: 'Naming',
@@ -119,15 +119,15 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: async ({ params, respond }) => {
-    const user = await findUserById(params.id)
-    return user ?? respond(404, { message: 'User not found' })
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `const user = await $endpoint.getUser({
+    clientCode: `const result = await $endpoint.getUser({
   params: { id: '123' },
 })
-console.log(\`id: \${user.id}, name: \${user.name}\`)`,
+if (result.status === 200) console.log(result.body.name)`,
     highlightLines: {
       serverCode: [2],
       clientCode: [1],
@@ -151,12 +151,12 @@ console.log(\`id: \${user.id}, name: \${user.name}\`)`,
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: async ({ params, respond }) => {
-    const user = await findUserById(params.id)
-    return user ?? respond(404, { message: 'User not found' })
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `const result = await $endpoint.getUser({ params: { id: '123' } }).result()
+    clientCode: `const result = await $endpoint.getUser({ params: { id: '123' } })
 // checking the status narrows the body type
 if (result.status === 404) console.log(result.body.message)
 if (result.status === 200) console.log(result.body.name)`,
@@ -165,7 +165,7 @@ if (result.status === 200) console.log(result.body.name)`,
       clientCode: [1, 3, 4],
     },
     serverEffect: '`responses` declares each possible status body.',
-    clientEffect: 'The result call narrows body types from the status check.',
+    clientEffect: 'Awaiting the request narrows body types from the status check.',
     runtimeEffect: 'Runtime response validation still follows the declared status schemas.',
   },
   {
@@ -183,12 +183,12 @@ if (result.status === 200) console.log(result.body.name)`,
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: async ({ params, respond }) => {
-    const user = await findUserById(params.id)
-    return user ?? respond(404, { message: 'User not found' })
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `const { data: result, pending, error, refresh } = await useEndpointResult('getUser', {
+    clientCode: `const { data: result, pending, error, refresh } = await useEndpoint('getUser', {
   params: { id: '123' },
 })`,
     highlightLines: {
@@ -196,7 +196,7 @@ if (result.status === 200) console.log(result.body.name)`,
       clientCode: [1, 2, 3],
     },
     serverEffect: 'No new server shape is required for Nuxt async data.',
-    clientEffect: '`useEndpointResult` keeps status-aware body types inside async data state.',
+    clientEffect: '`useEndpoint` keeps status-aware body types inside async data state.',
     runtimeEffect: 'Refreshes and deduped executions reuse the generated endpoint request.',
   },
   {
@@ -214,21 +214,19 @@ if (result.status === 200) console.log(result.body.name)`,
     200: z.object({ id: z.number(), name: z.string() }),
     404: z.object({ message: z.string() }),
   },
-  handler: async ({ params, respond }) => {
-    const user = await findUserById(params.id)
-    return user ?? respond(404, { message: 'User not found' })
+  handler: async (event) => {
+    const user = await findUserById(event.validated.params.id)
+    return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
     clientCode: `import { useQuery } from '@tanstack/vue-query'
-import { endpointQueryOptions } from '#endpoints/query'
 
-const user = useQuery(
-  endpointQueryOptions.getUser({
-    params: { id: '123' },
-  }),
-)
+const request = $endpoint.getUser({ params: { id: '123' } })
+const user = useQuery(request.queryOptions())
 
-user.data.value?.name // User — typed from the endpoint`,
+if (user.data.value?.status === 200) {
+  user.data.value.body.name // User — typed from the endpoint
+}`,
     highlightLines: {
       serverCode: [2],
       clientCode: [1, 2, 4, 5, 6, 7, 8, 10],

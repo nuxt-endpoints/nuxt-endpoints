@@ -9,6 +9,18 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 }
 
 describe('defineRouteHandler multi-method inference', () => {
+  it('types a direct handler as a validated H3 event', () => {
+    defineRouteHandler({
+      params: schema<{ id: string }, { id: number }>(),
+      handler: (event) => {
+        expectTypeOf(event.validated.params).toEqualTypeOf<{ id: number }>()
+        expectTypeOf(event.routeDef.params).toEqualTypeOf<Schema<{ id: string }, { id: number }>>()
+        expectTypeOf(event.respond).not.toBeAny()
+        return { id: event.validated.params.id }
+      },
+    })
+  })
+
   it('infers every handler from its own contract', () => {
     const handler = defineRouteHandler({
       params: schema<{ id: string }, { id: number }>(),
@@ -17,7 +29,8 @@ describe('defineRouteHandler multi-method inference', () => {
           query: schema<{ search: string }, { search: string; limit: number }>(),
           response: { 200: schema<{ id: number; name: string }>() },
         },
-        handler: ({ params, query, body }) => {
+        handler: (event) => {
+          const { params, query, body } = event.validated
           expectTypeOf(params).not.toBeAny()
           expectTypeOf(query).not.toBeAny()
           expectTypeOf(body).not.toBeAny()
@@ -35,7 +48,9 @@ describe('defineRouteHandler multi-method inference', () => {
             404: schema<{ message: string }>(),
           },
         },
-        handler: ({ params, body, respond }) => {
+        handler: (event) => {
+          const { params, body } = event.validated
+          const { respond } = event
           expectTypeOf(params).not.toBeAny()
           expectTypeOf(body).not.toBeAny()
           expectTypeOf(respond).not.toBeAny()
@@ -46,7 +61,7 @@ describe('defineRouteHandler multi-method inference', () => {
       },
       head: {
         validate: { response: { 202: schema<undefined>() } },
-        handler: ({ respond }) => respond(202, undefined),
+        handler: (event) => event.respond(202, undefined),
       },
       trace: {
         validate: { response: { 200: schema<{ trace: string }>() } },
@@ -87,7 +102,7 @@ describe('defineRouteHandler multi-method inference', () => {
       params: schema<{ id: number }>(),
       // @ts-expect-error request validation is per method, so a root validate never applies.
       validate: { headers: schema<{ authorization: string }>() },
-      get: { handler: ({ params }) => ({ id: params.id }) },
+      get: { handler: (event) => ({ id: event.validated.params.id }) },
     })
   })
 
@@ -123,5 +138,10 @@ describe('defineRouteHandler multi-method inference', () => {
       // @ts-expect-error method entries are route contracts too.
       post: withRuntimeMethod,
     })
+  })
+
+  it('uses the same one-argument shape as H3', () => {
+    // @ts-expect-error defineRouteHandler has the same one-argument shape as H3.
+    defineRouteHandler({ handler: () => ({ ok: true }) }, {})
   })
 })

@@ -38,8 +38,10 @@ export default defineRouteHandler({
       }),
     },
   },
-  handler: ({ query }) => {
-    const matches = users.filter((user) => user.name.toLowerCase().includes(query.q.toLowerCase()))
-    return { items: matches.slice(0, query.limit ?? 10), total: matches.length }
+  handler: (event) => {
+    const matches = users.filter((user) =>
+      user.name.toLowerCase().includes(event.validated.query.q.toLowerCase()),
+    )
+    return { items: matches.slice(0, event.validated.query.limit ?? 10), total: matches.length }
   },
 })
