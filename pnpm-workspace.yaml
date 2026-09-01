@@ -11,5 +11,5 @@ minimumReleaseAgeExclude:
   - nuxt-nightly@5.0.0-29800730.fb02c57e
 overrides:
   h3: link:../upstream/h3
-  fetchdts: link:../upstream/fetchdts-pr192
+  fetchdts: link:../upstream/fetchdts
   nitro: link:../upstream/nitro

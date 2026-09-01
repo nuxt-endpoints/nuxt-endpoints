@@ -6,7 +6,7 @@ settings:
 
 overrides:
   h3: link:../upstream/h3
-  fetchdts: link:../upstream/fetchdts-pr192
+  fetchdts: link:../upstream/fetchdts
   nitro: link:../upstream/nitro
 
 importers:
