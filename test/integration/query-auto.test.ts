@@ -24,6 +24,18 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(payload).toContain('Tom')
     })
 
+    it('executes mutation options through Pinia Colada and pins the idempotency key', async () => {
+      const html = await $fetch<string>('/mutation-idempotent')
+
+      const first = html.match(/mutation-first: ([^<]+)/)?.[1]
+      const second = html.match(/mutation-second: ([^<]+)/)?.[1]
+
+      expect(html).toContain('mutation-key: nuxt-endpoints v2 post /api/idempotent')
+      expect(html).toContain('mutation-state: success')
+      expect(first).toMatch(/^201:\d+:25$/)
+      expect(second).toBe(first)
+    })
+
     it('forwards cookies and isolates query caches between SSR requests', async () => {
       const [alice, bob] = await Promise.all([
         $fetch<string>('/query-whoami', {

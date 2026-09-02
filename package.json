@@ -69,6 +69,8 @@
     "lint:fix": "oxlint src test --ignore-path .gitignore --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json --fix && oxlint playground site test/fixtures --ignore-path .gitignore --fix",
     "test": "vitest run",
     "test:e2e": "NUXT_ENDPOINTS_E2E=1 vitest run test/integration",
+    "test:e2e:browser": "NUXT_ENDPOINTS_E2E=1 NUXT_ENDPOINTS_BROWSER_E2E=1 vitest run test/integration",
+    "test:e2e:browser:install": "playwright-core install --with-deps --no-shell chromium",
     "test:package": "node scripts/smoke-packed-package.mjs",
     "typecheck": "oxlint src --type-check --tsconfig=tsconfig.json",
     "test:typecheck": "oxlint src test --ignore-pattern 'test/fixtures/**' --type-check --tsconfig=tsconfig.test.json",

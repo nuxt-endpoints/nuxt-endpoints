@@ -45,6 +45,14 @@ jobs:
       - name: Check
         run: vp run check
 
+      - name: Install Chromium for browser E2E
+        if: matrix.node-version == '22.19.0'
+        run: vp run test:e2e:browser:install
+
+      - name: Browser E2E
+        if: matrix.node-version == '22.19.0'
+        run: vp run test:e2e:browser
+
       - name: Build package
         run: vp run build
 
