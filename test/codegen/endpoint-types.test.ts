@@ -46,7 +46,7 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(buildEndpointRouteEntryUnion([])).toBe('  | never')
   })
 
-  it('embeds path, method, contract, and handler return metadata', () => {
+  it('embeds Nitro contract metadata and derives handler returns from the source definition', () => {
     const union = buildEndpointRouteEntryUnion([listUsersHandler])
 
     expect(union).toContain("path: '/api/users'")
@@ -55,7 +55,7 @@ describe('buildEndpointRouteEntryUnion', () => {
       "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/users', 'contract', 'get'>",
     )
     expect(union).toContain(
-      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/users', 'handlerReturn', 'get'>",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef'], 'get'>",
     )
   })
 
@@ -65,20 +65,20 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union.split('\n')).toHaveLength(2)
   })
 
-  it('accesses every method through the shared fetchdts metadata schema', () => {
+  it('uses shared contract metadata and source-derived returns for every method', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
       "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'get'>",
     )
     expect(union).toContain(
-      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'handlerReturn', 'get'>",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'get'>",
     )
     expect(union).toContain(
       "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'put'>",
     )
     expect(union).toContain(
-      "handlerReturn: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'handlerReturn', 'put'>",
+      "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'put'>",
     )
     expect(union).not.toContain('__endpoint_contract')
     expect(union).not.toContain('__endpoint_handler_return')
@@ -103,7 +103,7 @@ describe('generateEndpointTypes', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
     expect(content).toContain(
-      "import type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
+      "import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
     )
     expect(content).toContain(
       "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",

@@ -12,7 +12,7 @@ import {
   useLogger,
 } from '@nuxt/kit'
 import type { Nuxt, NuxtModule } from '@nuxt/schema'
-import type { NitroRouteContract, NitroRouteMethod, NitroTypes } from 'nitro/types'
+import type { NitroRouteContract, NitroTypes } from 'nitro/types'
 import { camelCase } from 'scule'
 import {
   generateEndpointClient,
@@ -212,7 +212,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           logger.warn(message),
         )
       }
-      const generateArtifacts = async (nitroTypes?: NitroTypes) => {
+      const generateArtifacts = async () => {
         if (!options.runtime?.path) {
           runtimePath = await resolveConventionPath(
             nuxt.options.rootDir,
@@ -226,9 +226,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           indexRouteContracts(await nitro.getRouteContracts()),
         )
         endpointHandlerManifest = handlers
-        if (nitroTypes) {
-          contributeEndpointRouteTypes(nitroTypes, handlers, resolve('./runtime'))
-        }
         await writeGenerated(typeFile, generateEndpointTypes(resolve, handlers, resolvedOptions))
         await writeGenerated(
           runtimeFile,
@@ -274,37 +271,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 })
 
 export default nuxtEndpointsModule
-
-export function contributeEndpointRouteTypes(
-  types: NitroTypes,
-  handlers: readonly EndpointRouteHandler[],
-  runtimePath: string,
-): void {
-  const runtimeImport = toImportPath(runtimePath)
-  // `EndpointHandlerSuccessBody` stays out of the public runtime surface, so the
-  // generated declaration names its module directly rather than the barrel.
-  const endpointImport = `${runtimeImport}/endpoint`
-
-  for (const handler of handlers) {
-    const routeImport = toImportPath(handler.handler)
-    const routeDefinition = `typeof import('${routeImport}').default['~routeDef']`
-    const method = handler.method.toLowerCase() as NitroRouteMethod
-    const definition = `import('${runtimeImport}').EndpointDefinitionFromRoute<${routeDefinition}, '${method}'>`
-    const handlerReturn = `import('${runtimeImport}').EndpointHandlerReturnFromRoute<${routeDefinition}, '${method}'>`
-    const successResponse = `Simplify<Serialize<import('${endpointImport}').EndpointHandlerSuccessBody<${definition}, ${handlerReturn}>>>`
-
-    types.routes[handler.route] ??= {}
-    if (handler.methodGroup) {
-      delete types.routes[handler.route].default
-    }
-    types.routes[handler.route][method] = [successResponse]
-
-    types.routeMetadata[handler.route] ??= {}
-    types.routeMetadata[handler.route][method] ??= {}
-    const metadata = types.routeMetadata[handler.route][method]!
-    metadata.handlerReturn = [handlerReturn]
-  }
-}
 
 export async function composeHandlers(
   handlers: NitroRouteHandlerDescriptor[],

@@ -23,14 +23,17 @@ The current build flow is:
    bindings. Handler-only code is not imported during the build.
 3. NE reads the supported `nitro.getRouteContracts()` provider; it no longer
    scans or Jiti-evaluates route files.
-4. Nitro populates opaque `contract` metadata from its provider and generates
-   `InternalRouteSchema`; NE contributes only its consumer-specific
-   `handlerReturn` field through Nitro's type-generation input.
-5. The endpoint client reads those fields through
-   `TypedFetchMetadataField`.
+4. Nitro populates both the serialized successful response in `types.routes`
+   and opaque `contract` metadata, then generates `InternalApi` and
+   `InternalRouteSchema` from those standard inputs.
+5. The endpoint client reads `contract` through `TypedFetchMetadataField`.
+   When a route has no declared response schema, its generated type derives
+   the authored handler return directly from the handler's `~routeDef` type.
 
-The runtime handler keeps `~routeDef` for TypeScript inference, but build-time
-metadata comes from Nitro's provider, not private NE carrier fields.
+The runtime handler keeps `~routeDef` for TypeScript inference, but NE no
+longer writes either `NitroTypes.routes` or consumer-specific route metadata.
+Build-time contract metadata and ordinary success responses come from Nitro's
+provider.
 
 ## Server values and client wire values
 
@@ -111,7 +114,8 @@ The implemented prototype integration is:
 
 1. Author the Standard Schema contract in H3's route shape.
 2. Read it through Nitro's build-time registry provider.
-3. Add opaque NE fields to Nitro's generated fetch schema.
+3. Let Nitro populate the ordinary successful response and opaque contract in
+   its generated fetch schema.
 4. Keep status-specific results, runtime validation, OpenAPI, idempotency,
    Effect, and Pinia Colada at the Nuxt Endpoints layer.
 5. Make awaited `$endpoint` requests status-aware while keeping `.raw()` for native responses.

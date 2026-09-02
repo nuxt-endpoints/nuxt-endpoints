@@ -93,7 +93,7 @@ describe('DefinedEndpoint', () => {
     }
 
     const handler = defineRouteHandler(definition)
-    await expect(handler(createEvent({ params: { id: '42' } }))).resolves.toEqual({
+    await expect(handler(createEvent({ params: { id: '42' } }) as never)).resolves.toEqual({
       id: 42,
       ownsContract: true,
       isEvent: true,

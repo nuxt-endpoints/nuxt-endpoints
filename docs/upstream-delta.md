@@ -67,13 +67,12 @@ of handler-only imports and side effects, generated NE client types, and the
 running Nuxt fixture.
 
 The provider is also connected to Nitro's standard type pipeline. Nitro now
-populates each discovered method's opaque `contract` metadata itself before
-`types:extend`; NE contributes its success-body projection to
-`NitroTypes.routes` and its remaining consumer-specific `handlerReturn`
-metadata. Nitro compiles both maps into one fetchdts schema, augments
-`InternalRouteSchema`, and still generates the ordinary `InternalApi`. Nuxt 5
-receives the latter through `@nuxt/nitro-server`, while NE resolves the opaque
-fields with `TypedFetchMetadataField` for status-aware endpoint results.
+populates each discovered method's serialized success body in
+`NitroTypes.routes` and its opaque `contract` metadata before `types:extend`.
+It compiles both into one fetchdts schema, augments `InternalRouteSchema`, and
+generates the ordinary `InternalApi`. NE writes neither map: it resolves the
+contract with `TypedFetchMetadataField` and derives the authored handler return
+from `~routeDef` only when a response schema is absent.
 
 The first provider slice retained `jiti` as a compatibility fallback. That
 migration is complete: `src/discovery.ts`, its dedicated tests, and NE's direct
@@ -110,10 +109,9 @@ The fetchdts extension is implemented in a separate worktree based directly on
 PR #192. It lets Nitro preserve arbitrary typed metadata through
 `compileRoutes` and lets a downstream client recover a field without fetchdts
 interpreting its semantics. The local Nitro fork now uses that extension for a
-parallel `InternalRouteSchema`: `response` remains the ordinary success body,
-Nitro populates `contract` from its route-contract provider, and NE adds
-`handlerReturn` for its status-aware projection. This is one compiled route
-tree, not another scanner or source of truth.
+parallel `InternalRouteSchema`: Nitro populates both the ordinary successful
+`response` and opaque `contract` from its route-contract provider. This is one
+compiled route tree, not another scanner or source of truth.
 
 ## Validation runtime ownership
 
@@ -358,13 +356,13 @@ need an NE adapter for their normal success-body semantics.
 This does **not** replace Nitro's `types:extend` route schema. Nuxt's
 `buildServerRoutes()` constructs only `responseType`, `bodyType`, `queryType`,
 and `headersType`; `ServerRouteHandler` has no opaque metadata member. It
-therefore cannot carry Nitro's `contract` or NE's `handlerReturn` field, even
+therefore cannot carry Nitro's opaque `contract` field, even
 though the fetchdts compiler beneath it supports
 `RouteMetadataExtension`. The two generated maps currently have separate jobs:
 
 ```text
 Nuxt server:routes -> ordinary $fetch / useFetch success and request types
-Nitro types:extend -> opaque contract metadata -> status-aware $endpoint
+Nitro types:extend -> success response + opaque contract -> status-aware $endpoint
 ```
 
 Keeping both is compatible and avoids a second NE-owned route scanner. Removing
@@ -373,17 +371,16 @@ Nuxt's compile path; adding private properties to `server:routes` handlers or
 substituting generated wrapper handlers would only create an undocumented
 overlay.
 
-One adjacent gap remains visible after the merge. `@nuxt/nitro-server` derives
-body/query/header types from the handler's `H3Event` call signature. The current
-H3 prototype `RouteHandler` and NE adapter retain the contract on `~routeDef`
-but do not project its request shapes into that signature, so the generated
-request types are permissive. This is an H3/Nitro extractor contract issue, not
-a reason for NE to fork Nuxt's route compiler.
+`@nuxt/nitro-server` derives body/query/header types from the handler's
+`H3Event` call signature. H3 now projects Standard Schema input types into that
+signature, and the NE adapter does the same while retaining the full contract
+on `~routeDef`. The Nuxt fixture checks the generated body and query types in
+both assignability directions.
 
 ## Environment notes
 
 The focused Nuxt integration suite has now run against the pinned stack through
-Nuxt's patched Nitro: all 41 tests pass. This exercises real bound servers,
+Nuxt's patched Nitro: all 45 tests pass. This exercises real bound servers,
 generated clients and types, SSR request forwarding, per-status responses,
 OpenAPI, Pinia Colada hydration, and the SQLite-backed idempotency implementation.
 The default suite also passes all 381 enabled tests, including the five native

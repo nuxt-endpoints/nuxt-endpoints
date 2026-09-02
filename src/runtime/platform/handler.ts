@@ -4,9 +4,10 @@
 // `H3Event` — that one alias is what keeps the h3 major version a detail of
 // this directory. See README.md for where each call goes.
 import { defineHandler } from 'h3'
-import type { H3Event } from 'h3'
+import type { EventHandlerRequestShape, H3Event } from 'h3'
 
 export type RuntimeEvent = H3Event
+export type RuntimeContractEvent<Request extends EventHandlerRequestShape> = H3Event<Request>
 
 export function defineRuntimeHandler<RESPONSE>(
   handler: (event: RuntimeEvent) => RESPONSE,

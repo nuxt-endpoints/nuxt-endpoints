@@ -3,12 +3,10 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Nuxt } from '@nuxt/schema'
-import type { NitroTypes } from 'nitro/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   assertOpenApiRoutesDoNotOverlap,
   composeHandlers,
-  contributeEndpointRouteTypes,
   findUnsupportedRouteTemplateSyntax,
   indexRouteContracts,
   resolveConventionPath,
@@ -34,39 +32,6 @@ describe('Nitro route contract provider', () => {
     await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
       { route: '/api/users', method: 'get' },
     ])
-  })
-
-  it('adds NE response metadata without replacing Nitro-owned contract metadata', () => {
-    const types: NitroTypes = {
-      routes: {
-        '/api/multi': { default: ['OriginalDispatcherResponse'] },
-      },
-      routeMetadata: {
-        '/api/multi': {
-          get: { contract: ['NitroOwnedContract'] },
-        },
-      },
-    }
-
-    contributeEndpointRouteTypes(
-      types,
-      [
-        {
-          handler: '/project/server/api/multi.ts',
-          route: '/api/multi',
-          method: 'get',
-          methodGroup: true,
-        },
-      ],
-      '/project/runtime',
-    )
-
-    expect(types.routes['/api/multi']).not.toHaveProperty('default')
-    expect(types.routes['/api/multi']?.get?.[0]).toContain('EndpointHandlerSuccessBody')
-    expect(types.routeMetadata['/api/multi']?.get?.contract).toEqual(['NitroOwnedContract'])
-    expect(types.routeMetadata['/api/multi']?.get?.handlerReturn?.[0]).toContain(
-      'EndpointHandlerReturnFromRoute',
-    )
   })
 })
 

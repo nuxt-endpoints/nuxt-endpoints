@@ -555,7 +555,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(nitroRoutes).toContain("'get':")
       expect(nitroRoutes).toContain("'put':")
       expect(nitroRouteSchema).toContain('"contract"')
-      expect(nitroRouteSchema).toContain('"handlerReturn"')
+      expect(nitroRouteSchema).not.toContain('"handlerReturn"')
       expect(nitroRouteSchema).toContain('interface InternalRouteSchema extends NitroRouteSchema')
     })
 

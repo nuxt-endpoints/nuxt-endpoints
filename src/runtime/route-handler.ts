@@ -21,8 +21,8 @@ import {
 } from './endpoint'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './endpoint-methods'
 import type { EndpointRuntime } from './endpoint-runtime'
-import type { RuntimeEvent } from './platform'
-import type { ValidatorSchema } from './validator'
+import type { RuntimeContractEvent, RuntimeEvent } from './platform'
+import type { InferInput, ValidatorSchema } from './validator'
 
 type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
   query?: QUERY
@@ -205,8 +205,32 @@ type RouteMethodSuccessBody<Definition> = {
   >
 }[RouteMethodKeys<Definition>]
 
+type EndpointRouteRequest<Definition extends EndpointDefinition> = {
+  body: RouteBodyInput<Definition['body']>
+  query: RouteSchemaInput<Definition['query']>
+  headers: RouteSchemaInput<Definition['headers']>
+}
+
+type RouteMethodRequest<Definition> = {
+  [Method in RouteMethodKeys<Definition>]: EndpointRouteRequest<
+    ResolvedEndpointDefinition<Definition, Method>
+  >
+}[RouteMethodKeys<Definition>]
+
+type RouteSchemaInput<Schema> = Schema extends ValidatorSchema ? InferInput<Schema> : never
+
+type RouteBodyInput<Body> = Body extends ValidatorSchema
+  ? InferInput<Body>
+  : Body extends Record<string, infer Member>
+    ? Member extends ValidatorSchema
+      ? InferInput<Member>
+      : Member extends true
+        ? ReadableStream<Uint8Array> | null
+        : never
+    : never
+
 export type EndpointRouteMethodsEventHandler<Definition> = ((
-  event: RuntimeEvent,
+  event: RuntimeContractEvent<RouteMethodRequest<Definition>>,
 ) => Promise<RouteMethodSuccessBody<Definition>>) & {
   readonly '~routeDef': Definition
   __endpoint_contracts__: RouteMethodContracts<Definition>
@@ -242,7 +266,14 @@ export type EndpointHandlerReturnFromRoute<
       : WidenCapturedReturn<RawHandlerReturnFromRoute<Definition, Method>>
     : RawHandlerReturnFromRoute<Definition, Method>
 
-type EndpointRouteEventHandler<Definition, Return> = ((event: RuntimeEvent) => Promise<Return>) & {
+type EndpointRouteEventHandler<
+  Definition,
+  Return,
+  ResolvedDefinition extends EndpointDefinition =
+    EndpointDefinitionFromRoute<Definition> extends infer Resolved extends EndpointDefinition
+      ? Resolved
+      : EndpointDefinition,
+> = ((event: RuntimeContractEvent<EndpointRouteRequest<ResolvedDefinition>>) => Promise<Return>) & {
   readonly '~routeDef': Definition
 }
 

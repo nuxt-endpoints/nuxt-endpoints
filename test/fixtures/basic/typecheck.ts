@@ -5,7 +5,11 @@ import type {
   EndpointMethod,
   EndpointPath,
 } from '#endpoints'
-import type { Response as NuxtServerResponse } from './.nuxt/server-routes'
+import type {
+  RequestBody as NuxtServerRequestBody,
+  RequestQuery as NuxtServerRequestQuery,
+  Response as NuxtServerResponse,
+} from './.nuxt/server-routes'
 
 type Equal<LEFT, RIGHT> =
   (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends <VALUE>() => VALUE extends RIGHT ? 1 : 2
@@ -16,7 +20,16 @@ type Assert<VALUE extends true> = VALUE
 export type NuxtServerUserResponseAgreement = Assert<
   Equal<NuxtServerResponse<'/api/users', 'POST'>, { id: number; name: string }>
 >
-
+declare const nuxtServerUserBody: NuxtServerRequestBody<'/api/users', 'POST'>
+declare const nuxtServerSearchQuery: NuxtServerRequestQuery<'/api/search', 'GET'>
+export const nuxtServerUserBodyAsExpected: { name: string } = nuxtServerUserBody
+export const expectedUserBodyAsNuxtServerBody: NuxtServerRequestBody<'/api/users', 'POST'> = {
+  name: 'Sid',
+}
+export const nuxtServerSearchQueryAsExpected: { q: string } = nuxtServerSearchQuery
+export const expectedSearchQueryAsNuxtServerQuery: NuxtServerRequestQuery<'/api/search', 'GET'> = {
+  q: 'search',
+}
 declare const client: $EndpointClient
 declare const useClient: $UseEndpoint
 

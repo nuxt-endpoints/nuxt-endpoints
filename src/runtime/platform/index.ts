@@ -10,7 +10,7 @@ export type {
   RouteContractValidator,
 } from 'h3'
 export { defineRuntimeHandler, getRuntimeMethod, getRuntimeWebRequest } from './handler'
-export type { RuntimeEvent } from './handler'
+export type { RuntimeContractEvent, RuntimeEvent } from './handler'
 export {
   getRuntimeQuery,
   getRuntimeRequestHeaders,
