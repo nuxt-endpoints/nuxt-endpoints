@@ -559,6 +559,25 @@ export default defineRouteHandler({
 })
 ```
 
+A status can also declare the headers it promises, per header name. Those are validated against what is actually being sent, so a declared header the handler forgets — or sets to a value its schema rejects — fails the same way a wrong body does: a `500`, because the server broke its own contract rather than the client sending something wrong. Header names are matched case-insensitively, and a header that was never set validates as `undefined`, so use an optional schema for one that is not always present.
+
+```ts
+export default defineRouteHandler({
+  validate: {
+    response: {
+      200: {
+        body: z.object({ id: z.number() }),
+        headers: { 'X-Request-Id': z.string().uuid() },
+      },
+    },
+  },
+  handler: (event) =>
+    event.respond(200, { id: 1 }, { headers: { 'x-request-id': crypto.randomUUID() } }),
+})
+```
+
+Declared response headers also appear in the generated OpenAPI document.
+
 ## Routes registered by configuration
 
 Discovery does not depend on file scanning. It reads Nitro's configured handlers alongside its scanned ones, so a route registered through `nitro.handlers` — or by another Nuxt module calling `addServerHandler` — is an ordinary endpoint: validated, in the generated client, typed identically, and in the OpenAPI document.

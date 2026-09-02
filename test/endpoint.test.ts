@@ -70,6 +70,19 @@ const strictUserResponse: StandardSchemaLike<unknown, { id: number; name: string
   },
 }
 
+const requestIdHeader: StandardSchemaLike<unknown, string> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate(input: unknown) {
+      if (typeof input !== 'string' || !input.startsWith('req-')) {
+        return { issues: [{ message: 'Invalid request id header' }] }
+      }
+      return { value: input }
+    },
+  },
+}
+
 const errorResponse: StandardSchemaLike<{ message: string }> = {
   '~standard': {
     version: 1,
@@ -238,6 +251,75 @@ describe('DefinedEndpoint', () => {
         status: 200,
         issues: [{ message: 'Invalid user response' }],
       },
+    })
+  })
+
+  it('can validate declared response headers at runtime', async () => {
+    const { defineEndpoint, defineEndpointHandler, respond } = await import('./internal-runtime')
+
+    const endpoint = defineEndpoint(
+      {
+        responses: {
+          200: { body: strictUserResponse, headers: { 'X-Request-Id': requestIdHeader } },
+        },
+      },
+      { validation: { response: true } },
+    )
+
+    const compliant = defineEndpointHandler(endpoint, () =>
+      respond(200, { id: 1, name: 'Tom' }, { headers: { 'x-request-id': 'req-1' } }),
+    )
+    const event = createEvent({})
+    await expect(compliant(event)).resolves.toEqual({ id: 1, name: 'Tom' })
+    // Declaring the header in `X-Request-Id` and sending it as `x-request-id`
+    // is the same header, so casing must not decide the outcome.
+    expect(event.res.headers.get('x-request-id')).toBe('req-1')
+
+    const missing = defineEndpointHandler(endpoint, () => respond(200, { id: 1, name: 'Tom' }))
+    await expect(missing(createEvent({}))).rejects.toMatchObject({
+      status: 500,
+      statusText: 'Response Contract Error',
+      data: {
+        status: 200,
+        source: 'headers',
+        issues: [{ path: ['X-Request-Id'], message: 'Invalid request id header' }],
+      },
+    })
+
+    const wrongValue = defineEndpointHandler(endpoint, () =>
+      respond(200, { id: 1, name: 'Tom' }, { headers: { 'x-request-id': 'nope' } }),
+    )
+    await expect(wrongValue(createEvent({}))).rejects.toMatchObject({
+      status: 500,
+      statusText: 'Response Contract Error',
+      data: { status: 200, source: 'headers' },
+    })
+  })
+
+  it('reads declared response headers off a returned native Response', async () => {
+    const { defineEndpoint, defineEndpointHandler, respond } = await import('./internal-runtime')
+
+    const endpoint = defineEndpoint(
+      {
+        responses: {
+          200: { media: 'text/csv', headers: { 'X-Request-Id': requestIdHeader } },
+        },
+      },
+      { validation: { response: true } },
+    )
+
+    // The Response carries these headers to the wire itself, so validating only
+    // the record the endpoint computed would fail a compliant media route.
+    const onResponse = defineEndpointHandler(endpoint, () =>
+      respond(200, new Response('id\n1\n', { headers: { 'x-request-id': 'req-9' } })),
+    )
+    await expect(onResponse(createEvent({}))).resolves.toBeInstanceOf(Response)
+
+    const withoutHeader = defineEndpointHandler(endpoint, () => respond(200, new Response('id\n')))
+    await expect(withoutHeader(createEvent({}))).rejects.toMatchObject({
+      status: 500,
+      statusText: 'Response Contract Error',
+      data: { status: 200, source: 'headers' },
     })
   })
 

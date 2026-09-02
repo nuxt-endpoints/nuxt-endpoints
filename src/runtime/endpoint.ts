@@ -403,19 +403,23 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
 
     if (isStatusResponse(result)) {
       await this.validateResponse(result.status, result.body)
+      const headers = this.withResponseHeaders(result.status, negotiated, result.headers)
+      await this.validateResponseHeaders(result.status, headers, result.body)
       return {
         status: result.status,
         body: result.body,
-        headers: this.withResponseHeaders(result.status, negotiated, result.headers),
+        headers,
         explicitStatus: true,
       }
     }
 
     await this.validateResponse(200, result)
+    const headers = this.withResponseHeaders(200, negotiated, undefined)
+    await this.validateResponseHeaders(200, headers, result)
     return {
       status: 200,
       body: result,
-      headers: this.withResponseHeaders(200, negotiated, undefined),
+      headers,
       explicitStatus: false,
     }
   }
@@ -473,6 +477,83 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       })
     }
   }
+
+  /**
+   * Checks the headers this status declares against what is actually going out.
+   * A declared header the handler never set, or set to a value its schema
+   * rejects, is the same class of failure as a wrong body: the server broke its
+   * own contract, so it is a 500 rather than a client error.
+   *
+   * H3 validates the body but ignores the `headers` member, so this stays here
+   * rather than in `validateRouteContractResponse`. Header names are compared
+   * case-insensitively because neither the declaration nor the handler is
+   * obliged to agree on casing, and a missing header is validated as
+   * `undefined` so an optional schema can accept it.
+   *
+   * A native `Response` body carries its own headers to the wire, so those are
+   * read back off it and win: checking only the record this class computed
+   * would fail a media route that sets `Content-Disposition` on the `Response`
+   * it returns.
+   */
+  private async validateResponseHeaders(
+    status: number,
+    headers: Readonly<Record<string, string>> | undefined,
+    body: unknown,
+  ) {
+    if (!this.options.validation?.response) {
+      return
+    }
+
+    const declared = getDeclaredResponseHeaders(this.definition, status)
+    if (!declared) {
+      return
+    }
+
+    const sent = new Map(
+      Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]),
+    )
+    if (body instanceof Response) {
+      for (const [name, value] of body.headers) {
+        sent.set(name.toLowerCase(), value)
+      }
+    }
+    const issues: ValidationIssue[] = []
+    for (const [name, schema] of Object.entries(declared)) {
+      const result = await parseValidator(schema, sent.get(name.toLowerCase()))
+      if (!result.success) {
+        issues.push(
+          ...result.issues.map((issue) => ({
+            ...issue,
+            path: [name, ...(issue.path ?? [])],
+          })),
+        )
+      }
+    }
+
+    if (issues.length > 0) {
+      throw createRuntimeError({
+        statusCode: 500,
+        statusMessage: 'Response Contract Error',
+        data: {
+          status,
+          source: 'headers',
+          issues,
+        },
+      })
+    }
+  }
+}
+
+function getDeclaredResponseHeaders(
+  definition: EndpointDefinition,
+  status: number,
+): Record<string, ValidatorSchema> | undefined {
+  const contract = getResponseContract(definition, status)
+  if (!contract || typeof contract !== 'object' || !('headers' in contract)) {
+    return undefined
+  }
+  const headers = contract.headers
+  return headers && Object.keys(headers).length > 0 ? headers : undefined
 }
 
 const validateContractSchema: RouteContractValidator = async (schema, input) => {
