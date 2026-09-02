@@ -224,15 +224,15 @@ Two caveats:
 - The generated OpenAPI document lists every member under `requestBody.content`.
   Schema constructs the converter libraries cannot express (such as
   `z.instanceof(File)`) fail conversion according to those libraries' behavior.
-- [Idempotency](/docs/idempotency) does not combine with a multipart body. The
-  fingerprint projects the validated `body`, and a `File` value has no
-  serializable projection, so such a request is refused rather than
-  fingerprinted on a partial view of itself.
+- [Idempotency](/docs/idempotency) needs an explicit route fingerprint for a
+  multipart body containing `File`. Put that projection in
+  `server/endpoints/runtime.ts`; the runtime refuses an implicit partial view.
 
 ## Hooks
 
-Two extension points sit on every endpoint. Both are declared application-wide,
-in `server/endpoints/runtime.ts`.
+Two extension points sit on every endpoint. Application-wide hooks are the
+defaults; a generated route and method can override either hook in the same
+`server/endpoints/runtime.ts` file.
 
 ```ts
 // server/endpoints/runtime.ts
@@ -248,6 +248,17 @@ export default defineEndpointRuntime({
     } finally {
       recordDuration(context.event, Date.now() - started)
     }
+  },
+  routes: {
+    '/api/users/:id': {
+      post: {
+        onValidationError: (failure) => {
+          if (failure.source === 'body') {
+            return { status: 422, body: { error: 'invalid_user' } }
+          }
+        },
+      },
+    },
   },
 })
 ```
@@ -266,8 +277,8 @@ matches. The failure describes what its kind can:
 
 Both carry `event`, so an envelope can include values Nitro middleware
 attached. Return `status`, `body`, and optionally `statusText` and `headers` —
-or return nothing to decline, which falls through to the default response for
-that failure.
+or return nothing to decline. A route hook falls through to the application
+hook; the application hook falls through to the built-in response.
 
 Handler exceptions are ordinary Nitro errors and stay outside this hook, as do
 idempotency failures, which keep their `application/problem+json` Problem
@@ -281,10 +292,14 @@ a recorded idempotent response is replayed. Because a wrapper is an ordinary
 function, `try`/`finally` is how work that must survive a thrown handler is
 expressed, and its own scope is how state is carried across the call.
 
-Wrappers nest outermost-first: the application wrapper, then the endpoint's own
-idempotency handling closest to the handler. A replayed response therefore still
-unwinds back out through the wrapper, which is what makes rate limiting or audit
-logging count replays too.
+`wrapHandler` is application-wide; route entries do not accept it. It wraps
+idempotency handling and the handler, so a replayed response still unwinds
+through it. This makes application-wide rate limiting or audit logging count
+replays too without exposing idempotency's internal interceptor per route.
+
+Runtime route keys must exactly match generated route templates and use
+lowercase HTTP methods. Server startup reports unmatched entries instead of
+silently ignoring them.
 
 The context is the same one the handler receives, so `context.event`,
 validated `params`, `query`, `headers`, and `body` are all available.

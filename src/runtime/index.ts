@@ -97,7 +97,14 @@ export type {
   EndpointRouteMethodsEventHandler,
 } from './route-handler'
 export { defineEndpointRuntime } from './endpoint-runtime'
-export type { EndpointOpenApiRuntime, EndpointRuntime } from './endpoint-runtime'
+export type {
+  EndpointOpenApiRuntime,
+  EndpointRouteIdempotencyRuntime,
+  EndpointRouteRuntime,
+  EndpointRouteRuntimeMap,
+  EndpointRuntime,
+  EndpointRuntimeRouteMethod,
+} from './endpoint-runtime'
 export type {
   EndpointHandlerNext,
   EndpointHandlerWrapper,

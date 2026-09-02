@@ -26,6 +26,7 @@ import type {
   IdempotencyStoredResponse,
 } from './idempotency'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
+import type { EndpointRouteIdempotencyRuntime } from './endpoint-runtime'
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
 
@@ -79,6 +80,7 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
   options: NormalizedEndpointIdempotencyOptions
   getRouteIdentity: () => EndpointRouteIdentity | undefined
   getPolicy: () => EndpointIdempotencyPolicy | undefined
+  getRouteOptions: () => EndpointRouteIdempotencyRuntime | undefined
   /**
    * Whether this endpoint picks its response media type from `Accept`. Only
    * then does the negotiated type belong in the default fingerprint: with one
@@ -87,7 +89,13 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
    */
   negotiatesResponseMediaType: boolean
 }): EndpointHandlerWrapper<DEFINITION> {
-  const { options: idempotency, getRouteIdentity, getPolicy, negotiatesResponseMediaType } = input
+  const {
+    options: idempotency,
+    getRouteIdentity,
+    getPolicy,
+    getRouteOptions,
+    negotiatesResponseMediaType,
+  } = input
 
   return async (context, next) => {
     const key = readIdempotencyKey(context.event, idempotency.headerName)
@@ -112,7 +120,8 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
       )
     }
 
-    const runtime = resolveIdempotencyRuntimeOptions(idempotency, getPolicy())
+    const routeOptions = getRouteOptions()
+    const runtime = resolveIdempotencyRuntimeOptions(idempotency, routeOptions, getPolicy())
     const runtimeContext = context as unknown as RuntimeIdempotencyContext
     if (runtime.authorization !== 'middleware') {
       await runtime.authorization(runtimeContext)
@@ -146,8 +155,12 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
     // what makes two requests the same request: a retry differing only in JSON
     // key order or in a value the schema coerces is one request, and a retry
     // asking for a different representation is not.
-    const projection = idempotency.fingerprint
-      ? await idempotency.fingerprint(runtimeContext)
+    const routeFingerprint = routeOptions?.fingerprint as
+      | NormalizedEndpointIdempotencyOptions['fingerprint']
+      | undefined
+    const fingerprintOption = routeFingerprint ?? idempotency.fingerprint
+    const projection = fingerprintOption
+      ? await fingerprintOption(runtimeContext)
       : {
           params: context.params,
           query: context.query,
@@ -209,7 +222,12 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
       throw error
     }
 
-    if (!isReplayableStatus(response.status, idempotency.replayStatuses)) {
+    if (
+      !isReplayableStatus(
+        response.status,
+        routeOptions?.replayStatuses ?? idempotency.replayStatuses,
+      )
+    ) {
       await storage.release(leaseInput)
       return response
     }
@@ -267,6 +285,7 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
 // this is a defensive fallback rather than a path exercised in practice.
 function resolveIdempotencyRuntimeOptions(
   endpointOptions: NormalizedEndpointIdempotencyOptions,
+  routeOptions: EndpointRouteIdempotencyRuntime | undefined,
   policy: EndpointIdempotencyPolicy | undefined,
 ): ResolvedIdempotencyRuntimeOptions {
   // The policy's context type (`EndpointIdempotencyContext<EndpointDefinition>`)
@@ -294,9 +313,15 @@ function resolveIdempotencyRuntimeOptions(
     scope: resolved.scope,
     authorization: resolved.authorization,
     leaseTtlMs:
-      endpointOptions.leaseTtlMs ?? runtimePolicy?.leaseTtlMs ?? defaultIdempotencyLeaseTtlMs,
+      routeOptions?.leaseTtlMs ??
+      endpointOptions.leaseTtlMs ??
+      runtimePolicy?.leaseTtlMs ??
+      defaultIdempotencyLeaseTtlMs,
     replayTtlMs:
-      endpointOptions.replayTtlMs ?? runtimePolicy?.replayTtlMs ?? defaultIdempotencyReplayTtlMs,
+      routeOptions?.replayTtlMs ??
+      endpointOptions.replayTtlMs ??
+      runtimePolicy?.replayTtlMs ??
+      defaultIdempotencyReplayTtlMs,
   }
 }
 

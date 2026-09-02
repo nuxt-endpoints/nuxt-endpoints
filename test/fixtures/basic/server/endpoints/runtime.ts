@@ -3,6 +3,44 @@ import { createMemoryIdempotencyStorage, defineEndpointRuntime } from '../../../
 const storage = createMemoryIdempotencyStorage()
 
 export default defineEndpointRuntime({
+  routes: {
+    '/api/idempotent-bodyless': {
+      post: {
+        idempotency: {
+          fingerprint: () => ({ operation: 'bodyless-conflict' }),
+          replayStatuses: [409],
+          leaseTtlMs: 15_000,
+          replayTtlMs: 60_000,
+        },
+      },
+    },
+    '/api/idempotent-upload': {
+      post: {
+        idempotency: {
+          fingerprint: ({ body }) => {
+            const input = body as { name: string; file: File }
+            return {
+              name: input.name,
+              file: {
+                name: input.file.name,
+                size: input.file.size,
+                type: input.file.type,
+              },
+            }
+          },
+        },
+      },
+    },
+    '/api/runtime-hooks': {
+      post: {
+        onValidationError: (failure) => {
+          if (failure.source === 'query') {
+            return { status: 409, body: { error: 'route', source: failure.source } }
+          }
+        },
+      },
+    },
+  },
   onValidationError: (failure) => ({
     status: 422,
     body: {

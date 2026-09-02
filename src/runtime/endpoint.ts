@@ -60,7 +60,7 @@ import type {
   EndpointHandlerWrapper,
   EndpointRuntimeResponse,
 } from './interceptor'
-import type { EndpointRuntime } from './endpoint-runtime'
+import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
 import { isValidationErrorResponse } from './validation-error'
 import type {
   EndpointValidationErrorHandler,
@@ -79,7 +79,7 @@ export type EndpointRuntimeOptions<DEFINITION extends EndpointDefinition = Endpo
   /**
    * Shapes the response for a request that does not match this endpoint's
    * contract. Returning nothing falls through to the application-wide hook in
-   * `server/endpoints/hooks.ts`, and then to the default shape.
+   * `server/endpoints/runtime.ts`, and then to the default shape.
    */
   onValidationError?: EndpointValidationErrorHandler
   /**
@@ -88,6 +88,8 @@ export type EndpointRuntimeOptions<DEFINITION extends EndpointDefinition = Endpo
    * handling, so a replayed response still passes back through it.
    */
   wrapHandler?: EndpointHandlerWrapper<DEFINITION>
+  /** Internal: route contracts obtain their fingerprint from the runtime map at startup. */
+  deferIdempotencyFingerprintValidation?: boolean
 }
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
@@ -200,6 +202,7 @@ type RequiredFromOptions<OPTIONS> = OPTIONS extends { required: infer REQUIRED e
 
 export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   public readonly __idempotency_runtime_marker__: false | EndpointIdempotencyRuntimeMarker
+  public readonly __idempotency_fingerprint_deferred__: boolean
 
   constructor(
     public readonly definition: DEFINITION,
@@ -207,6 +210,8 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     private readonly idempotencyOptions?: NormalizedEndpointIdempotencyOptions,
     idempotencyRuntimeMarker?: EndpointIdempotencyRuntimeMarker,
   ) {
+    this.__idempotency_fingerprint_deferred__ =
+      options.deferIdempotencyFingerprintValidation === true
     this.__idempotency_runtime_marker__ =
       idempotencyOptions !== undefined
         ? (idempotencyRuntimeMarker ?? createIdempotencyRuntimeMarker(() => false))
@@ -244,7 +249,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     options?: EndpointIdempotencyOptions<DEFINITION>,
   ): DefinedEndpoint<DEFINITION & { idempotency: EndpointIdempotencyMetadata }> {
     const normalized = normalizeIdempotencyOptions(options ?? {})
-    assertIdempotencyFingerprintIsDeterminable(this.definition, options)
+    if (!this.options.deferIdempotencyFingerprintValidation) {
+      assertIdempotencyFingerprintIsDeterminable(this.definition, options)
+    }
     const marker = createIdempotencyRuntimeMarker((key) => options?.[key] !== undefined)
     const definition = {
       ...this.definition,
@@ -269,7 +276,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       headerName: metadata.headerName,
       required: metadata.required,
     })
-    assertIdempotencyFingerprintIsDeterminable(this.definition, options)
+    if (!this.options.deferIdempotencyFingerprintValidation) {
+      assertIdempotencyFingerprintIsDeterminable(this.definition, options)
+    }
     const marker = createIdempotencyRuntimeMarker((key) => options[key] !== undefined)
     return new DefinedEndpoint(this.definition, this.options, normalized, marker)
   }
@@ -297,6 +306,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     let idempotencyPolicy: EndpointIdempotencyPolicy | undefined
     let appValidationErrorHandler: EndpointValidationErrorHandler | undefined
     let appHandlerWrapper: EndpointHandlerWrapper<EndpointDefinition> | undefined
+    let routeRuntime: EndpointRouteRuntime | undefined
     const idempotencyOptions = this.idempotencyOptions
 
     // `routeIdentity` and `idempotencyPolicy` are injected after `.handler()`
@@ -308,6 +318,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           options: idempotencyOptions,
           getRouteIdentity: () => routeIdentity,
           getPolicy: () => idempotencyPolicy,
+          getRouteOptions: () => routeRuntime?.idempotency,
           negotiatesResponseMediaType: this.negotiates,
         })
       : undefined
@@ -326,7 +337,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
             event,
             resolveValidationErrorResponse(
               contextResult.failure,
-              this.options.onValidationError,
+              routeRuntime?.onValidationError ?? this.options.onValidationError,
               appValidationErrorHandler,
             ),
             this.negotiates,
@@ -334,9 +345,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
         }
 
         const context = contextResult.context
-        // Outermost first: an application-wide wrapper sees every request,
-        // an endpoint's own wrapper sees its own, and idempotency sits closest
-        // to the handler so a replay still unwinds back through both.
+        // Outermost first: the application wrapper sees every request, then the
+        // legacy internal wrapper, with idempotency closest to the handler so a
+        // replay still unwinds through every outer layer.
         const wrappers = [
           appHandlerWrapper as EndpointHandlerWrapper<DEFINITION> | undefined,
           this.options.wrapHandler,
@@ -371,10 +382,14 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
         }
         routeIdentity = normalized
       },
-      __set_endpoint_runtime__: (runtime: EndpointRuntime | undefined) => {
+      __set_endpoint_runtime__: (
+        runtime: EndpointRuntime | undefined,
+        endpointRuntime?: EndpointRouteRuntime,
+      ) => {
         appValidationErrorHandler = runtime?.onValidationError
         appHandlerWrapper = runtime?.wrapHandler
         idempotencyPolicy = runtime?.idempotency
+        routeRuntime = endpointRuntime
       },
     })
   }
@@ -474,7 +489,10 @@ export type EndpointEventHandler<
   __endpoint_contract__: DefinedEndpoint<DEFINITION>
   __endpoint_handler_return__: HANDLER_RETURN
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
-  __set_endpoint_runtime__: (runtime: EndpointRuntime | undefined) => void
+  __set_endpoint_runtime__: (
+    runtime: EndpointRuntime | undefined,
+    endpointRuntime?: EndpointRouteRuntime,
+  ) => void
 }
 
 // Exported so endpoint-methods.ts can compute the same success-body type for
@@ -1175,7 +1193,7 @@ function defaultValidationErrorResponse(
   }
 }
 
-// Endpoint handler wins, then the application-wide one, then the default.
+// Route/legacy handler wins, then the application-wide one, then the default.
 function resolveValidationErrorResponse(
   failure: EndpointValidationFailure,
   endpointHandler: EndpointValidationErrorHandler | undefined,

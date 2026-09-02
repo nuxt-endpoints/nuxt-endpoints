@@ -33,6 +33,41 @@ The policy file is server runtime code: it is bundled into the Nitro server and 
 
 The convention path is looked up in every root that can contribute server routes: the project `server/` directory, extended Nuxt layers, and custom Nitro `scanDirs`. The first match wins, project first.
 
+The same file can override request-time behavior for one generated route. Use the
+route template (including `:param` segments) and lowercase HTTP method:
+
+```ts
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => storage,
+    scope: ({ event }) => event.context.auth.tenantId,
+    authorization: 'middleware',
+  },
+  routes: {
+    '/api/uploads/:id': {
+      post: {
+        idempotency: {
+          fingerprint: ({ params, body }) => {
+            const upload = body as { file: File }
+            return {
+              id: params.id,
+              file: { name: upload.file.name, size: upload.file.size },
+            }
+          },
+          replayStatuses: [409],
+          leaseTtlMs: 30_000,
+          replayTtlMs: 86_400_000,
+        },
+      },
+    },
+  },
+})
+```
+
+Route TTLs override the corresponding application defaults. Storage, scope,
+and authorization remain application policy and cannot vary by route. Startup
+rejects a route or method that does not match a discovered endpoint.
+
 ## Declare it on an endpoint
 
 With a central policy in place, an endpoint declares only its contract-side metadata, as an `idempotency` slot alongside the rest of the contract:
@@ -71,17 +106,28 @@ Contract-side, on the route:
 - `headerName` (required): the header carrying the key. Matching is case-insensitive.
 - `required` (required): whether the header is mandatory. Reflected in the generated client type.
 
-Request-time, in the central policy:
+Request-time, in `server/endpoints/runtime.ts`:
 
-- `storage`, `scope`, `authorization`: as described above. The policy must provide all three.
+- `storage`, `scope`, `authorization`: as described above. Define them once in
+  the application policy; route entries do not accept them.
+- `fingerprint`: a route-only projection for requests the default projection
+  cannot represent, such as bodyless operations or multipart `File` input.
+- `replayStatuses`: additional route response statuses that may be recorded;
+  successful JSON responses are replayable by default.
 - `leaseTtlMs` (default `60000`): in-flight lease duration. Size it for the maximum expected handler duration.
 - `replayTtlMs` (default `86400000`): how long a completed response remains replayable.
 
-The split is what keeps the two halves honest: the route contract reaches generated clients and OpenAPI, so it carries no functions and no infrastructure, while the policy holds the callbacks and never leaves the server. Declaring `storage`, `scope`, or `authorization` on a route is rejected by TypeScript and again when the route module is loaded.
+The split is what keeps the two halves honest: the route contract reaches generated clients and OpenAPI, so it carries no functions and no infrastructure, while the runtime file holds callbacks and never leaves the server. Declaring `storage`, `scope`, `authorization`, `fingerprint`, `replayStatuses`, or either TTL in `defineRouteHandler` is rejected by TypeScript and again when the route module is loaded.
 
 Request identity is the request the handler can observe: validated `params`, `query`, and `body`, plus the negotiated media type when the endpoint offers more than one. Because those values are the validated ones rather than the raw bytes, a retry differing only in JSON key order, insignificant whitespace, or a value the schema coerces (`?limit=010` and `?limit=10`) is the same request.
 
-An idempotent endpoint therefore has to declare a `body` contract. Without one, request identity would rest on a body the runtime never parsed, and two different payloads under one key would look identical — so the endpoint is rejected when its module is loaded rather than replaying the first response to the second.
+The default fingerprint requires a declared `body` contract. A bodyless
+idempotent route must provide an explicit route fingerprint, even if that
+fingerprint is a constant naming the operation. Multipart bodies containing a
+`File` also need an explicit projection because a `File` is not JSON
+serializable. A missing bodyless fingerprint fails at startup with the exact
+runtime-map location to add; an unprojected `File` fails when the first such
+request is fingerprinted rather than producing an incomplete identity.
 
 If a policy is missing `storage`, `scope`, or `authorization` — or there is no policy file at all — server startup fails and names what is missing. An idempotent endpoint never silently runs unprotected.
 

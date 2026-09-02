@@ -6,10 +6,10 @@ import { pathToFileURL } from 'node:url'
 
 const arguments_ = process.argv.slice(2)
 if (arguments_[0] === '--') arguments_.shift()
-const [tarballArgument, nuxtVersion = '4.5.0'] = arguments_
+const [tarballArgument, nuxtVersion = '4.5.0', upstreamRoot] = arguments_
 
 if (!tarballArgument) {
-  throw new Error('Usage: smoke-packed-package.mjs <package.tgz> [nuxt-version]')
+  throw new Error('Usage: smoke-packed-package.mjs <package.tgz> [nuxt-version] [upstream-root]')
 }
 
 const tarballPath = isAbsolute(tarballArgument)
@@ -19,12 +19,22 @@ const smokeRoot = await mkdtemp(join(tmpdir(), 'nuxt-endpoints-package-smoke-'))
 
 try {
   await mkdir(join(smokeRoot, 'server/api'), { recursive: true })
+  await mkdir(join(smokeRoot, 'server/endpoints'), { recursive: true })
 
   await writeFile(join(smokeRoot, '.node-version'), '22.19.0\n')
   await writeFile(
     join(smokeRoot, 'pnpm-workspace.yaml'),
     `allowBuilds:
   'esbuild@0.28.2': true
+${
+  upstreamRoot
+    ? `overrides:
+  h3: link:${join(upstreamRoot, 'h3')}
+  fetchdts: link:${join(upstreamRoot, 'fetchdts')}
+  nitro: link:${join(upstreamRoot, 'nitro')}
+`
+    : ''
+}
 `,
   )
   await writeFile(
@@ -54,6 +64,32 @@ try {
 `,
   )
   await writeFile(
+    join(smokeRoot, 'server/endpoints/runtime.ts'),
+    `import { createMemoryIdempotencyStorage } from 'nuxt-endpoints/runtime'
+
+const storage = createMemoryIdempotencyStorage()
+
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => storage,
+    scope: () => 'packed-smoke',
+    authorization: 'middleware',
+  },
+  routes: {
+    '/api/echo': {
+      post: {
+        idempotency: {
+          fingerprint: ({ body }) => body,
+          leaseTtlMs: 15_000,
+          replayTtlMs: 60_000,
+        },
+      },
+    },
+  },
+})
+`,
+  )
+  await writeFile(
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
@@ -64,6 +100,11 @@ export default defineRouteHandler({
       201: z.object({ message: z.string() }),
     },
   },
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
+  },
   handler: (event) => event.respond(201, event.validated.body),
 })
 `,
@@ -73,7 +114,10 @@ export default defineRouteHandler({
   run('vp', ['exec', 'nuxi', 'prepare'], smokeRoot)
 
   const endpointTypes = await readFile(join(smokeRoot, '.nuxt/types/endpoints.d.ts'), 'utf8')
-  const serverImports = await readFile(join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'), 'utf8')
+  const serverImports = await readFirstFile([
+    join(smokeRoot, '.nuxt/types/nitro/nitro-imports.d.ts'),
+    join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'),
+  ])
 
   assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
   assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
@@ -100,6 +144,17 @@ function assertIncludes(source, expected, label) {
   if (!source.includes(expected)) {
     throw new Error(`Missing ${label}: ${expected}`)
   }
+}
+
+async function readFirstFile(paths) {
+  for (const path of paths) {
+    try {
+      return await readFile(path, 'utf8')
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
+  throw new Error(`None of the expected generated files exists: ${paths.join(', ')}`)
 }
 
 function assertSymbolExcludes(source, symbol, label) {
