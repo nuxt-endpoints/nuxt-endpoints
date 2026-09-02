@@ -19,6 +19,11 @@ unnecessary." Success is measured partly in deleted local code.
 Everything below is recorded from code, tests, or release metadata. A row stays
 UNVERIFIED until something in this repository proves it.
 
+Current GitHub issue and PR status is maintained in
+[`upstream-tracking.md`](./upstream-tracking.md). This document explains the
+architecture and evidence; the tracker records which upstream decisions are
+still moving.
+
 ## Local Nitro provider integration
 
 The local Nitro prototype now exposes `nitro.getRouteContracts()` during

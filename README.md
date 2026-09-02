@@ -118,7 +118,9 @@ Concepts, for when you want the reasoning behind the design:
 - [Mental Model](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/mental-model) — how the pieces fit together
 - [Limits](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/limits) — supported platform line, known constraints, and planned work
 
-Maintainer design notes and the detailed roadmap live in [`docs/`](./docs/roadmap.md).
+Maintainer design notes live in [`docs/`](./docs/roadmap.md). Upstream issues and
+pull requests that can change the Nuxt 5 architecture are kept in the
+[`upstream tracker`](./docs/upstream-tracking.md).
 
 ## Contributing
 
