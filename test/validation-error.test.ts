@@ -113,6 +113,23 @@ describe('application-level validation error handler', () => {
     expect(declined.status).toBe(418)
     await expect(declined.json()).resolves.toEqual({ app: true, source: 'headers' })
   })
+
+  it('falls back from the matching route hook to the application hook', async () => {
+    const endpoint = defineEndpoint({ query, headers: z.object({ 'x-tenant': z.string() }) })
+    const handler = endpoint.handler(() => ({ ok: true }))
+    handler.__set_endpoint_runtime__(appRuntime, {
+      onValidationError: ({ source }) =>
+        source === 'query' ? { status: 422, body: { from: 'route' } } : undefined,
+    })
+
+    const claimed = await request(handler, 'http://t.local/?page=x')
+    expect(claimed.status).toBe(422)
+    await expect(claimed.json()).resolves.toEqual({ from: 'route' })
+
+    const declined = await request(handler, 'http://t.local/?page=1')
+    expect(declined.status).toBe(418)
+    await expect(declined.json()).resolves.toEqual({ app: true, source: 'headers' })
+  })
 })
 
 describe('defineEndpointRuntime', () => {
@@ -124,6 +141,41 @@ describe('defineEndpointRuntime', () => {
     expect(() => defineEndpointRuntime({ wrapHandler: 'x' as never })).toThrow(
       /must be a function/i,
     )
+  })
+
+  it('rejects a malformed route runtime entry', () => {
+    expect(() =>
+      defineEndpointRuntime({
+        routes: { '/api/items': { post: { onValidationError: 'x' } } },
+      } as never),
+    ).toThrow(/routes.*\/api\/items.*post.*onValidationError/i)
+  })
+
+  it('rejects unknown JavaScript route runtime settings instead of discarding them', () => {
+    expect(() =>
+      defineEndpointRuntime({
+        routes: { '/api/items': { post: { fingerprint: () => ({}) } as never } },
+      }),
+    ).toThrow(/routes\["\/api\/items"\]\.post\.fingerprint is not supported/i)
+    expect(() =>
+      defineEndpointRuntime({
+        routes: {
+          '/api/items': { post: { idempotency: { replayStatus: [409] } as never } },
+        },
+      }),
+    ).toThrow(/\.idempotency\.replayStatus is not supported/i)
+    expect(() =>
+      defineEndpointRuntime({
+        routes: { '/api/items': { post: { wrapHandler: () => undefined } as never } },
+      }),
+    ).toThrow(/\.post\.wrapHandler is not supported/i)
+    expect(() =>
+      defineEndpointRuntime({
+        routes: {
+          '/api/items': { post: { idempotency: { storage: () => ({}) } as never } },
+        },
+      }),
+    ).toThrow(/\.idempotency\.storage is not supported/i)
   })
 
   it('rejects a malformed openApi section', () => {

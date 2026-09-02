@@ -415,6 +415,78 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(response.status).toBe(400)
     })
 
+    it('uses route runtime settings for a bodyless fingerprint and a replayable 409', async () => {
+      const request = () =>
+        fetch('/api/idempotent-bodyless', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'integration-bodyless-request-1' },
+        })
+
+      const first = await request()
+      const second = await request()
+
+      expect(first.status).toBe(409)
+      expect(second.status).toBe(409)
+      await expect(first.json()).resolves.toEqual({ executionCount: 1 })
+      await expect(second.json()).resolves.toEqual({ executionCount: 1 })
+    })
+
+    it('uses an explicit route fingerprint for multipart File input', async () => {
+      const request = () => {
+        const body = new FormData()
+        body.append('name', 'Multipart idempotency')
+        body.append('file', new File(['contents'], 'upload.txt', { type: 'text/plain' }))
+        return fetch('/api/idempotent-upload', {
+          method: 'POST',
+          body,
+          headers: { 'idempotency-key': 'integration-upload-request-1' },
+        })
+      }
+
+      const first = await request()
+      const second = await request()
+
+      expect(first.status).toBe(201)
+      expect(second.status).toBe(201)
+      await expect(first.json()).resolves.toEqual({
+        executionCount: 1,
+        name: 'Multipart idempotency',
+      })
+      await expect(second.json()).resolves.toEqual({
+        executionCount: 1,
+        name: 'Multipart idempotency',
+      })
+    })
+
+    it('uses route hooks and falls back to application validation handling', async () => {
+      const routeFailure = await fetch('/api/runtime-hooks', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Ada' }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(routeFailure.status).toBe(409)
+      await expect(routeFailure.json()).resolves.toEqual({ error: 'route', source: 'query' })
+
+      const applicationFailure = await fetch('/api/runtime-hooks?q=ok', {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(applicationFailure.status).toBe(422)
+      await expect(applicationFailure.json()).resolves.toEqual({
+        error: 'contract',
+        kind: 'schema',
+        source: 'body',
+      })
+
+      const success = await fetch('/api/runtime-hooks?q=ok', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Ada' }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(success.headers.get('x-wrapped')).toBe('POST')
+    })
+
     it('includes idempotency metadata in the generated client and OpenAPI', async () => {
       const buildDir = getBuildDir(useTestContext)
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')

@@ -2,6 +2,13 @@
 
 ## 0.8.0 - 2026-09-02
 
+### Added
+
+- `server/endpoints/runtime.ts` now accepts route-and-method runtime overrides
+  for `fingerprint`, replay statuses and TTLs, plus validation-error handling.
+  This makes bodyless and multipart/File idempotent routes
+  expressible without putting callbacks in the build-time contract.
+
 ### Changed
 
 - **Breaking:** endpoint routes now directly default-export the canonical
@@ -31,6 +38,8 @@
   idempotency boundary already enforced by TypeScript. `fingerprint`,
   `replayStatuses`, `leaseTtlMs`, and `replayTtlMs` are rejected instead of
   being silently discarded.
+- Runtime route entries are validated against discovered endpoints at startup,
+  so renamed paths and unsupported method settings cannot be silently ignored.
 
 ### Documentation
 

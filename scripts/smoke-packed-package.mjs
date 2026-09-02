@@ -22,6 +22,7 @@ let applicationOutput = ''
 
 try {
   await mkdir(join(smokeRoot, 'server/api'), { recursive: true })
+  await mkdir(join(smokeRoot, 'server/endpoints'), { recursive: true })
 
   await writeFile(join(smokeRoot, '.node-version'), '22.19.0\n')
   await writeFile(
@@ -57,6 +58,32 @@ try {
 `,
   )
   await writeFile(
+    join(smokeRoot, 'server/endpoints/runtime.ts'),
+    `import { createMemoryIdempotencyStorage } from 'nuxt-endpoints/runtime'
+
+const storage = createMemoryIdempotencyStorage()
+
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => storage,
+    scope: () => 'packed-smoke',
+    authorization: 'middleware',
+  },
+  routes: {
+    '/api/echo': {
+      post: {
+        idempotency: {
+          fingerprint: ({ body }) => body,
+          leaseTtlMs: 15_000,
+          replayTtlMs: 60_000,
+        },
+      },
+    },
+  },
+})
+`,
+  )
+  await writeFile(
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
@@ -66,6 +93,11 @@ export default defineRouteHandler({
     response: {
       201: z.object({ message: z.string() }),
     },
+  },
+  idempotency: {
+    enabled: true,
+    headerName: 'Idempotency-Key',
+    required: true,
   },
   handler: (event) => {
     return event.respond(201, event.validated.body)

@@ -10,7 +10,8 @@ import type {
   EndpointRouteIdentity,
 } from './endpoint'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
-import type { EndpointRuntime } from './endpoint-runtime'
+import { resolveEndpointRouteRuntime, validateEndpointRuntime } from './endpoint-runtime'
+import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 
@@ -27,7 +28,11 @@ type HandlerFunction = {
   // Private compatibility carrier for the canonical multi-method form.
   __endpoint_contracts__?: Record<string, DefinedEndpoint<EndpointDefinition>>
   __set_endpoint_route__?: (identity: EndpointRouteIdentity) => void
-  __set_endpoint_runtime__?: (runtime: EndpointRuntime | undefined) => void
+  __set_endpoint_runtime__?: (
+    runtime: EndpointRuntime | undefined,
+    endpointRuntime?: EndpointRouteRuntime,
+    identity?: EndpointRouteIdentity,
+  ) => void
 }
 
 type HandlerDefinition = {
@@ -76,6 +81,11 @@ export async function extractEndpoints(
   runtime?: EndpointRuntime,
 ) {
   const endpoints = []
+  const matchedRuntimeEntries = new Set<string>()
+  const handlerRegistrations = new WeakMap<
+    HandlerFunction,
+    { identity: string; hasOverride: boolean }
+  >()
 
   for (const definition of definitions) {
     const handler = await resolveHandler(definition)
@@ -84,10 +94,35 @@ export async function extractEndpoints(
       continue
     }
 
-    // Every endpoint receives the application-wide hooks, whether or not it
-    // declares its own: precedence is resolved per request, not by suppressing
-    // this injection.
-    handler.__set_endpoint_runtime__?.(runtime)
+    const identity = {
+      method: definition.method.toLowerCase(),
+      routeTemplate: definition.route,
+    }
+    const routeRuntime = resolveEndpointRouteRuntime(
+      runtime,
+      identity.routeTemplate,
+      identity.method,
+    )
+    assertRouteRuntimeIsNotShared(handler, identity, routeRuntime, handlerRegistrations)
+    if (routeRuntime) {
+      matchedRuntimeEntries.add(runtimeEntryKey(identity.routeTemplate, identity.method))
+      if (!handler.__set_endpoint_runtime__) {
+        throw new Error(
+          `[nuxt-endpoints] Endpoint ${identity.method} ${identity.routeTemplate} does not expose a runtime attachment hook.`,
+        )
+      }
+      handler.__set_endpoint_runtime__(runtime, routeRuntime, identity)
+    } else {
+      // Every endpoint receives the application defaults. Preserve the
+      // one-argument path for handlers without a route-specific override.
+      handler.__set_endpoint_runtime__?.(runtime)
+    }
+
+    if (routeRuntime?.idempotency && !contract.definition.idempotency) {
+      throw new Error(
+        `[nuxt-endpoints] Runtime entry ${identity.method} ${identity.routeTemplate} configures idempotency, but the route contract does not enable it.`,
+      )
+    }
 
     if (contract.definition.idempotency) {
       const marker = contract.__idempotency_runtime_marker__
@@ -102,14 +137,24 @@ export async function extractEndpoints(
         )
       }
       handler.__set_endpoint_route__({
-        method: definition.method,
-        routeTemplate: definition.route,
+        method: identity.method,
+        routeTemplate: identity.routeTemplate,
       })
+
+      if (
+        contract.__idempotency_fingerprint_deferred__ &&
+        contract.definition.body === undefined &&
+        routeRuntime?.idempotency?.fingerprint === undefined
+      ) {
+        throw new Error(
+          `[nuxt-endpoints] Bodyless idempotent endpoint ${identity.method} ${identity.routeTemplate} needs routes["${identity.routeTemplate}"].${identity.method}.idempotency.fingerprint in server/endpoints/runtime.ts.`,
+        )
+      }
 
       const missing = findMissingIdempotencyRuntimeOptions(marker, runtime?.idempotency)
       if (missing.length > 0) {
         throw new Error(
-          `[nuxt-endpoints] Idempotent endpoint ${definition.method} ${definition.route} is missing runtime options: ${missing.join(', ')}. Provide them in .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
+          `[nuxt-endpoints] Idempotent endpoint ${definition.method} ${definition.route} is missing runtime options: ${missing.join(', ')}. Provide route overrides or an application idempotency policy in server/endpoints/runtime.ts.`,
         )
       }
     }
@@ -121,7 +166,31 @@ export async function extractEndpoints(
     })
   }
 
+  assertNoUnmatchedRuntimeEntries(runtime, matchedRuntimeEntries)
+
   return endpoints
+}
+
+function assertRouteRuntimeIsNotShared(
+  handler: HandlerFunction,
+  identity: EndpointRouteIdentity,
+  routeRuntime: EndpointRouteRuntime | undefined,
+  registrations: WeakMap<HandlerFunction, { identity: string; hasOverride: boolean }>,
+): void {
+  // A method-group dispatcher targets a distinct member for each identity.
+  if (handler.__endpoint_contracts__) return
+
+  const current = `${identity.method} ${identity.routeTemplate}`
+  const previous = registrations.get(handler)
+  if (previous && (previous.hasOverride || routeRuntime !== undefined)) {
+    throw new Error(
+      `[nuxt-endpoints] Route-specific runtime settings cannot be attached to a handler shared by ${previous.identity} and ${current}. Export a distinct defineRouteHandler() instance for each route.`,
+    )
+  }
+  registrations.set(handler, {
+    identity: previous?.identity ?? current,
+    hasOverride: previous?.hasOverride === true || routeRuntime !== undefined,
+  })
 }
 
 // A method-group dispatcher (`__endpoint_contracts__`) exposes one
@@ -160,6 +229,25 @@ function findMissingIdempotencyRuntimeOptions(
   return idempotencyRuntimeOptionKeys.filter((key) => !marker[key] && policy?.[key] === undefined)
 }
 
+function assertNoUnmatchedRuntimeEntries(
+  runtime: EndpointRuntime | undefined,
+  matched: ReadonlySet<string>,
+): void {
+  for (const [path, methods] of Object.entries(runtime?.routes ?? {})) {
+    for (const method of Object.keys(methods)) {
+      if (!matched.has(runtimeEntryKey(path, method))) {
+        throw new Error(
+          `[nuxt-endpoints] Runtime entry ${method} ${path} does not match a discovered endpoint route.`,
+        )
+      }
+    }
+  }
+}
+
+function runtimeEntryKey(path: string, method: string): string {
+  return `${method.toLowerCase()} ${path}`
+}
+
 function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyPolicy {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -176,12 +264,15 @@ function assertValidEndpointRuntime(value: unknown): EndpointRuntime | undefined
   if (value === undefined) {
     return undefined
   }
-  if (typeof value !== 'object' || value === null) {
+  try {
+    validateEndpointRuntime(value)
+  } catch (error) {
     throw new Error(
-      '[nuxt-endpoints] server/endpoints/runtime.ts must default-export defineEndpointRuntime({ ... }).',
+      '[nuxt-endpoints] server/endpoints/runtime.ts must default-export a valid defineEndpointRuntime({ ... }) value.',
+      { cause: error },
     )
   }
-  const runtime = value as EndpointRuntime
+  const runtime = value
   if (runtime.idempotency !== undefined && !isIdempotencyPolicyShape(runtime.idempotency)) {
     throw new Error(
       '[nuxt-endpoints] The idempotency policy in server/endpoints/runtime.ts needs storage, scope, and authorization.',

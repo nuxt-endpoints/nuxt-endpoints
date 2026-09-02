@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createMemoryIdempotencyStorage,
   defineEndpoint,
+  defineEndpointRuntime,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
+  defineRouteHandler,
 } from './internal-runtime'
 import type { EndpointRuntime } from './internal-runtime'
 
@@ -105,6 +107,102 @@ describe('idempotency route metadata startup', () => {
 })
 
 describe('idempotency runtime option resolution at startup', () => {
+  it('injects the runtime entry matching the endpoint path and method', async () => {
+    const endpointRuntime = { onValidationError: () => undefined }
+    const runtime = defineEndpointRuntime({
+      routes: { '/api/items': { post: endpointRuntime } },
+    } as never)
+    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const setRuntime = vi.spyOn(handler, '__set_endpoint_runtime__')
+
+    await expect(
+      extractEndpoints([route('/api/items', 'post', handler)], runtime),
+    ).resolves.toHaveLength(1)
+    expect(setRuntime).toHaveBeenCalledWith(runtime, endpointRuntime, {
+      method: 'post',
+      routeTemplate: '/api/items',
+    })
+  })
+
+  it('rejects a runtime entry that does not match a discovered endpoint', async () => {
+    const runtime = defineEndpointRuntime({
+      routes: { '/api/missing': { post: { onValidationError: () => undefined } } },
+    })
+    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+
+    await expect(extractEndpoints([route('/api/items', 'post', handler)], runtime)).rejects.toThrow(
+      /Runtime entry post \/api\/missing does not match a discovered endpoint route/,
+    )
+  })
+
+  it('rejects route runtime settings on a handler shared by multiple routes', async () => {
+    const runtime = defineEndpointRuntime({
+      routes: { '/api/items': { post: { onValidationError: () => undefined } } },
+    })
+    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+
+    await expect(
+      extractEndpoints(
+        [route('/api/items', 'post', handler), route('/api/other-items', 'post', handler)],
+        runtime,
+      ),
+    ).rejects.toThrow(/Route-specific runtime settings cannot be attached to a handler shared by/)
+  })
+
+  it('rejects idempotency runtime options on a route that did not enable idempotency', async () => {
+    const runtime = defineEndpointRuntime({
+      routes: { '/api/items': { post: { idempotency: { fingerprint: () => ({}) } } } },
+    })
+    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+
+    await expect(extractEndpoints([route('/api/items', 'post', handler)], runtime)).rejects.toThrow(
+      /configures idempotency.*route contract does not enable it/i,
+    )
+  })
+
+  it('accepts a bodyless idempotent route when its runtime entry supplies a fingerprint', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const handler = defineRouteHandler({
+      idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
+      handler: () => ({ ok: true }),
+    })
+    const runtime = defineEndpointRuntime({
+      idempotency: {
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      },
+      routes: {
+        '/api/items': { post: { idempotency: { fingerprint: () => ({}) } } },
+      },
+    } as never)
+
+    await expect(
+      extractEndpoints([route('/api/items', 'post', handler as object)], runtime),
+    ).resolves.toHaveLength(1)
+  })
+
+  it('gives a bodyless idempotent route an actionable runtime fingerprint error', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const handler = defineRouteHandler({
+      idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
+      handler: () => ({ ok: true }),
+    })
+    const runtime = defineEndpointRuntime({
+      idempotency: {
+        storage: () => storage,
+        scope: () => 'public',
+        authorization: 'middleware',
+      },
+    })
+
+    await expect(
+      extractEndpoints([route('/api/items', 'post', handler as object)], runtime),
+    ).rejects.toThrow(
+      'routes["/api/items"].post.idempotency.fingerprint in server/endpoints/runtime.ts',
+    )
+  })
+
   it('injects the central policy (or its absence) into every idempotent handler', async () => {
     const storage = createMemoryIdempotencyStorage()
     const handler = defineEndpoint({})
@@ -155,7 +253,7 @@ describe('idempotency runtime option resolution at startup', () => {
       .handler(() => ({ ok: true }))
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)])).rejects.toThrow(
-      '[nuxt-endpoints] Idempotent endpoint post /api/items is missing runtime options: storage, authorization. Provide them in .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.',
+      '[nuxt-endpoints] Idempotent endpoint post /api/items is missing runtime options: storage, authorization. Provide route overrides or an application idempotency policy in server/endpoints/runtime.ts.',
     )
   })
 

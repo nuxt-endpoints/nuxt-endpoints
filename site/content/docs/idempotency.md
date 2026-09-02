@@ -61,29 +61,67 @@ export default defineEndpointRuntime({
   or `'middleware'` when Nitro middleware already made the complete decision.
 - `leaseTtlMs` and `replayTtlMs` provide application defaults.
 
+The same file can override request-time behavior for one generated route. Use
+the route template (including `:param` segments) and lowercase HTTP method:
+
+```ts
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => storage,
+    scope: ({ event }) => event.context.auth.tenantId,
+    authorization: 'middleware',
+  },
+  routes: {
+    '/api/uploads/:id': {
+      post: {
+        idempotency: {
+          fingerprint: ({ params, body }) => {
+            const upload = body as { file: File }
+            return {
+              id: params.id,
+              file: { name: upload.file.name, size: upload.file.size },
+            }
+          },
+          replayStatuses: [409],
+          leaseTtlMs: 30_000,
+          replayTtlMs: 86_400_000,
+        },
+      },
+    },
+  },
+})
+```
+
+Route TTLs override the corresponding application defaults. Storage, scope,
+and authorization remain application policy and cannot vary by route. Startup
+rejects an entry that does not match a discovered endpoint.
+
 The runtime file is server code and is not evaluated during contract discovery.
 It may therefore reference infrastructure connections. Configure a different
 location with `endpoints.runtime.path`.
 
 Runtime callbacks do not belong in the route definition. They are rejected by
 both TypeScript and runtime definition validation because Nitro evaluates the
-serializable definition during build. Put `storage`, `scope`, and
-`authorization` in the central runtime policy.
+serializable definition during build. Put `storage`, `scope`, `authorization`,
+`fingerprint`, replay statuses, and TTLs in the runtime file.
 
-For an operation without a body contract, supply `fingerprint` explicitly so
-the implementation cannot confuse an intentionally input-free operation with a
-handler that reads undeclared input:
+For an operation without a body contract, supply a route `fingerprint`
+explicitly so the implementation cannot confuse an intentionally input-free
+operation with a handler that reads undeclared input. Multipart bodies
+containing a `File` need an explicit JSON-serializable projection for the same
+reason:
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ id: z.string() }),
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-    fingerprint: ({ params }) => ({ params }),
+export default defineEndpointRuntime({
+  routes: {
+    '/api/items/:id/publish': {
+      post: {
+        idempotency: {
+          fingerprint: ({ params }) => ({ id: params.id }),
+        },
+      },
+    },
   },
-  handler: (event) => publishItem(event.validated.params.id),
 })
 ```
 

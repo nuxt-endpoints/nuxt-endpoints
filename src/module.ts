@@ -321,7 +321,7 @@ async function composeHandlers(
     const { idempotency, idempotencyRuntimeGaps, mediaResponse } = detection
     if (idempotencyRuntimeGaps?.length && !policyFileExists) {
       throw new Error(
-        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} does not provide ${idempotencyRuntimeGaps.join(', ')} and no endpoint runtime file was found. Add them to .idempotency() or declare an idempotency policy in server/endpoints/runtime.ts.`,
+        `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} needs ${idempotencyRuntimeGaps.join(', ')}, but no endpoint runtime file was found. Declare an application policy or route override in server/endpoints/runtime.ts.`,
       )
     }
     endpointHandlers.push({

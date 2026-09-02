@@ -631,6 +631,47 @@ describe('endpoint idempotency runtime', () => {
   })
 
   describe('central policy injection', () => {
+    it('applies route fingerprint, replay statuses, and TTL overrides before the central policy', async () => {
+      const storage = createMemoryIdempotencyStorage()
+      const claim = vi.spyOn(storage, 'claim')
+      const complete = vi.spyOn(storage, 'complete')
+      const execute = vi.fn(({ body, respond }) =>
+        respond(409, { acceptedAmount: (body as { amount: number }).amount }),
+      )
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ required: true })
+      const handler = defineEndpointHandler(endpoint, execute)
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
+      handler.__set_endpoint_runtime__(
+        {
+          idempotency: {
+            storage: () => storage,
+            scope: () => 'public',
+            authorization: 'middleware',
+            leaseTtlMs: 90_000,
+            replayTtlMs: 91_000,
+          },
+        },
+        {
+          idempotency: {
+            fingerprint: () => ({ logicalOperation: 'one' }),
+            replayStatuses: [409],
+            leaseTtlMs: 1_234,
+            replayTtlMs: 5_678,
+          },
+        },
+      )
+
+      const request = (amount: number) =>
+        createEvent({ body: { amount }, headers: { 'idempotency-key': 'request-1' } })
+      await expect(handler(request(100))).resolves.toEqual({ acceptedAmount: 100 })
+      await expect(handler(request(200))).resolves.toEqual({ acceptedAmount: 100 })
+
+      expect(execute).toHaveBeenCalledOnce()
+      expect(claim).toHaveBeenCalledWith(expect.objectContaining({ leaseTtlMs: 1_234 }))
+      expect(complete).toHaveBeenCalledWith(expect.objectContaining({ replayTtlMs: 5_678 }))
+      expect(setResponseStatus).toHaveBeenLastCalledWith(expect.anything(), 409)
+    })
+
     it('uses the injected policy entirely when the endpoint supplies no runtime options', async () => {
       const storage = createMemoryIdempotencyStorage()
       const authorize = vi.fn()

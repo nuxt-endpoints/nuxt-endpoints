@@ -215,12 +215,54 @@ export default defineRouteHandler({
 })
 ```
 
-The central policy supplies `storage`, `scope`, and `authorization`. Putting
-those callbacks in the route definition is rejected so contract discovery
-never evaluates application runtime dependencies during the build.
+The central policy supplies `storage`, `scope`, and `authorization`. Route
+overrides for `fingerprint`, replay statuses, and TTLs use
+`routes[path][method].idempotency` in the same runtime file. This is required
+for bodyless idempotent operations and multipart bodies containing `File`.
+Putting these callbacks in the route definition is rejected so contract
+discovery never evaluates application runtime dependencies during the build.
 
 For application-wide policy and production storage requirements, see
 [Idempotency](/docs/idempotency).
+
+## Hooks
+
+Application hooks and per-route overrides also live in
+`server/endpoints/runtime.ts`:
+
+```ts
+export default defineEndpointRuntime({
+  onValidationError: ({ kind, source }) => ({
+    status: 422,
+    body: { error: 'invalid_request', field: source, reason: kind },
+  }),
+  wrapHandler: async (context, next) => {
+    const started = Date.now()
+    try {
+      return await next()
+    } finally {
+      recordDuration(context.event, Date.now() - started)
+    }
+  },
+  routes: {
+    '/api/users/:id': {
+      post: {
+        onValidationError: (failure) => {
+          if (failure.source === 'body') {
+            return { status: 422, body: { error: 'invalid_user' } }
+          }
+        },
+      },
+    },
+  },
+})
+```
+
+A route validation hook may return nothing to fall through to the application
+hook; the application hook may fall through to the built-in response.
+`wrapHandler` is application-wide and wraps idempotency plus the handler; route
+entries do not accept it. Runtime route keys must exactly match generated
+templates and use lowercase methods; startup reports unmatched entries.
 
 ## Reusing schemas and metadata
 

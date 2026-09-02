@@ -419,6 +419,7 @@ function createEndpoint(definition: EndpointDefinition): DefinedEndpoint<Endpoin
 function routeHandlerRuntimeOptions(definition: EndpointDefinition): EndpointRuntimeOptions {
   return {
     validation: { response: definition.responses !== undefined },
+    deferIdempotencyFingerprintValidation: true,
   }
 }
 
