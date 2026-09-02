@@ -14,6 +14,7 @@ export const docsNavSections = [
     items: [
       { label: 'Introduction', to: '/docs' },
       { label: 'Getting Started', to: '/docs/getting-started' },
+      { label: 'Nuxt 5 Progress', to: '/docs/nuxt5-progress' },
     ],
   },
   {
