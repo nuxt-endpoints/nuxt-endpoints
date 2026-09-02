@@ -1,15 +1,14 @@
-import type { Serialize, Simplify } from 'nitro/types'
+import type { Serialize } from 'nuxt/app'
+
+type Simplify<TYPE> = TYPE extends readonly unknown[] | Date
+  ? TYPE
+  : { [KEY in keyof TYPE]: Simplify<TYPE[KEY]> }
 
 /**
- * JSON response shape exposed to clients on the Nitro 3 platform line.
- * Keep the Nitro-specific mapping isolated here so the Nuxt 5 typed-fetch
- * integration can replace this adapter without changing endpoint contracts.
+ * JSON response shape exposed to Nuxt clients.
  *
- * Nitro 3 keeps `Serialize`/`Simplify` in `nitro/types`, so adopting it was an
- * import path. The remaining event is nitrojs/nitro#2758: if Nitro's fetch
- * types are rebuilt on fetchdts, this projection is rewritten against it. The
- * status-discriminated result in client.ts stays owned there either way,
- * because fetchdts's `EndpointMetadata` carries one `response` per route and
- * method, with no per-status key.
+ * Nuxt owns the transport serialization used by its typed fetch API. The
+ * status-discriminated result in client.ts remains NE-owned because the route
+ * tree carries one ordinary success response plus the full contract metadata.
  */
 export type EndpointWireValue<VALUE> = Simplify<Serialize<VALUE>>

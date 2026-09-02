@@ -1,4 +1,5 @@
 import * as v from 'valibot'
+import { defineRouteHandler } from '../../../../src/runtime'
 
 const users = [
   { id: 1, name: 'Tom' },

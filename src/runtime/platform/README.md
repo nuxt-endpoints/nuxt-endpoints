@@ -22,13 +22,14 @@ flowchart TB
         wire["wire.ts<br/>JSON projection"]
     end
     h3["h3 — execution"]
-    nitro["Nitro — build, serving, fetch types"]
+    nitro["Nitro — contract extraction and serving"]
+    nuxt["Nuxt — wire and typed fetch"]
 
     contract --> seam
     request --> h3
     response --> h3
     handler --> h3
-    wire --> nitro
+    wire --> nuxt
 ```
 
 | File          | Role                                                                    |
@@ -43,9 +44,11 @@ flowchart TB
 This branch tests the future boundary directly:
 
 - H3 owns the route-contract shape and shared request/response validation.
-- Nitro recognizes the H3 macro, provides the registry, and generates types.
-- fetchdts resolves fields without owning status-aware semantics.
-- NE keeps status-aware endpoint requests, OpenAPI, idempotency, Effect, and Query integration.
+- Nitro recognizes the H3 macro and exposes its contract registry.
+- Nuxt joins contracts to server routes and generates `ServerRoutes` through
+  fetchdts; fetchdts resolves fields without owning status semantics.
+- NE keeps status-aware endpoint requests, OpenAPI, idempotency, Effect, and
+  Pinia Colada integration.
 
 `request.ts` now contains transport adaptation only: preserving repeated query
 values, normalizing H3's query container to a plain record, and reading

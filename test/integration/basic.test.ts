@@ -526,14 +526,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const buildDir = getBuildDir(useTestContext)
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
-      const nitroRoutes = await readFile(
-        join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
-        'utf8',
-      )
-      const nitroRouteSchema = await readFile(
-        join(fixtureRoot, '.nuxt/types/nitro/nitro-route-schema.d.ts'),
-        'utf8',
-      )
+      const serverRoutes = await readFile(join(buildDir, 'server-routes.d.ts'), 'utf8')
 
       expect(endpointTypes).toContain("path: '/api/users/:id'")
       expect(endpointTypes).toContain("method: 'get'")
@@ -549,14 +542,14 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointTypes).not.toContain('plain')
       expect(endpointTypes).toContain('EndpointClient<EndpointRouteEntry, EndpointClientFeatures>')
       expect(endpointTypes).toContain('raw: true')
-      expect(nitroRoutes).toContain('interface InternalApi')
-      expect(nitroRoutes).toContain("'/api/users/:id'")
-      expect(nitroRoutes).toContain("'/api/multi'")
-      expect(nitroRoutes).toContain("'get':")
-      expect(nitroRoutes).toContain("'put':")
-      expect(nitroRouteSchema).toContain('"contract"')
-      expect(nitroRouteSchema).not.toContain('"handlerReturn"')
-      expect(nitroRouteSchema).toContain('interface InternalRouteSchema extends NitroRouteSchema')
+      expect(serverRoutes).toContain('export interface GeneratedServerRoutes')
+      expect(serverRoutes).toContain('"/api"')
+      expect(serverRoutes).toContain('"/multi"')
+      expect(serverRoutes).toContain('"GET"')
+      expect(serverRoutes).toContain('"PUT"')
+      expect(serverRoutes).toContain('"contract"')
+      expect(serverRoutes).not.toContain('"handlerReturn"')
+      expect(serverRoutes).toContain('interface ServerRoutes extends GeneratedServerRoutes')
     })
 
     it('uses endpoint request Query options without generated Query factories', async () => {
@@ -568,28 +561,27 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       await expect(access(join(buildDir, 'types/endpoints-query.d.ts'))).rejects.toThrow()
     })
 
-    it('agrees with the generated Nitro InternalApi for every route', async () => {
+    it('agrees with Nuxt generated ServerRoutes for every route', async () => {
       const buildDir = getBuildDir(useTestContext)
       const tsconfigPath = join(buildDir, 'endpoints-typecheck.json')
-      const internalApiAgreementPath = join(buildDir, 'internal-api-agreement.ts')
+      const serverRoutesAgreementPath = join(buildDir, 'server-routes-agreement.ts')
       const nuxtRoot = dirname(require.resolve('nuxt/package.json'))
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
       await writeFile(
-        internalApiAgreementPath,
-        generateInternalApiAgreementTypecheck(endpointTypes),
+        serverRoutesAgreementPath,
+        generateServerRoutesAgreementTypecheck(endpointTypes),
         'utf8',
       )
       // Deliberately without `typecheck.ts`: `scripts/typecheck-fixture.mjs`
       // compiles it against the same generated types, and both run in
       // `pnpm check`, so including it here was the same tsc pass twice. What is
-      // only provable with a real Nitro build stays - the generated
-      // `InternalApi` this agreement file compares against.
+      // only provable with a real Nuxt build stays: the generated route tree
+      // this agreement file compares against.
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
-        join(fixtureRoot, '.nuxt/types/nitro/nitro-routes.d.ts'),
-        join(fixtureRoot, '.nuxt/types/nitro/nitro-route-schema.d.ts'),
+        join(buildDir, 'server-routes.d.ts'),
         join(buildDir, 'types/endpoints.d.ts'),
-        internalApiAgreementPath,
+        serverRoutesAgreementPath,
       ])
 
       await writeJson(tsconfigPath, {
@@ -686,10 +678,10 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
   return buildDir
 }
 
-function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
+function generateServerRoutesAgreementTypecheck(endpointTypes: string): string {
   // Each union member is one line. The provider contributes every discovered
   // method separately, including methods authored together in one route file,
-  // so the standard InternalApi projection must agree method by method.
+  // so Nuxt's ordinary typed-fetch projection must agree method by method.
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
@@ -700,18 +692,19 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
     })
     .filter((route) => route.path !== undefined && route.method !== undefined)
   if (routes.length === 0) {
-    throw new Error('No generated endpoint routes were available for InternalApi comparison.')
+    throw new Error('No generated endpoint routes were available for ServerRoutes comparison.')
   }
 
   const assertions = routes
     .map(
       ({ path, method }, index) =>
-        `type RouteAgreement${index} = Assert<Agrees<SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
+        `type RouteAgreement${index} = Assert<Agrees<SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>, TypedFetchResponseBody<ServerRoutes, ${JSON.stringify(path)}, ${JSON.stringify(method.toUpperCase())}>>>`,
     )
     .join('\n')
 
   return `import type { $EndpointPathResponse } from '#endpoints'
-import type { InternalApi } from 'nitro/types'
+import type { ServerRoutes } from '@nuxt/schema'
+import type { TypedFetchResponseBody } from 'nuxt/app'
 
 type Equal<LEFT, RIGHT> =
   (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends
@@ -727,15 +720,23 @@ type SuccessBody<RESULT> = Extract<RESULT, { ok: true }> extends { body: infer B
   : never
 
 // A route that declares a stream response is exempt, and deliberately so.
-// InternalApi describes what a parsing $fetch would produce for that route,
+// ServerRoutes describes what a parsing $fetch would produce for that route,
 // while the whole point of the declaration is that this client does not parse
 // it. The exemption is keyed on the exact client type a stream declaration
 // produces, so a JSON route whose projection drifted cannot slip through it -
 // and \`typecheck.ts\` asserts the streaming side positively.
+// Nuxt may preserve a literal inferred handler return while NE intentionally
+// widens an undeclared response contract, so assignability toward NE is the
+// correct cross-system agreement. Declared schemas are asserted independently
+// in \`typecheck.ts\`.
 type Agrees<LEFT, RIGHT> =
   Equal<LEFT, ReadableStream<Uint8Array>> extends true
     ? true
-    : Equal<LEFT, RIGHT>
+    : [RIGHT] extends [never]
+      ? false
+      : RIGHT extends LEFT
+        ? true
+        : false
 
 ${assertions}
 `

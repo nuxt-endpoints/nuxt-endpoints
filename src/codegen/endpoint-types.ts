@@ -5,7 +5,7 @@ export function buildEndpointRouteEntryUnion(handlers: readonly EndpointRouteHan
   return handlers.length
     ? handlers
         .map((handler) => {
-          const definitionAccessor = `TypedFetchMetadataField<InternalRouteSchema, '${handler.route}', 'contract', '${handler.method}'>`
+          const definitionAccessor = `TypedFetchMetadataField<ServerRoutes, '${handler.route}', 'contract', '${handler.method}'>`
           const routeDefinition = `typeof import('${toImportPath(handler.handler)}').default['~routeDef']`
           const handlerReturnAccessor = `EndpointHandlerReturnFromRoute<${routeDefinition}, '${handler.method}'>`
           return `  | { path: '${handler.route}', method: '${handler.method}', definition: ${definitionAccessor}, handlerReturn: ${handlerReturnAccessor} }`
@@ -27,7 +27,8 @@ export function generateEndpointTypes(
 
   return `
 import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from '${toImportPath(resolve('./runtime'))}'
-import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'
+import type { ServerRoutes } from '@nuxt/schema'
+import type { TypedFetchMetadataField } from 'nuxt/app'
 
 type EndpointRouteEntry =
 ${endpointUnion}

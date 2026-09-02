@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { defineRouteHandler } from '../../../../src/runtime'
 
 const UserInput = z.object({
   name: z.string().min(1),

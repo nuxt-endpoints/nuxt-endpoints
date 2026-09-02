@@ -2,8 +2,8 @@
 //
 // `vp run test:typecheck` deliberately excludes `test/fixtures/**`, and the
 // fixture's own `tsconfig` is Nuxt's. So the one place the library is consumed
-// the way an application consumes it - a route file calling `defineEndpoint`
-// and `defineEndpointHandler`, and a page calling the generated client - went
+// the way an application consumes it - route files calling
+// `defineRouteHandler`, and a page calling the generated client - went
 // unchecked, and a contract shape that did not type-check for a handler could
 // pass every check. This closes that hole without needing a server: `nuxi
 // prepare` writes the generated types, then tsc reads them plus `typecheck.ts`.
@@ -54,9 +54,7 @@ const nuxtRoot = dirname(require.resolve('nuxt/package.json'))
 const tsconfigPath = join(buildDir, 'fixture-typecheck.json')
 const files = await existingFiles([
   join(buildDir, 'types/imports.d.ts'),
-  join(buildDir, 'types/nitro-routes.d.ts'),
-  join(buildDir, 'types/nitro-route-schema.d.ts'),
-  join(buildDir, 'types/nitro/nitro-route-schema.d.ts'),
+  join(buildDir, 'server-routes.d.ts'),
   join(buildDir, 'types/endpoints.d.ts'),
   join(fixtureRoot, 'schema-provider-typecheck.ts'),
   join(fixtureRoot, 'typecheck.ts'),

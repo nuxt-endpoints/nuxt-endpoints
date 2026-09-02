@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import type { InferRouteHandlerContract } from 'h3'
 import { defineRouteHandler } from '../../src/runtime'
 import type { StandardSchemaLike } from '../../src/runtime'
 
@@ -167,6 +168,18 @@ describe('defineRouteHandler multi-method inference', () => {
       idempotency: withReplayTtl,
       handler: () => ({ ok: true }),
     })
+  })
+
+  it('preserves authored idempotency metadata through the H3 contract projection', () => {
+    const handler = defineRouteHandler({
+      idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
+      handler: () => ({ ok: true }),
+    })
+
+    type Contract = InferRouteHandlerContract<typeof handler>
+    expectTypeOf<Contract>().toMatchTypeOf<{
+      idempotency: { enabled: true; headerName: 'Idempotency-Key'; required: true }
+    }>()
   })
 
   it('uses the same one-argument shape as H3', () => {

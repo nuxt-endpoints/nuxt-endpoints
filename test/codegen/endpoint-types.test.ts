@@ -52,7 +52,7 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union).toContain("path: '/api/users'")
     expect(union).toContain("method: 'get'")
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/users', 'contract', 'get'>",
+      "definition: TypedFetchMetadataField<ServerRoutes, '/api/users', 'contract', 'get'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef'], 'get'>",
@@ -69,13 +69,13 @@ describe('buildEndpointRouteEntryUnion', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'get'>",
+      "definition: TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'get'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'get'>",
     )
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<InternalRouteSchema, '/api/multi', 'contract', 'put'>",
+      "definition: TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'put'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'put'>",
@@ -105,9 +105,8 @@ describe('generateEndpointTypes', () => {
     expect(content).toContain(
       "import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
     )
-    expect(content).toContain(
-      "import type { InternalRouteSchema, TypedFetchMetadataField } from 'nitro/types'",
-    )
+    expect(content).toContain("import type { ServerRoutes } from '@nuxt/schema'")
+    expect(content).toContain("import type { TypedFetchMetadataField } from 'nuxt/app'")
   })
 
   it('produces awaited path and raw response types', () => {

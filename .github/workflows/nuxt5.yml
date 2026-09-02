@@ -26,7 +26,7 @@ jobs:
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 22.19.0
+          node-version: 24.20.0
           cache: false
           run-install: false
 
@@ -36,15 +36,19 @@ jobs:
           git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/fetchdts.git ../upstream/fetchdts
           git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/h3.git ../upstream/h3
           git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/nitro.git ../upstream/nitro
+          git clone --depth 1 --branch prototype/route-metadata https://github.com/nuxt-endpoints/nuxt.git ../upstream/nuxt
           git -C ../upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          git -C ../upstream/h3 fetch --depth 1 origin 3e2212a962b53acf0608e3d8495cd087ff09d4c1
-          git -C ../upstream/nitro fetch --depth 1 origin 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+          git -C ../upstream/h3 fetch --depth 1 origin efdaeb06d71a5f470256f71d600324fcab75a9a2
+          git -C ../upstream/nitro fetch --depth 1 origin 83f2000389a533edb3859f6e1c2244ee55032c48
+          git -C ../upstream/nuxt fetch --depth 1 origin 092e1ea64bf415c4b8f52ee46ef3fd32c94e0a76
           git -C ../upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          git -C ../upstream/h3 checkout --detach 3e2212a962b53acf0608e3d8495cd087ff09d4c1
-          git -C ../upstream/nitro checkout --detach 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+          git -C ../upstream/h3 checkout --detach efdaeb06d71a5f470256f71d600324fcab75a9a2
+          git -C ../upstream/nitro checkout --detach 83f2000389a533edb3859f6e1c2244ee55032c48
+          git -C ../upstream/nuxt checkout --detach 092e1ea64bf415c4b8f52ee46ef3fd32c94e0a76
           test "$(git -C ../upstream/fetchdts rev-parse HEAD)" = de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          test "$(git -C ../upstream/h3 rev-parse HEAD)" = 3e2212a962b53acf0608e3d8495cd087ff09d4c1
-          test "$(git -C ../upstream/nitro rev-parse HEAD)" = 5eeec902c0c684898dcc5ded4d3291eb3fa5318e
+          test "$(git -C ../upstream/h3 rev-parse HEAD)" = efdaeb06d71a5f470256f71d600324fcab75a9a2
+          test "$(git -C ../upstream/nitro rev-parse HEAD)" = 83f2000389a533edb3859f6e1c2244ee55032c48
+          test "$(git -C ../upstream/nuxt rev-parse HEAD)" = 092e1ea64bf415c4b8f52ee46ef3fd32c94e0a76
 
       - name: Build fetchdts prototype
         working-directory: ../upstream/fetchdts
@@ -57,6 +61,13 @@ jobs:
       - name: Build Nitro prototype
         working-directory: ../upstream/nitro
         run: vp install --frozen-lockfile && vp run build
+
+      - name: Pack Nuxt prototype
+        run: |
+          cd ../upstream/nuxt
+          vp install --frozen-lockfile
+          cd "$GITHUB_WORKSPACE"
+          vp run prepare:nuxt5-fork
 
       - name: Install Nuxt Endpoints
         run: vp install --frozen-lockfile

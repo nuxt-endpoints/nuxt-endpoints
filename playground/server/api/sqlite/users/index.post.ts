@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { defineRouteHandler } from '../../../../../src/runtime'
+import { createPlaygroundUser } from '../../../utils/database'
 
 const PlaygroundUser = z.object({
   id: z.number(),

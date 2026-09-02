@@ -1,11 +1,15 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import type { Serialize, Simplify } from 'nitro/types'
+import type { Serialize } from 'nuxt/app'
 import type {
   EndpointClient,
   StandardSchemaLike,
   StatusResponse,
   UseEndpointClient,
 } from '../../src/runtime'
+
+type Simplify<TYPE> = TYPE extends readonly unknown[] | Date
+  ? TYPE
+  : { [KEY in keyof TYPE]: Simplify<TYPE[KEY]> }
 
 type Schema<OUTPUT> = StandardSchemaLike<unknown, OUTPUT>
 

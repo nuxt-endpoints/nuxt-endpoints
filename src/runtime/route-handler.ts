@@ -333,7 +333,7 @@ export function defineRouteHandler<
     IDEMPOTENCY,
     DEFINITION,
     ACTUAL_RETURN
-  >,
+  > & { idempotency: IDEMPOTENCY },
   EndpointHandlerSuccessBody<
     DEFINITION,
     HasEndpointResponses<DEFINITION> extends true

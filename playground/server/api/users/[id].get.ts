@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { defineRouteHandler } from '../../../../src/runtime'
 
 const User = z.object({
   id: z.number(),

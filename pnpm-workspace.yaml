@@ -11,6 +11,12 @@ minimumReleaseAgeExclude:
   - '@nuxt/vite-server-nightly@5.0.0-29805621.06b691a8'
   - 'nuxt-nightly@5.0.0-29800730.fb02c57e || 5.0.0-29805621.06b691a8'
 overrides:
+  '@nuxt/kit': file:../upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz
+  '@nuxt/nitro-server': file:../upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz
+  '@nuxt/schema': file:../upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz
+  '@nuxt/vite-builder': file:../upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz
+  '@nuxt/vite-server': file:../upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz
   h3: link:../upstream/h3
   fetchdts: link:../upstream/fetchdts
   nitro: link:../upstream/nitro
+  nuxt: file:../upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz

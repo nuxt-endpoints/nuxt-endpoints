@@ -62,6 +62,7 @@
     "site:generate": "node site/scripts/generate-magic-tokens.mjs && node site/scripts/check-playground-types.mjs && nuxi generate site",
     "site:preview": "nuxi preview site",
     "prepack": "nuxt-module-build build",
+    "prepare:nuxt5-fork": "node scripts/pack-nuxt-fork.mjs",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
@@ -78,8 +79,8 @@
     "release": "node scripts/release.mjs"
   },
   "dependencies": {
-    "@nuxt/kit": "npm:@nuxt/kit-nightly@5.0.0-29805621.06b691a8",
-    "@nuxt/schema": "npm:@nuxt/schema-nightly@5.0.0-29805621.06b691a8",
+    "@nuxt/kit": "5.0.0-0",
+    "@nuxt/schema": "5.0.0-0",
     "@valibot/to-json-schema": "^1.7.1",
     "h3": "2.0.1-rc.22",
     "nitro": "^3.0.260610-beta",
@@ -104,7 +105,7 @@
     "codemirror": "^6.0.2",
     "effect": "^3.21.3",
     "jiti": "^2.7.0",
-    "nuxt": "npm:nuxt-nightly@5.0.0-29805621.06b691a8",
+    "nuxt": "5.0.0-20260903.d070492f",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
     "oxlint-tsgolint": "^7.0.2001",

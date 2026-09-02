@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path'
 import {
   addImports,
   addServerHandler,
-  addServerImports,
   addServerPlugin,
   addServerTemplate,
   createResolver,
@@ -42,11 +41,6 @@ export type EndpointsRuntimeModuleOptions = {
 }
 
 const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
-
-// Only the canonical identifier is auto-imported. Nitro's contract macro
-// recognizes no other name, so a route authored through anything else would be
-// served without its contract ever reaching the build.
-const endpointServerAutoImports = ['defineRouteHandler'] as const
 
 export type EndpointsOpenApiModuleOptions = {
   enabled?: boolean
@@ -245,20 +239,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         handler: resolve('./runtime/openapi-handler'),
       })
     }
-
-    // Nitro auto-imports h3's `defineRouteHandler` from `nitro/h3` under the
-    // same name. Ours is the superset the contract macro is configured to read,
-    // so it has to win — but at equal priority unimport picks a winner from its
-    // own array order and warns about the duplicate. Declaring a higher priority
-    // makes ours deterministic instead of incidental, and silences the warning.
-    addServerImports([
-      ...endpointServerAutoImports.map((name) => ({
-        from: resolve('./runtime'),
-        name,
-        priority: 10,
-      })),
-      { from: resolve('./runtime'), name: 'defineEndpointRuntime', priority: 10 },
-    ])
 
     addImports([
       { from: runtimeFile, name: '$endpoint' },
