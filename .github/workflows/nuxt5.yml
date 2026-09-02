@@ -70,7 +70,10 @@ jobs:
           vp run prepare:nuxt5-fork
 
       - name: Install Nuxt Endpoints
-        run: vp install --frozen-lockfile
+        # The six Nuxt packages are built and packed on this runner. Their
+        # tarball bytes are platform-dependent, while their source commits and
+        # dependency graph remain pinned above and in pnpm-lock.yaml.
+        run: vp install --no-frozen-lockfile
 
       - name: Prepare module development files
         run: vp run dev:prepare
