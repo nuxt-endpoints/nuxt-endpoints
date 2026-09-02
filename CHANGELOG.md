@@ -25,6 +25,13 @@
   end-to-end OpenAPI extraction for `z.file()` and raises the Zod peer baseline
   to 4.2.
 
+### Fixed
+
+- JavaScript route definitions now enforce the complete runtime-only
+  idempotency boundary already enforced by TypeScript. `fingerprint`,
+  `replayStatuses`, `leaseTtlMs`, and `replayTtlMs` are rejected instead of
+  being silently discarded.
+
 ### Documentation
 
 - Reframed the project as a Nuxt 4.5+ implementation of the route-contract

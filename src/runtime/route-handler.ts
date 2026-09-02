@@ -9,6 +9,7 @@ import type {
   HasEndpointResponses,
   WidenCapturedReturn,
 } from './contract'
+import type { IdempotencyRouteContractForbiddenOptionKey } from './idempotency'
 import {
   defineEndpoint,
   defineEndpointHandler,
@@ -29,18 +30,12 @@ type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
   response?: RESPONSES
 }
 
-// The contract carries the portable declaration; everything the request-time
-// implementation needs is resolved from the runtime file and the central policy.
-// Naming these keys keeps them from riding through the contract's `const`
-// capture and being dropped without a diagnostic.
+// The contract carries only portable metadata. Request-time settings have no
+// public per-endpoint transport yet: callbacks cannot enter build evaluation,
+// and accepting the serializable settings here would silently discard them.
+// The shared key union also drives JavaScript definition-time validation.
 type RouteContractIdempotency = {
-  storage?: never
-  scope?: never
-  authorization?: never
-  fingerprint?: never
-  leaseTtlMs?: never
-  replayTtlMs?: never
-  replayStatuses?: never
+  [KEY in IdempotencyRouteContractForbiddenOptionKey]?: never
 }
 
 export type EndpointRouteEvent<DEFINITION extends EndpointDefinition = EndpointDefinition> =
