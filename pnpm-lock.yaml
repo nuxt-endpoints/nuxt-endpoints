@@ -1020,7 +1020,7 @@ packages:
       typescript: ^5.9.3
 
   '@nuxt/nitro-server@file:../upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz':
-    resolution: {integrity: sha512-WKHbIqmsQGvFIZ7wNhJWiL4SRW55+irsqr1AYyK7eQtxuUiuEIloDKysRsOz8+76jXsf96Y+3x43LWJyHnCFzA==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
+    resolution: {integrity: sha512-Gz3/ltTtYVBCuTK7u7voFIKWqMQluCz22Jfx7XvN5aYJ+zuW5yOdj570Q6MlcLkcHYnEc9txT8woHYlVrJ9TQA==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.19.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
@@ -1127,7 +1127,7 @@ packages:
         optional: true
 
   '@nuxt/vite-builder@file:../upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz':
-    resolution: {integrity: sha512-uL9EAxVQjsJ2Si4XYRcEUpDeU7wXEoHORcTbLqtQH9Sl/lXJl4fNXMx1v+HKjUnw/Btt6jqsSvD4Zb8qRaR/nA==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz}
+    resolution: {integrity: sha512-xVlhMcoQuLOGmdPdehuArRLL8b/0Bg8UvHTV6/IfsZQmXOCN3noTTIEt256gCTSsnzWHvLzfYQu26sLMk2PSjA==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
@@ -1154,7 +1154,7 @@ packages:
         optional: true
 
   '@nuxt/vite-server@file:../upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz':
-    resolution: {integrity: sha512-saoAZbkUQD79SaeaFyunVFJ5BOD90cH28BO/hpz/xpXEJTDlE9wlXSYw97pxI+Z+AGC7vJysN15/f6dBVOAJKQ==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz}
+    resolution: {integrity: sha512-NN3XFylGB8yNxlBmwBWatjoEDJPIeFNzjYf0KIgeFOkD2h2P22PvWIX3UTBhB30EAiPW1oO7xHXpBW9oa7cnfA==, tarball: file:../upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.19.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
