@@ -73,7 +73,7 @@ jobs:
         # The six Nuxt packages are built and packed on this runner. Their
         # tarball bytes are platform-dependent, while their source commits and
         # dependency graph remain pinned above and in pnpm-lock.yaml.
-        run: vp install --no-frozen-lockfile
+        run: vp install --no-frozen-lockfile -- --update-checksums
 
       - name: Prepare module development files
         run: vp run dev:prepare
