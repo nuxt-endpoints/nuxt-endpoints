@@ -105,6 +105,8 @@ to opt into automatic generation. Supply a string when the logical operation
 must survive a page reload, process restart, or queue handoff.
 
 ```ts
+import { useMutation } from '@pinia/colada'
+
 const request = $endpoint('/api/points/grants', {
   method: 'post',
   body: { userId: 'u_1', amount: 10 },
@@ -113,8 +115,9 @@ const request = $endpoint('/api/points/grants', {
 const mutation = useMutation(request.mutationOptions())
 ```
 
-The key belongs to `request`. TanStack retries perform fresh HTTP attempts with
-that same key, and the resolved key is included in mutation identity.
+The key belongs to `request`. Re-executing that logical mutation performs a
+fresh HTTP attempt with the same key, and the resolved key is included in its
+Pinia Colada mutation identity. Create a new request object for a separate action.
 
 ## Storage requirements
 

@@ -128,14 +128,22 @@ export type EndpointCall<
   EndpointMutationCallFeature<ROUTE>
 
 export type EndpointCallQueryOptions<ROUTE extends EndpointRouteEntry> = {
-  queryKey: readonly unknown[]
-  queryFn: (context: { signal: AbortSignal }) => Promise<EndpointResultData<ROUTE>>
+  key: EndpointCacheKey<ROUTE['method']>
+  query: (context: { signal: AbortSignal }) => Promise<EndpointResultData<ROUTE>>
 }
 
 export type EndpointCallMutationOptions<ROUTE extends EndpointRouteEntry> = {
-  mutationKey: readonly unknown[]
-  mutationFn: () => Promise<EndpointResultData<ROUTE>>
+  key: EndpointCacheKey<ROUTE['method']>
+  mutation: () => Promise<EndpointResultData<ROUTE>>
 }
+
+export type EndpointCacheKey<METHOD extends HttpMethod = HttpMethod> = readonly [
+  'nuxt-endpoints',
+  'v2',
+  METHOD,
+  string,
+  string,
+]
 
 type EndpointQueryCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['method'] extends
   | 'get'
@@ -430,7 +438,7 @@ export type EndpointClientRuntimeOptions = {
    *
    * `useEndpoint` uses it for its request. `$endpoint` keeps direct awaits on
    * plain `$fetch`, but request `.queryOptions()` / `.mutationOptions()` use
-   * the captured fetcher so TanStack SSR forwards the incoming request.
+   * the captured fetcher so Pinia Colada SSR forwards the incoming request.
    */
   captureFetcher?: () => EndpointFetcherRuntime | undefined
 }
@@ -533,12 +541,12 @@ type EndpointCallRuntimeValue = PromiseLike<unknown> &
   Pick<Promise<unknown>, 'catch' | 'finally'> & {
     raw: () => Promise<Response>
     queryOptions: () => {
-      queryKey: readonly unknown[]
-      queryFn: (context: { signal: AbortSignal }) => Promise<EndpointResultDataRuntime>
+      key: EndpointCacheKey
+      query: (context: { signal: AbortSignal }) => Promise<EndpointResultDataRuntime>
     }
     mutationOptions: () => {
-      mutationKey: readonly unknown[]
-      mutationFn: () => Promise<EndpointResultDataRuntime>
+      key: EndpointCacheKey
+      mutation: () => Promise<EndpointResultDataRuntime>
     }
     [endpointCallRuntimeSymbol]: EndpointCallRuntime
     [key: string]: unknown
@@ -899,15 +907,15 @@ function createEndpointCall(
   }
   if (route.method === 'get' || route.method === 'head') {
     call.queryOptions = () => ({
-      queryKey: createRequestQueryKey(route, request.options),
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
+      key: createRequestQueryKey(route, request.options),
+      query: ({ signal }: { signal: AbortSignal }) =>
         queryRequest.result(signal).then(toEndpointResultData),
     })
   }
   if (['delete', 'patch', 'post', 'put'].includes(route.method)) {
     call.mutationOptions = () => ({
-      mutationKey: createRequestQueryKey(route, request.options),
-      mutationFn: () => queryRequest.result().then(toEndpointResultData),
+      key: createRequestQueryKey(route, request.options),
+      mutation: () => queryRequest.result().then(toEndpointResultData),
     })
   }
 
@@ -917,14 +925,14 @@ function createEndpointCall(
 function createRequestQueryKey(
   route: EndpointClientRouteConfig,
   options: Record<string, unknown>,
-): readonly unknown[] {
+): EndpointCacheKey {
   const request: Record<string, unknown> = {}
   for (const key of ['params', 'query', 'body', 'mediaType', 'accept', 'idempotencyKey'] as const) {
     if (options[key] !== undefined) {
       request[key] = options[key]
     }
   }
-  return ['nuxt-endpoints', 'v2', route.method, route.path, normalizeEndpointRequestKey(request)]
+  return ['nuxt-endpoints', 'v2', route.method, route.path, stableStringify(request)]
 }
 
 function createUseEndpointCall(

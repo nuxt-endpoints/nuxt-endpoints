@@ -519,7 +519,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(stdout + stderr).toBe('')
     }, 30000)
 
-    it('renders TanStack Query data during SSR', async () => {
+    it('renders Pinia Colada data during SSR', async () => {
       await expect($fetch<string>('/query-user')).resolves.toContain('query-user: Tom')
     })
 

@@ -15,9 +15,12 @@
   `{ status, ok, body, headers }` union directly. The public `.result()`, data
   mode, and `useEndpointResult` compatibility APIs have been removed;
   `useEndpoint` exposes the serializable status union through Nuxt async data.
-- Vue Query consumes the same lazy endpoint request through `.queryOptions()`
-  or `.mutationOptions()`. Required idempotency keys are generated when that
-  request object is created and reused by retries of the same object.
+- **Breaking:** the TanStack Vue Query dependency, adapter, and
+  `endpoints.client.query` auto-setup option have been removed.
+  `.queryOptions()` and `.mutationOptions()` now return standard Pinia Colada
+  options; its official Nuxt module owns SSR prefetching and hydration.
+  Required idempotency keys are generated when the request object is created
+  and reused by repeated execution of that same logical request.
 - Zod 4 schemas use their native `.toJSONSchema()` conversion. This includes
   end-to-end OpenAPI extraction for `z.file()` and raises the Zod peer baseline
   to 4.2.

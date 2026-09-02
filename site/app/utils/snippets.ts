@@ -180,12 +180,12 @@ if (result.status === 200) console.log(result.body.name)`,
     runtimeEffect: 'Refreshes and deduped executions reuse the generated endpoint request.',
   },
   {
-    shortTitle: 'Vue Query',
-    title: 'Use the endpoint with Vue Query.',
+    shortTitle: 'Pinia Colada',
+    title: 'Use the endpoint with Pinia Colada.',
     description: [
       { text: 'Generated options pass the same typed request into ' },
       { text: 'useQuery', tone: 'client' },
-      { text: '. Vue Query owns the cache while the endpoint contract owns the types.' },
+      { text: '. Colada owns the cache while the endpoint contract owns the types.' },
     ],
     serverCode: `export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
@@ -200,7 +200,7 @@ if (result.status === 200) console.log(result.body.name)`,
     return user ?? event.respond(404, { message: 'User not found' })
   },
 })`,
-    clientCode: `import { useQuery } from '@tanstack/vue-query'
+    clientCode: `import { useQuery } from '@pinia/colada'
 
 const request = $endpoint('/api/users/:id', {
   method: 'get',
@@ -217,7 +217,7 @@ if (user.data.value?.status === 200) {
     },
     serverEffect: 'The route method, path, and request input form a stable query key.',
     clientEffect: 'The query options preserve the endpoint request and response types.',
-    runtimeEffect: 'Vue Query owns caching, retries, invalidation, and background refreshes.',
+    runtimeEffect: 'Pinia Colada owns caching, invalidation, and background refreshes.',
   },
 ] as const satisfies {
   shortTitle: string

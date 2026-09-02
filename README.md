@@ -76,7 +76,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and request-object Query options forward the incoming request
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Importable path, method, request, and result helper types from `#endpoints`
-- ✅ TanStack/Vue Query integration through `.queryOptions()` / `.mutationOptions()`, with optional Nuxt SSR setup
+- ✅ Pinia Colada integration through standard `.queryOptions()` / `.mutationOptions()`, with its official Nuxt SSR module
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 
 ## Quick Start
@@ -117,7 +117,7 @@ design constraint, and any unavoidable change will be documented as a migration.
 The work is public: follow the [Nuxt 5 integration progress](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
 for the Nuxt Endpoints branch and the matching H3, Nitro, and fetchdts forks.
 
-Module options (OpenAPI route, optional client methods, the Vue Query adapter) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
+Module options (OpenAPI route and optional client methods) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 
 ## Documentation
 
@@ -127,7 +127,7 @@ Guides:
 - [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — status-aware and raw response shapes
-- [Vue Query](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/tanstack-query) — request-object Query options and SSR setup
+- [Pinia Colada](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/pinia-colada) — standard request-object query/mutation options and official Nuxt SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics
 - [Idempotency](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/idempotency) — optional `Idempotency-Key` replay protection

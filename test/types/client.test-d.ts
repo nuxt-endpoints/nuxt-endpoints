@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import type { UseMutationOptions, UseQueryOptions } from '@pinia/colada'
 import type {
   EndpointClient,
   EndpointResult,
@@ -72,11 +73,14 @@ describe('path-based endpoint client types', () => {
     call.result()
   })
 
-  it('exposes Query options on the same request object', () => {
+  it('exposes Pinia Colada options on the same request object', () => {
     const getCall = $endpoint('/api/users/:id', { method: 'get', params: { id: '1' } })
     const query = getCall.queryOptions()
-    expectTypeOf(query.queryKey).toEqualTypeOf<readonly unknown[]>()
-    expectTypeOf(query.queryFn).returns.resolves.toEqualTypeOf<
+    expectTypeOf(query).toExtend<UseQueryOptions>()
+    expectTypeOf(query.key).toEqualTypeOf<
+      readonly ['nuxt-endpoints', 'v2', 'get', string, string]
+    >()
+    expectTypeOf(query.query).returns.resolves.toEqualTypeOf<
       | { status: 200; ok: true; body: { id: number; name: string } }
       | { status: 404; ok: false; body: { message: string } }
     >()
@@ -84,7 +88,8 @@ describe('path-based endpoint client types', () => {
     getCall.mutationOptions()
 
     const postCall = $endpoint('/api/users', { method: 'post', body: { name: 'Tom' } })
-    postCall.mutationOptions()
+    const mutation = postCall.mutationOptions()
+    expectTypeOf(mutation).toExtend<UseMutationOptions>()
     // @ts-expect-error POST calls do not expose query options.
     postCall.queryOptions()
   })

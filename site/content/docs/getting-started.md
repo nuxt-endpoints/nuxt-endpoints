@@ -111,13 +111,13 @@ export default defineNuxtConfig({
 
 `openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.raw` controls whether `.raw()` is generated on `$endpoint` calls.
 
-Endpoint request objects expose typed query and mutation options when the optional Vue Query peer is installed:
+Endpoint request objects expose standard Pinia Colada query and mutation options. For cache, SSR, and hydration support, install Colada and its official Nuxt modules:
 
 ```bash
-vp add @tanstack/vue-query
+vp add @pinia/colada @pinia/colada-nuxt pinia @pinia/nuxt
 ```
 
-No generated factory or module option is required. See [Vue Query](/docs/tanstack-query) for `.queryOptions()`, `.mutationOptions()`, and the opt-in automatic Nuxt SSR setup.
+Add `@pinia/nuxt` and `@pinia/colada-nuxt` to `modules`; Nuxt Endpoints does not install a second cache plugin. See [Pinia Colada](/docs/pinia-colada) for `.queryOptions()` and `.mutationOptions()`.
 
 ## What gets generated
 

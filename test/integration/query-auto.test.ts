@@ -1,14 +1,12 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const fixtureRoot = fileURLToPath(new URL('../fixtures/query-auto', import.meta.url))
 
 if (process.env.NUXT_ENDPOINTS_E2E === '1') {
-  const { $fetch, setup, useTestContext } = await import('@nuxt/test-utils/e2e')
+  const { $fetch, setup } = await import('@nuxt/test-utils/e2e')
 
-  describe('TanStack Query auto setup integration', async () => {
+  describe('Pinia Colada Nuxt integration', async () => {
     await setup({
       rootDir: fixtureRoot,
       browser: false,
@@ -17,22 +15,11 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       setupTimeout: 120000,
     })
 
-    it('generates the auto setup plugin with the configured stale time', async () => {
-      const buildDir = useTestContext().nuxt?.options.buildDir
-      expect(buildDir).toBeTruthy()
-
-      const plugin = await readFile(join(buildDir!, 'endpoints-query-plugin.ts'), 'utf8')
-      expect(plugin).toContain("useState<DehydratedState | null>('nuxt-endpoints-vue-query'")
-      expect(plugin).toContain('staleTime: 60000')
-    })
-
-    it('renders and dehydrates query data during SSR', async () => {
+    it('renders and serializes query data during SSR', async () => {
       const html = await $fetch<string>('/query-user')
       const payload = extractNuxtPayload(html)
 
       expect(html).toContain('query-user: Tom')
-      expect(payload).toContain('nuxt-endpoints-vue-query')
-      expect(payload).toContain('queryHash')
       expect(payload).toContain('\\u002Fapi\\u002Fusers\\u002F:id')
       expect(payload).toContain('Tom')
     })
@@ -54,7 +41,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
     })
   })
 } else {
-  describe.skip('TanStack Query auto setup integration', () => {
+  describe.skip('Pinia Colada Nuxt integration', () => {
     it('runs with NUXT_ENDPOINTS_E2E=1', () => {})
   })
 }

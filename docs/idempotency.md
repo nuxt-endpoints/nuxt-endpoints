@@ -347,12 +347,12 @@ When behavior depends on headers or other request state, `fingerprint` becomes
 an application requirement.
 
 The generated client accepts `idempotencyKey` outside the ordinary `headers`
-schema and maps it to the configured header. It is required in the client type
-when endpoint metadata says `required: true`, otherwise optional. The client
-never generates a key automatically because a retry must reuse the caller's
-same key rather than create one per HTTP attempt.
+schema and maps it to the configured header. When endpoint metadata says
+`required: true`, the client generates a UUID when the request object is
+created; optional endpoints generate one when passed `idempotencyKey: true`.
+Every execution of that same request object reuses the resolved key.
 
-Every generated runtime route, including the query adapter's route tables,
+Every generated runtime route, including the Pinia Colada request options,
 carries `{ headerName, required }`. Declaring the configured header again in the
 ordinary endpoint `headers` schema is a case-insensitive discovery error; doing
 so would otherwise create two incompatible client inputs for one wire header.
@@ -363,14 +363,14 @@ proved.
 The client also throws before sending if an untyped caller supplies both
 `idempotencyKey` and the configured header inside `headers`.
 
-TanStack Query and Infinite Query include `idempotencyKey` in their request key
+Pinia Colada query and mutation options include `idempotencyKey` in their cache key
 segment. This both preserves required keys when a getter request is reconstructed
 from its query key and prevents two different idempotent attempts from sharing
 one exact cache entry.
 
-When `required` is `true`, generated client options require `idempotencyKey`.
-When it is `false`, the field is optional; if the endpoint has no other required
-request input, the entire options argument remains optional.
+The generated client option remains optional when idempotency is required,
+because omission selects automatic UUID generation. A string remains available
+when the logical operation must survive a reload, process restart, or queue handoff.
 
 The automatic Problem Details response has this stable shape:
 
@@ -622,7 +622,7 @@ Before a durable adapter is used in production, its tests must cover:
 4. Pure fingerprint helpers and development-only memory storage are implemented.
 5. Runtime conformance tests, normalized route identity, authorization, replay,
    and fenced completion are implemented.
-6. Generated-client, TanStack Query, Effect, and OpenAPI metadata/request mapping
+6. Generated-client, Pinia Colada, Effect, and OpenAPI metadata/request mapping
    are implemented and covered by runtime and type tests.
 7. Redis and relational-database storage contract recipes are published in
    [Idempotency Storage Recipes](./idempotency-storage-recipes.md).

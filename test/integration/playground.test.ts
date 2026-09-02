@@ -13,7 +13,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
 
   const { $fetch, createPage, fetch, setup } = await import('@nuxt/test-utils/e2e')
 
-  describe('SQLite and Vue Query playground integration', async () => {
+  describe('SQLite and Pinia Colada playground integration', async () => {
     await setup({
       rootDir: playgroundRoot,
       browser: browserE2E,
@@ -37,13 +37,13 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       rmSync(temporaryDirectory, { recursive: true, force: true })
     })
 
-    it('SSR-renders and dehydrates the SQLite-backed Vue Query', async () => {
+    it('SSR-renders and hydrates the SQLite-backed Pinia Colada query', async () => {
       const indexHtml = await $fetch<string>('/')
       const endpointsHtml = await $fetch<string>('/endpoints')
-      const html = await $fetch<string>('/sqlite-vue-query')
+      const html = await $fetch<string>('/sqlite-colada')
 
       expect(indexHtml).toContain('Choose a focused demo')
-      expect(indexHtml).toContain('href="/sqlite-vue-query"')
+      expect(indexHtml).toContain('href="/sqlite-colada"')
       expect(endpointsHtml).toContain('HTTP contract inspector')
       expect(endpointsHtml).toContain('Guided scenarios')
       expect(endpointsHtml).toContain('Server')
@@ -53,10 +53,9 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointsHtml).toContain('What to confirm')
       expect(endpointsHtml).toContain('x-client-version')
       expect(endpointsHtml).toContain('400 Validation Error')
-      expect(html).toContain('SQLite + Vue Query')
+      expect(html).toContain('SQLite + Pinia Colada')
       expect(html).toContain('Ada Lovelace')
       expect(html).toContain('Grace Hopper')
-      expect(html).toContain('nuxt-endpoints-vue-query')
       expect(html).toContain('\\u002Fapi\\u002Fsqlite\\u002Fusers')
     })
 
@@ -275,8 +274,8 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         await page.close()
       })
 
-      it('hydrates Vue Query, invalidates after a mutation, and replays without another row', async () => {
-        const page = await createPage('/sqlite-vue-query')
+      it('hydrates Pinia Colada, invalidates after a mutation, and replays without another row', async () => {
+        const page = await createPage('/sqlite-colada')
         const input = page.getByLabel('New SQLite user')
         const users = page.getByRole('list', { name: 'SQLite users' }).getByRole('listitem')
         const initialCount = await users.count()
@@ -299,7 +298,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
     })
   })
 } else {
-  describe.skip('SQLite and Vue Query playground integration', () => {
+  describe.skip('SQLite and Pinia Colada playground integration', () => {
     it('runs with NUXT_ENDPOINTS_E2E=1', () => {})
   })
 }

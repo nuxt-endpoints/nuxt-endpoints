@@ -14,7 +14,7 @@ The public product boundary is:
 - `defineRouteHandler({...})` for route authoring;
 - `$endpoint(path, { method, ...input })` for lazy status-aware requests;
 - `useEndpoint(path, { method, ...input })` for Nuxt async data;
-- request-object `.queryOptions()` and `.mutationOptions()` for Vue Query;
+- request-object `.queryOptions()` and `.mutationOptions()` for Pinia Colada;
 - OpenAPI generated from the same contracts.
 
 `$endpoint` and `useEndpoint` are not temporary copies of upstream APIs.
@@ -46,7 +46,7 @@ belong behind the platform adapter and build-time metadata boundary.
   client results, and native `.raw()` access.
 - Generated path-and-method clients and helper types from `#endpoints`.
 - `useEndpoint` with Nuxt async-data behavior and SSR request forwarding.
-- Request-object Vue Query options and optional automatic QueryClient setup.
+- Request-object Pinia Colada options, verified with the official Nuxt module.
 - Required idempotency keys generated when the request object is created and
   reused by retries of that object.
 - Application-owned idempotency storage and central runtime policy.
@@ -112,7 +112,7 @@ contain.
 
 ## Non-goals
 
-- Reimplementing Vue Query caching, retries, invalidation, or Devtools.
+- Reimplementing Pinia Colada caching, invalidation, SSR hydration, or Devtools.
 - Creating a second authentication, rate-limiting, CSRF, or middleware system.
 - Typing arbitrary streaming chunks or pretending redirects and proxies are
   ordinary JSON contracts.

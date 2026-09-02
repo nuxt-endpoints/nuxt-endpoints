@@ -8,7 +8,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, typed clients, Vue Query, status-aware results, and OpenAPI.',
+        'Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, typed clients, Pinia Colada, status-aware results, and OpenAPI.',
     },
   ],
 })
@@ -31,7 +31,7 @@ const queryPitch = {
   key: 'query',
   title: 'Your contract,',
   titleAccent: 'now query-ready.',
-  lead: 'After installing @tanstack/vue-query, the same $endpoint request object plugs directly into Vue Query. Vue Query owns server-state behavior while Nuxt Endpoints keeps request identity, retries, and response types aligned with the server contract.',
+  lead: 'The same $endpoint request object plugs directly into Pinia Colada. Colada owns server-state behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and status-aware response types aligned with the server contract.',
   points: [
     {
       icon: 'lucide:list-checks',
@@ -39,35 +39,30 @@ const queryPitch = {
     },
     {
       icon: 'lucide:repeat',
-      text: 'Ordinary Vue Query options keep invalidation, prefetching, optimistic updates, and Devtools standard',
+      text: 'Ordinary Pinia Colada options keep invalidation, optimistic updates, and Devtools standard',
     },
     {
       icon: 'lucide:globe',
-      text: 'Keep app-owned setup by default, or opt into a request-scoped Nuxt SSR QueryClient and hydration',
+      text: 'Use the official Nuxt modules for automatic SSR prefetching, serialization, and hydration',
     },
     {
       icon: 'lucide:cookie',
       text: 'useEndpoint and query options carry incoming cookies to internal routes during SSR',
     },
   ],
-  cta: { label: 'Use Vue Query', to: '/docs/tanstack-query' },
+  cta: { label: 'Use Pinia Colada', to: '/docs/pinia-colada' },
   blocks: [
     {
-      title: 'nuxt.config.ts — optional SSR setup',
+      title: 'nuxt.config.ts — official SSR setup',
       lang: 'ts',
       code: `export default defineNuxtConfig({
-  modules: ['nuxt-endpoints'],
-  endpoints: {
-    client: {
-      query: { setup: 'auto' },
-    },
-  },
+  modules: ['@pinia/nuxt', '@pinia/colada-nuxt', 'nuxt-endpoints'],
 })`,
     },
     {
       title: 'pages/users/[id].vue',
       lang: 'ts',
-      code: `import { useQuery } from '@tanstack/vue-query'
+      code: `import { useQuery } from '@pinia/colada'
 
 const route = useRoute()
 const request = $endpoint('/api/users/:id', {
@@ -292,8 +287,8 @@ const stackItems = [
     tone: 'effect',
   },
   {
-    label: 'Vue Query',
-    icon: 'simple-icons:reactquery',
+    label: 'Pinia Colada',
+    icon: 'simple-icons:pinia',
     tone: 'query',
   },
   {
@@ -377,8 +372,8 @@ const stackItems = [
 
       <div class="unit -copy">
         <p v-if="pitch.key === 'query'" class="text -eyebrow">
-          <Icon name="simple-icons:reactquery" size="1rem" aria-hidden="true" />
-          Optional Vue Query adapter
+          <Icon name="simple-icons:pinia" size="1rem" aria-hidden="true" />
+          Pinia Colada integration
         </p>
         <h2 class="title">
           {{ pitch.title }} <span class="value">{{ pitch.titleAccent }}</span>

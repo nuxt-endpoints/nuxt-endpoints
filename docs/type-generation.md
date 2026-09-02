@@ -126,5 +126,5 @@ Nuxt 5 support is claimed only after released package versions verify:
 - schema output types in the handler event;
 - status-specific result and raw-response unions;
 - actual HTTP serialization for `Date` and other wire boundaries;
-- runtime validation, OpenAPI, idempotency, Vue Query, and SSR behavior;
+- runtime validation, OpenAPI, idempotency, Pinia Colada, and SSR behavior;
 - an explicit compatibility policy for the Nuxt 4 line.

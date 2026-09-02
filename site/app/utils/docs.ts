@@ -23,7 +23,7 @@ export const docsNavSections = [
       { label: 'Define Endpoints', to: '/docs/endpoints' },
       { label: 'Generated Client', to: '/docs/client' },
       { label: 'Responses', to: '/docs/responses' },
-      { label: 'Vue Query', to: '/docs/tanstack-query' },
+      { label: 'Pinia Colada', to: '/docs/pinia-colada' },
       { label: 'OpenAPI', to: '/docs/openapi' },
       { label: 'Schema Libraries', to: '/docs/schema-libraries' },
       { label: 'Idempotency', to: '/docs/idempotency' },
