@@ -15,10 +15,10 @@
   `{ status, ok, body, headers }` union directly. The public `.result()`, data
   mode, and `useEndpointResult` compatibility APIs have been removed;
   `useEndpoint` exposes the serializable status union through Nuxt async data.
-- **Breaking:** the TanStack Vue Query dependency, adapter, and
-  `endpoints.client.query` auto-setup option have been removed.
-  `.queryOptions()` and `.mutationOptions()` now return standard Pinia Colada
-  options; its official Nuxt module owns SSR prefetching and hydration.
+- **Breaking:** `.queryOptions()` and `.mutationOptions()` now return standard
+  Pinia Colada options. The previous query dependency, adapter, and
+  `endpoints.client.query` auto-setup option have been removed; the official
+  Colada Nuxt module owns SSR prefetching and hydration.
   Required idempotency keys are generated when the request object is created
   and reused by repeated execution of that same logical request.
 - Zod 4 schemas use their native `.toJSONSchema()` conversion. This includes
@@ -45,9 +45,9 @@
   `useFetch`, which swaps plain `$fetch` for `useRequestFetch()` on relative
   paths, but they were built on `useAsyncData` and kept plain `$fetch` — so a
   cookie-authenticated endpoint returned 401 during SSR and succeeded only
-  after hydration. The Vue Query factories already captured the request-aware
-  fetcher; the composables now use the same mechanism, re-capturing per call so
-  concurrent SSR requests never share credentials.
+  after hydration. The legacy query adapter factories already captured the
+  request-aware fetcher; the composables now use the same mechanism,
+  re-capturing per call so concurrent SSR requests never share credentials.
 
   `$endpoint` is unchanged and still does not forward, matching Nuxt's own
   asymmetry between `$fetch` and `useFetch`.
@@ -225,7 +225,7 @@
   request that accepts nothing the endpoint can produce is refused with `406`
   before the handler runs, through `onValidationError` like any other failure.
   Every response of a negotiating endpoint carries `Vary: Accept`, and the
-  client's typed `accept` option is part of the TanStack Query cache key.
+  client's typed `accept` option is part of the request-object query cache key.
   Declaration order is the endpoint's preference: it breaks ties and answers a
   request that expresses none. This is the mirror image of a media-type request
   body, and it is affordable here only because nothing on the response side is
@@ -343,8 +343,8 @@
   while values that do not match the contract are still rejected — including
   tuple arity. Endpoints with no declared responses keep widening their
   handler return, so a sample value does not narrow the generated client type.
-- Vue Query cache keys include the `mediaType` option, so two calls to one
-  route that differ only by media type no longer share a cache entry.
+- Request-object query cache keys include the `mediaType` option, so two calls
+  to one route that differ only by media type no longer share a cache entry.
 - Build-time discovery no longer reads files that are not user route sources.
   Handlers registered programmatically, this module's own OpenAPI route among
   them, are recognized by path shape instead.
@@ -386,7 +386,7 @@
 
 - Client response types now follow Nitro's JSON wire serialization, including
   boundaries such as `Date` to `string`, across the default, result, raw,
-  Effect, and TanStack Query clients.
+  Effect, and request-object query clients.
 - Generated endpoint success responses are checked against Nitro's generated
   `InternalApi` for every integration fixture route.
 - Endpoint discovery now fails closed when route evaluation cannot expose the
@@ -409,7 +409,7 @@ Initial public release.
   Valibot, and Effect Schema.
 - Generated endpoint clients, Nuxt async-data composables, and OpenAPI 3.1
   output.
-- Optional TanStack Vue Query factories, request-scoped SSR integration, and
+- Optional request-object query factories, request-scoped SSR integration, and
   infinite-query helpers.
 - Optional `Idempotency-Key` response replay with an application-owned durable
   storage contract and a development-only memory adapter.
