@@ -24,6 +24,10 @@ Current GitHub issue and PR status is maintained in
 architecture and evidence; the tracker records which upstream decisions are
 still moving.
 
+The stable, per-feature ownership and implementation-status matrix lives in
+[`endpoint-responsibilities.md`](./endpoint-responsibilities.md). It explicitly
+separates the official Nuxt 5 stack from the local fork-based prototype.
+
 ## Local Nitro provider integration
 
 The local Nitro prototype now exposes `nitro.getRouteContracts()` during
@@ -88,27 +92,12 @@ client projection to NE's runtime without recreating build-time discovery.
 
 ## Capability map after the local integration
 
-`A` means present in the official baseline, `B` means represented by an
-official RFC/issue/PR, and `C` means no upstream design was found. The final
-column records what the local virtual upstream proves; it does not change the
-official classification.
-
-|   # | Capability                                                         | Owner        | Official | Local proof                                                          |
-| --: | ------------------------------------------------------------------ | ------------ | :------: | -------------------------------------------------------------------- |
-|   1 | A unified single-definition route authoring API                    | H3           |    B     | A: `defineRouteHandler`                                              |
-|   2 | Per-status response contract                                       | H3           |    B     | A: status-keyed `responses`                                          |
-|   3 | Params and extensible downstream fields                            | H3           |    B     | A: params plus extension fields                                      |
-|   4 | Per-method contracts in a multi-method route                       | H3           |    B     | A: method entries on `defineRouteHandler`                            |
-|   5 | Static contract macro and dependency extraction                    | Nitro        |    B     | A: scope-aware imports and immutable local bindings                  |
-|   6 | Build-time route/handler/method/contract provider                  | Nitro        |    B     | A: `getRouteContracts()`                                             |
-|   7 | Typed-fetch metadata extension preserved by compilation/resolution | fetchdts     |    C     | A and connected: generic `compileRoutes` / `TypedFetchMetadataField` |
-|   8 | Ordinary success-body typed `$fetch`                               | Nuxt         |    A     | A: Nitro provider → Nuxt `server:routes` → `ServerRoutes`            |
-|   9 | Status-aware endpoint request API                                  | Nuxt         |    C     | A in NE: awaited `$endpoint(...)`                                    |
-|  10 | Raw status/body/header transport                                   | ofetch       |    A     | unchanged; NE uses `.raw()`                                          |
-|  11 | OpenAPI projection from the full contract                          | NE consumer  |    C     | A                                                                    |
-|  12 | Pinia Colada projection from endpoint request objects              | NE consumer  |    C     | A                                                                    |
-|  13 | Build-safe idempotency metadata separated from runtime policy      | NE extension |    C     | A                                                                    |
-|  14 | Full request/status-response contract validation runtime           | H3           |    B     | A: Standard Schema runtime in unified handler                        |
+The canonical map is
+[`$endpoint` responsibility map](./endpoint-responsibilities.md). It replaces
+the earlier `A`/`B`/`C` shorthand with separate columns for upstream design
+discussion, the official Nuxt 5 stack, and the local prototype. The remaining
+sections here provide the measurements and implementation evidence behind
+that classification.
 
 The fetchdts extension is implemented in a separate worktree based directly on
 PR #192. It lets Nuxt preserve arbitrary typed metadata through

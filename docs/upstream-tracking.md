@@ -5,6 +5,10 @@ integration architecture or its release readiness. The detailed capability
 comparison lives in [`upstream-delta.md`](./upstream-delta.md); this file tracks
 the moving GitHub state.
 
+Stable repository ownership and per-feature implementation status live in the
+[`$endpoint` responsibility map](./endpoint-responsibilities.md). Keep that
+classification separate from this moving watchlist.
+
 Last verified: 2026-09-03.
 
 ## Tracking policy

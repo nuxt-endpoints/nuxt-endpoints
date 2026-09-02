@@ -120,7 +120,9 @@ Concepts, for when you want the reasoning behind the design:
 
 Maintainer design notes live in [`docs/`](./docs/roadmap.md). Upstream issues and
 pull requests that can change the Nuxt 5 architecture are kept in the
-[`upstream tracker`](./docs/upstream-tracking.md).
+[`upstream tracker`](./docs/upstream-tracking.md); the division of work across
+H3, Nitro, Nuxt, fetchdts, ofetch, Nuxt Endpoints, and Pinia Colada is recorded
+in the [`$endpoint` responsibility map](./docs/endpoint-responsibilities.md).
 
 ## Contributing
 
