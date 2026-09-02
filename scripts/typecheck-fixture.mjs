@@ -10,7 +10,9 @@
 //
 // The generated route union references each handler through
 // `typeof import('…route.ts')`, so tsc pulls the fixture's route files into the
-// program and reports their errors too. That is the point.
+// program and reports their errors too. The fixture also imports Nuxt's
+// generated `server-routes.d.ts`, so the ordinary Nuxt typed-fetch projection
+// and NE's status-aware projection are checked in the same program.
 import { execFile } from 'node:child_process'
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'

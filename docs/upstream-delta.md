@@ -341,45 +341,42 @@ concrete-path route tree.
 
 ## Nuxt 5 moves the typed-fetch extension point
 
-This is the largest structural change found so far, and it is Nuxt's, not
-Nitro's. `@nuxt/schema` on the 5.x nightly declares two new interfaces:
+[Nuxt #36238](https://github.com/nuxt/nuxt/pull/36238) merged on 2026-09-02.
+Nuxt now asks the configured server builder for `ServerRouteHandler[]` through
+`server:routes`, compiles those handlers with fetchdts, and writes
+`.nuxt/server-routes.d.ts`. The payload is deliberately small: router segments,
+the original route, method, handler file, and a middleware flag. The hook
+context can additionally name the builder's body/query/header extractor types.
 
-```ts
-interface ServerTypes {}
-interface ServerRoutes {}
+The Nuxt 5 fixture is pinned to the merge build and proves that an NE-authored
+route appears in this generated map. Its ordinary POST success response agrees
+exactly with `{ id: number; name: string }`, so `$fetch` and `useFetch` do not
+need an NE adapter for their normal success-body semantics.
+
+This does **not** replace Nitro's `types:extend` route schema. Nuxt's
+`buildServerRoutes()` constructs only `responseType`, `bodyType`, `queryType`,
+and `headersType`; `ServerRouteHandler` has no opaque metadata member. It
+therefore cannot carry the `contract` and `handlerReturn` fields NE contributes
+to Nitro, even though the fetchdts compiler beneath it supports
+`RouteMetadataExtension`. The two generated maps currently have separate jobs:
+
+```text
+Nuxt server:routes -> ordinary $fetch / useFetch success and request types
+Nitro types:extend -> opaque contract metadata -> status-aware $endpoint
 ```
 
-`ServerRoutes` is documented as the extension point "through which the
-configured `server.builder` contributes the response types of the routes its
-runtime serves", augmented as:
+Keeping both is compatible and avoids a second NE-owned route scanner. Removing
+the Nitro-side projection requires a generic metadata contribution point in
+Nuxt's compile path; adding private properties to `server:routes` handlers or
+substituting generated wrapper handlers would only create an undocumented
+overlay.
 
-```ts
-declare module '@nuxt/schema' {
-  interface ServerRoutes {
-    '/api/hello': { get: { message: string } }
-  }
-}
-```
-
-Keys are route patterns and may contain `:param` and `**` segments; values map
-a lowercased method — or `default` — to the type the route resolves to. The
-doc comment says `@nuxt/nitro-server` declares Nitro's scanned routes there,
-"so `$fetch` and `useFetch` typing stays accurate without the app layer
-depending on a particular server runtime."
-
-`@nuxt/nitro-server` bridges this boundary with `interface ServerRoutes extends
-InternalApi {}`. The running fixture now proves the complete standard path:
-provider records become method-specific Nitro `InternalApi` entries, Nuxt's
-typed `$fetch` sees their success bodies, and a multi-method route exposes its
-GET and PUT responses separately. `ServerRoutes` still carries one response
-type per route and method; status discrimination travels through Nitro's
-parallel opaque metadata schema and is consumed only by the separate result
-API.
-
-Also present is `RequestEventFallback`, "the fallback request event shape,
-described in web standards only, used when no server builder has contributed
-an event type" — `{ req: Request; url: URL; res: { status?, statusText?, … } }`,
-the h3 v2 event shape expressed without depending on h3.
+One adjacent gap remains visible after the merge. `@nuxt/nitro-server` derives
+body/query/header types from the handler's `H3Event` call signature. The current
+H3 prototype `RouteHandler` and NE adapter retain the contract on `~routeDef`
+but do not project its request shapes into that signature, so the generated
+request types are permissive. This is an H3/Nitro extractor contract issue, not
+a reason for NE to fork Nuxt's route compiler.
 
 ## Environment notes
 

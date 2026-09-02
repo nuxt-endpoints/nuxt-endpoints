@@ -5,6 +5,17 @@ import type {
   EndpointMethod,
   EndpointPath,
 } from '#endpoints'
+import type { Response as NuxtServerResponse } from './.nuxt/server-routes'
+
+type Equal<LEFT, RIGHT> =
+  (<VALUE>() => VALUE extends LEFT ? 1 : 2) extends <VALUE>() => VALUE extends RIGHT ? 1 : 2
+    ? true
+    : false
+type Assert<VALUE extends true> = VALUE
+
+export type NuxtServerUserResponseAgreement = Assert<
+  Equal<NuxtServerResponse<'/api/users', 'POST'>, { id: number; name: string }>
+>
 
 declare const client: $EndpointClient
 declare const useClient: $UseEndpoint

@@ -92,12 +92,14 @@ it does not retain handler-only callbacks such as `validate.onError`.
 
 ## Nuxt 5 and `fetchdts`
 
-Nuxt's typed-fetch work is tracked in
-[`nuxt/nuxt#35769`](https://github.com/nuxt/nuxt/issues/35769). The reusable
+Nuxt's typed-fetch route generation landed in
+[`nuxt/nuxt#36238`](https://github.com/nuxt/nuxt/pull/36238), under the broader
+[`nuxt/nuxt#35769`](https://github.com/nuxt/nuxt/issues/35769) work. The reusable
 Nitro typed-fetch work is tracked in
 [`nitrojs/nitro#2758`](https://github.com/nitrojs/nitro/issues/2758). Until an
-upstream implementation lands, released package support remains a migration
-direction; this branch verifies the proposed integration with local prototypes.
+upstream generic metadata contribution point lands, this branch keeps Nuxt's
+ordinary generated route map and Nitro's opaque contract metadata map as
+compatible parallel projections.
 
 [`fetchdts`](https://github.com/unjs/fetchdts) supplies type utilities for a
 schema containing paths, methods, query, body, headers, response, and response
