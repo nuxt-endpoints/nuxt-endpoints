@@ -12,15 +12,8 @@ const packages = ['schema', 'kit', 'nitro-server', 'vite-server', 'vite', 'nuxt'
 mkdirSync(packDirectory, { recursive: true })
 
 for (const packageDirectory of packages) {
-  execFileSync(
-    'pnpm',
-    [
-      '--dir',
-      join(nuxtRoot, 'packages', packageDirectory),
-      'pack',
-      '--pack-destination',
-      packDirectory,
-    ],
-    { cwd: nuxtRoot, stdio: 'inherit' },
-  )
+  execFileSync('vp', ['pm', 'pack', '--pack-destination', packDirectory], {
+    cwd: join(nuxtRoot, 'packages', packageDirectory),
+    stdio: 'inherit',
+  })
 }
