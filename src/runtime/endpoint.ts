@@ -389,19 +389,23 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
 
     if (isStatusResponse(result)) {
       await this.validateResponse(result.status, result.body)
+      const headers = this.withResponseHeaders(result.status, negotiated, result.headers)
+      await this.validateResponseHeaders(result.status, headers, result.body)
       return {
         status: result.status,
         body: result.body,
-        headers: this.withResponseHeaders(result.status, negotiated, result.headers),
+        headers,
         explicitStatus: true,
       }
     }
 
     await this.validateResponse(200, result)
+    const headers = this.withResponseHeaders(200, negotiated, undefined)
+    await this.validateResponseHeaders(200, headers, result)
     return {
       status: 200,
       body: result,
-      headers: this.withResponseHeaders(200, negotiated, undefined),
+      headers,
       explicitStatus: false,
     }
   }
@@ -474,6 +478,67 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       })
     }
   }
+
+  /** Validate the response headers declared for this status against what will be sent. */
+  private async validateResponseHeaders(
+    status: number,
+    headers: Readonly<Record<string, string>> | undefined,
+    body: unknown,
+  ) {
+    if (!this.options.validation?.response) {
+      return
+    }
+
+    const declared = getDeclaredResponseHeaders(this.definition, status)
+    if (!declared) {
+      return
+    }
+
+    const sent = new Map(
+      Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]),
+    )
+    if (body instanceof Response) {
+      for (const [name, value] of body.headers) {
+        sent.set(name.toLowerCase(), value)
+      }
+    }
+    const issues: ValidationIssue[] = []
+    for (const [name, schema] of Object.entries(declared)) {
+      const result = await parseValidator(schema, sent.get(name.toLowerCase()))
+      if (!result.success) {
+        issues.push(
+          ...result.issues.map((issue) => ({
+            ...issue,
+            path: [name, ...(issue.path ?? [])],
+          })),
+        )
+      }
+    }
+
+    if (issues.length > 0) {
+      throw createRuntimeError({
+        statusCode: 500,
+        statusMessage: 'Response Contract Error',
+        data: {
+          status,
+          source: 'headers',
+          issues,
+        },
+      })
+    }
+  }
+}
+
+function getDeclaredResponseHeaders(
+  definition: EndpointDefinition,
+  status: number,
+): Record<string, ValidatorSchema> | undefined {
+  const contract = getResponseContract(definition, status)
+  if (!contract || typeof contract !== 'object' || !('headers' in contract)) {
+    return undefined
+  }
+  const headers = contract.headers
+  return headers && Object.keys(headers).length > 0 ? headers : undefined
 }
 
 export type EndpointEventHandler<

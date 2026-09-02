@@ -44,6 +44,8 @@ belong behind the platform adapter and build-time metadata boundary.
 - Standard Schema request validation with Zod, Valibot, and Effect Schema.
 - Declared per-status responses, runtime response validation, status-aware
   client results, and native `.raw()` access.
+- Per-header response contracts in OpenAPI and runtime validation, including
+  case-insensitive matching and native `Response` headers.
 - Generated path-and-method clients and helper types from `#endpoints`.
 - `useEndpoint` with Nuxt async-data behavior and SSR request forwarding.
 - Request-object Pinia Colada options, verified with the official Nuxt module.

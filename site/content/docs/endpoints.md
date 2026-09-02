@@ -147,6 +147,27 @@ export default defineRouteHandler({
 The server value is validated as `Date`; generated HTTP clients see the JSON
 wire value as `string`.
 
+A status can also declare the headers it promises. Declared headers are validated against what is
+actually sent, so a missing or rejected header fails with a `500` response contract error. Header
+names are matched case-insensitively; use an optional schema when a header is not always present.
+
+```ts
+export default defineRouteHandler({
+  validate: {
+    response: {
+      200: {
+        body: z.object({ id: z.number() }),
+        headers: { 'X-Request-Id': z.string().uuid() },
+      },
+    },
+  },
+  handler: (event) =>
+    event.respond(200, { id: 1 }, { headers: { 'x-request-id': crypto.randomUUID() } }),
+})
+```
+
+Declared response headers also appear in the generated OpenAPI document.
+
 ## Request media types
 
 Use a media-type map when one route accepts more than one representation.
