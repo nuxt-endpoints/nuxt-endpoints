@@ -30,6 +30,7 @@ Add the contract and handler in one call, replacing the plain event handler:
 
 ```ts
 // server/api/users/[id].get.ts
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 import { z } from 'zod'
 
 export default defineRouteHandler({

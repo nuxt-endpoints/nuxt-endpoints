@@ -104,6 +104,7 @@ const pitches = [
         title: 'server/api/users/[id].get.ts',
         lang: 'ts',
         code: `import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
@@ -154,7 +155,9 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
-        code: `export default defineRouteHandler({
+        code: `import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
+export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
   handler: (event) => {
     return findUser(event.validated.params.id)
@@ -165,7 +168,9 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 2 — tighten the contract',
         lang: 'ts',
-        code: `export default defineRouteHandler({
+        code: `import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
+export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
   validate: { response: { 200: User, 404: NotFound } },
   handler: async (event) => {

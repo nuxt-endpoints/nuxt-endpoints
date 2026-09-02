@@ -1,18 +1,13 @@
 # Nitro v3 and H3 v2 Readiness
 
-Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
+Status: historical migration analysis, superseded for the `nuxt5` branch by
+[Type Generation, Wire Responses, and Nuxt 5](./type-generation.md) and
+[Upstream Delta](./upstream-delta.md).
 
-H3 rows last verified: 2026-08-24, against `h3@2.0.1-rc.22` — the newest H3 v2
-release resolvable in this repository's lockfile, where it arrives transitively.
-Nitro rows were recorded against `nitro@3.0.260610-beta` and have not been
-re-measured since.
-
-The adapter maps below were previously unverified projections. The H3 rows are
-now measured: every name was resolved against the installed package, and the
-runtime rows were additionally observed by dispatching requests through a real
-`H3` app. Both upstream packages are prerelease, so re-verify when they reach
-stable — and note that the verified version is not the latest RC, so a row can
-have moved since.
+The adapter tables below preserve the measurements that guided the original
+Nitro 2 / H3 1 migration. They are not a description of the current Nuxt 5
+prototype. That prototype now runs the local H3, Nitro, fetchdts, and Nuxt
+forks and validates the full generated `ServerRoutes` pipeline.
 
 ## Where the seam lives
 
@@ -74,7 +69,7 @@ export default defineRouteHandler({
 | Runtime handler manifest   | The module generates `#nuxt-endpoints/server-handlers`; runtime code no longer imports Nitro's private server-handler virtual module.                                                                                                                                                                                                                                                            |
 | OpenAPI route registration | The module uses Nuxt Kit's `addServerHandler`; it no longer mutates `nitro.h3App.stack`.                                                                                                                                                                                                                                                                                                         |
 | Nitro plugin import        | The runtime plugin uses the exported `nitropack/runtime/plugin` subpath instead of a `dist` path.                                                                                                                                                                                                                                                                                                |
-| Client JSON wire types     | [`src/runtime/platform/wire.ts`](../src/runtime/platform/wire.ts) isolates Nitro 2 `Simplify<Serialize<T>>`; integration tests compare every endpoint success body with generated `InternalApi`.                                                                                                                                                                                                 |
+| Client JSON wire types     | [`src/runtime/platform/wire.ts`](../src/runtime/platform/wire.ts) isolated Nitro 2 `Simplify<Serialize<T>>`; the Nuxt 5 implementation now uses Nuxt's `Serialize` and compares endpoint success bodies with generated `ServerRoutes`.                                                                                                                                                           |
 | Compatibility range        | `nitropack` remains on `^2.10.0`; preparation is not advertised as Nitro 3 support.                                                                                                                                                                                                                                                                                                              |
 
 That Nitro 2/H3 1 implementation was covered by unit, type, build, and Nuxt
@@ -199,9 +194,12 @@ a separate `@nuxt/nitro-server` package, which is not yet stable.
 
 ## Nuxt 5 typed-fetch boundary
 
-Nuxt Endpoints does not use Nitro's `InternalApi` as the source of request contracts or status-specific responses. It uses endpoint metadata for that richer surface and verifies that the successful JSON wire projection agrees with `InternalApi`.
-
-For Nuxt 5, the preferred path is to contribute endpoint metadata to Nuxt's `fetchdts`-based schema through a public module extension API. If no such hook is exposed, the module keeps its contract schema and may consume `fetchdts` utilities internally. See [Type Generation, Wire Responses, and Nuxt 5](./type-generation.md) for the current flow and acceptance conditions.
+The implemented prototype contributes opaque contract metadata from Nitro to
+Nuxt's `server:routes` pipeline. Nuxt and fetchdts generate one `ServerRoutes`
+tree: ordinary `$fetch` / `useFetch` consume its successful response, while NE
+reads its contract field for status-specific `$endpoint` / `useEndpoint`
+results. See [Type Generation, Wire Responses, and Nuxt 5](./type-generation.md)
+for the current flow and acceptance conditions.
 
 ## Acceptance checklist
 

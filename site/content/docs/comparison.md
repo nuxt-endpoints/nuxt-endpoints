@@ -16,7 +16,7 @@ Nuxt already infers server route return types for `$fetch`. What it does not pro
 
 Nuxt Endpoints keeps that workflow — routes stay ordinary files under `server/api`, and plain `$fetch` continues to work — and adds the contract on top for the routes that opt in. See [Incremental Adoption](/docs/incremental-adoption).
 
-Nuxt Endpoints contributes its route types to Nitro's own type generation and carries the full contract through Nitro's generated `InternalRouteSchema`, then applies Nitro's JSON wire mapping to client responses. Integration tests compare every generated endpoint success body directly with Nitro's generated `InternalApi`. Awaited `$endpoint` requests preserve status-specific non-2xx bodies outside `InternalApi`'s success-return model, and `.raw()` exposes the native response.
+Nitro extracts each route contract, and Nuxt's Nitro adapter contributes its ordinary successful response plus opaque contract metadata to Nuxt's `ServerRoutes`. Plain `$fetch`, `useFetch`, `$endpoint`, and `useEndpoint` therefore read one generated route tree. Awaited `$endpoint` requests additionally preserve status-specific non-2xx bodies outside the ordinary successful response model, and `.raw()` exposes the native response.
 
 ## Nuxt typed fetch and fetchdts
 
@@ -24,7 +24,7 @@ Nuxt's typed-fetch work and [`fetchdts`](https://github.com/unjs/fetchdts) are c
 
 Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. Nuxt Endpoints owns that executable route contract. It can adopt a different typed-fetch generator later without changing what `defineRouteHandler` means.
 
-The preferred Nuxt 5 direction is to contribute endpoint metadata to Nuxt's generated fetch schema through a public module hook, then let Nuxt clients and Nuxt Endpoints consume the same successful response projection. Until that hook and implementation exist, this is a migration direction rather than a Nuxt 5 support claim.
+The Nuxt 5 prototype does this through an opaque `typeMetadata` field on the local Nuxt fork's `server:routes` contribution. The implementation is proven across the local h3, Nitro, fetchdts, and Nuxt forks, but it is not yet an accepted or released upstream API.
 
 ## tRPC
 

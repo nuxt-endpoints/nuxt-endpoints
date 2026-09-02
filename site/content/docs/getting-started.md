@@ -7,7 +7,7 @@ In a few minutes you will have a Nuxt route that validates its input at runtime,
 
 ## Compatibility
 
-Nuxt Endpoints targets Nuxt 5 with Nitro 3 and h3 v2. It currently resolves forks of h3, Nitro, and fetchdts that carry route-contract work not yet released upstream, so this is an integration branch rather than a support claim for published packages. The Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch.
+Nuxt Endpoints targets Nuxt 5 with Nitro 3 and h3 v2. It currently resolves forks of h3, Nitro, Nuxt, and fetchdts that carry route-contract work not yet released upstream, so this is an integration branch rather than a support claim for published packages. The Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch.
 
 This section is the single source for the supported platform line; other pages link here instead of restating it.
 
@@ -44,6 +44,7 @@ Create an ordinary Nuxt server route and default-export a `defineRouteHandler()`
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
   summary: 'Get a user',

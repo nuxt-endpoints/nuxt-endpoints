@@ -3,7 +3,7 @@ title: Nuxt 5 Progress
 description: What the Nuxt 5 integration branch delegates upstream today, and what is still owned by the module.
 ---
 
-This is the Nuxt 5 integration branch. It builds against prototype forks of h3, Nitro, and
+This is the Nuxt 5 integration branch. It builds against prototype forks of h3, Nitro, Nuxt, and
 fetchdts that carry route-contract work not yet released upstream — see
 [Compatibility](/docs/getting-started#compatibility) for the supported platform line. The
 Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch and is the published release line.
@@ -17,6 +17,7 @@ Last updated: **2026-09-03**
 | Nuxt Endpoints | [`nuxt5`](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/nuxt5)                                   | Nuxt integration, `$endpoint`, `useEndpoint`, OpenAPI, and idempotency UX |
 | H3             | [`prototype/route-contracts`](https://github.com/nuxt-endpoints/h3/tree/prototype/route-contracts)       | Typed route contracts, validation, and the active contract on the event   |
 | Nitro          | [`prototype/route-contracts`](https://github.com/nuxt-endpoints/nitro/tree/prototype/route-contracts)    | Build-time contract extraction, the contract provider, and runtime wiring |
+| Nuxt           | [`prototype/route-metadata`](https://github.com/nuxt-endpoints/nuxt/tree/prototype/route-metadata)       | Carries Nitro contract metadata through `server:routes` to `ServerRoutes` |
 | fetchdts       | [`prototype/route-contracts`](https://github.com/nuxt-endpoints/fetchdts/tree/prototype/route-contracts) | Extensible route metadata carried into generated client types             |
 
 These are public working branches. **Nothing has been proposed to the official h3, Nitro,
@@ -29,9 +30,10 @@ public npm registry. Use the `main` branch for that.
 
 > **Current integration work:** Nitro removed its built-in typed-fetch pipeline in
 > [nitro#4572](https://github.com/nitrojs/nitro/pull/4572), after route type generation moved to
-> Nuxt and fetchdts. The public prototype still contains the earlier Nitro type bridge and is being
-> rebased so Nitro only contributes builder-owned route and contract information. This page does
-> not claim that the final upstream extension point has been accepted.
+> Nuxt and fetchdts. The prototype has now removed the earlier Nitro type bridge: Nitro exposes
+> contracts, Nuxt joins them to `server:routes`, and one `ServerRoutes` tree serves both ordinary
+> typed fetch and status-aware `$endpoint`. This page does not claim that the extension point has
+> been accepted upstream.
 
 ## What moved upstream
 
@@ -47,9 +49,8 @@ the platform. What the module no longer owns:
   files itself — the previous jiti-based scanner is gone.
 - **Ordinary generated route types** now belong to Nuxt and fetchdts. Nitro removed its built-in
   `InternalApi` / `nitro-routes.d.ts` pipeline in nitro#4572. The module's own `types.routes` writer
-  and `handlerReturn` metadata have also been deleted. The remaining integration task is to carry
-  opaque contract metadata through Nuxt's `server:routes` pipeline without restoring typed-fetch
-  generation inside Nitro.
+  and `handlerReturn` metadata have also been deleted. The local Nuxt fork carries opaque contract
+  metadata through `server:routes` without restoring typed-fetch generation inside Nitro.
 - **Generic route-type compilation** lives in fetchdts, which carries opaque route metadata
   without interpreting status-aware semantics.
 
@@ -74,6 +75,9 @@ primitives:
 contract discovery and validation live. This branch therefore replaces module-owned plumbing with
 upstream primitives while preserving that UX, and route files use the same `defineRouteHandler`
 syntax on both lines.
+
+Nitro 3 no longer provides server auto-imports, so Nuxt 5 route files explicitly import
+`defineRouteHandler` from `nuxt-endpoints/runtime`. The declaration shape itself is unchanged.
 
 The one authoring difference between the lines: this branch can declare `head`, `options`,
 `connect`, and `trace` explicitly, while the Nuxt 4 line supports five methods, derives HEAD from

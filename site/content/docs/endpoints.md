@@ -7,9 +7,14 @@ The endpoint definition is the contract for runtime validation, handler context 
 
 ## Basic route
 
-Default-export a `defineRouteHandler()` call. Path params are declared at the root, request and response schemas under `validate`, and the handler receives the h3 event with the parsed schema output on `event.validated`.
+Default-export a `defineRouteHandler()` call. On the Nuxt 5 line it is an explicit
+server import; Nitro 3 no longer supplies server auto-imports. Path params are
+declared at the root, request and response schemas under `validate`, and the
+handler receives the h3 event with the parsed schema output on
+`event.validated`. Later snippets omit the same import for brevity.
 
 ```ts
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 import { z } from 'zod'
 
 const User = z.object({

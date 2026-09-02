@@ -66,13 +66,13 @@ shared multi-method fields, preservation of the actual schema object, exclusion
 of handler-only imports and side effects, generated NE client types, and the
 running Nuxt fixture.
 
-The provider is also connected to Nitro's standard type pipeline. Nitro now
-populates each discovered method's serialized success body in
-`NitroTypes.routes` and its opaque `contract` metadata before `types:extend`.
-It compiles both into one fetchdts schema, augments `InternalRouteSchema`, and
-generates the ordinary `InternalApi`. NE writes neither map: it resolves the
-contract with `TypedFetchMetadataField` and derives the authored handler return
-from `~routeDef` only when a response schema is absent.
+The provider is connected to Nuxt's standard type pipeline. Nitro exposes each
+discovered route, method, handler, and contract but no longer generates a typed
+fetch schema. Nuxt's Nitro adapter contributes the serialized successful body
+and opaque `contract` metadata through `server:routes`; Nuxt compiles both into
+one fetchdts `ServerRoutes` tree. NE resolves the contract with
+`TypedFetchMetadataField` and derives the authored handler return from
+`~routeDef` only when a response schema is absent.
 
 The first provider slice retained `jiti` as a compatibility fallback. That
 migration is complete: `src/discovery.ts`, its dedicated tests, and NE's direct
@@ -97,7 +97,7 @@ official classification.
 |   5 | Static contract macro and dependency extraction                    | Nitro        |    B     | A: scope-aware imports and immutable local bindings                  |
 |   6 | Build-time route/handler/method/contract provider                  | Nitro        |    B     | A: `getRouteContracts()`                                             |
 |   7 | Typed-fetch metadata extension preserved by compilation/resolution | fetchdts     |    C     | A and connected: generic `compileRoutes` / `TypedFetchMetadataField` |
-|   8 | Ordinary success-body typed `$fetch`                               | Nuxt/Nitro   |    A     | A: provider → `InternalApi` → Nuxt `ServerRoutes`                    |
+|   8 | Ordinary success-body typed `$fetch`                               | Nuxt         |    A     | A: Nitro provider → Nuxt `server:routes` → `ServerRoutes`            |
 |   9 | Status-aware endpoint request API                                  | Nuxt         |    C     | A in NE: awaited `$endpoint(...)`                                    |
 |  10 | Raw status/body/header transport                                   | ofetch       |    A     | unchanged; NE uses `.raw()`                                          |
 |  11 | OpenAPI projection from the full contract                          | NE consumer  |    C     | A                                                                    |
@@ -106,12 +106,11 @@ official classification.
 |  14 | Full request/status-response contract validation runtime           | H3           |    B     | A: Standard Schema runtime in unified handler                        |
 
 The fetchdts extension is implemented in a separate worktree based directly on
-PR #192. It lets Nitro preserve arbitrary typed metadata through
+PR #192. It lets Nuxt preserve arbitrary typed metadata through
 `compileRoutes` and lets a downstream client recover a field without fetchdts
-interpreting its semantics. The local Nitro fork now uses that extension for a
-parallel `InternalRouteSchema`: Nitro populates both the ordinary successful
-`response` and opaque `contract` from its route-contract provider. This is one
-compiled route tree, not another scanner or source of truth.
+interpreting its semantics. The local Nuxt fork uses that extension for the
+same `ServerRoutes` tree as ordinary typed fetch; there is no parallel Nitro
+route schema.
 
 ## Validation runtime ownership
 
@@ -259,34 +258,13 @@ covered by no test in h3. Nothing named `~routeDef` or `~validatedDef` exists.
 
 ## What Nitro 3 and fetchdts provide today
 
-**Nitro 3 does not use fetchdts.** `nitro@3.0.260610-beta` lists no `fetchdts`
-dependency and imports it nowhere. Typed `$fetch` is still Nitro's own
-`InternalApi` / `MatchedRoutes` machinery, augmented through
-`declare module 'nitro/types'`. nitro#2758 proposes the switch and has had no
-maintainer comment since 2025-01-22.
+[Nitro #4572](https://github.com/nitrojs/nitro/pull/4572) removed Nitro's own
+typed-fetch generator. Nitro no longer creates `InternalApi` or a parallel
+route schema. Nuxt now owns ordinary `$fetch` / `useFetch` route typing and
+uses fetchdts to compile `ServerRoutes`.
 
-`Serialize` and `Simplify` remain exported from `nitro/types`, and Nitro's own
-codegen still composes route types as `Simplify<Serialize<…>>`. The wire
-projection was an import path.
-
-`definePlugin` is exported from the `nitro` root as an alias of
-`defineNitroPlugin`; the `nitropack/runtime/plugin` subpath is gone.
-
-Nitro's `types:extend` hook receives `NitroTypes`:
-
-```ts
-export type NitroTypes = {
-  routes: Record<string, Partial<Record<HTTPMethod | 'default', string[]>>>
-  tsConfig?: TSConfig
-}
-```
-
-Each entry is a list of type-source strings for the **response** slot. There is
-no request, per-status, or header slot in that structure, so richer contract
-metadata cannot travel through it. `defineRouteMeta` is a separate,
-experimental, OpenAPI-only channel that does not reach `$fetch` typing.
-
-fetchdts's per-route metadata is one response per endpoint and method:
+fetchdts's ordinary per-route metadata contains one response per endpoint and
+method:
 
 ```ts
 export interface EndpointMetadata {
@@ -298,9 +276,10 @@ export interface EndpointMetadata {
 }
 ```
 
-It carries request `body` / `query` / `headers` and `responseHeaders`, which is
-more than Nitro 3 transports today — but `response` is a single type, with no
-per-status key. Status discrimination stays downstream under this shape.
+It carries request `body` / `query` / `headers` and `responseHeaders`, but
+`response` is deliberately a single type. The local fetchdts extension accepts
+opaque extra metadata, allowing NE to carry `contractType` without teaching
+fetchdts about status semantics.
 
 ### fetchdts route machinery assessment
 
@@ -331,13 +310,11 @@ response types and awaited status discrimination; projecting that union into a
 second route tree would add a parallel source of truth without deleting the
 union or `path-template.ts`.
 
-The reusable part is the ordinary typed-fetch projection once Nitro adopts it,
-plus an opaque `contract` extension owned by the status-aware consumer. The
-ordinary `response` accessor remains the success body. The local Nitro fork
-owns the fetchdts dependency and re-exports the compiler's type primitives from
-`nitro/types`, so an application or Nuxt module does not need a direct fetchdts
-dependency. Named route parameters and OpenAPI remain outside fetchdts's
-concrete-path route tree.
+The reusable part is the ordinary typed-fetch projection in Nuxt, plus opaque
+contract metadata owned by the status-aware consumer. The ordinary `response`
+accessor remains the success body. Nuxt re-exports fetchdts's public type
+primitives from `nuxt/app`; Nitro does not depend on fetchdts. Named route
+parameters and OpenAPI remain NE projections over the same contract.
 
 ## Nuxt 5 moves the typed-fetch extension point
 
@@ -353,23 +330,23 @@ route appears in this generated map. Its ordinary POST success response agrees
 exactly with `{ id: number; name: string }`, so `$fetch` and `useFetch` do not
 need an NE adapter for their normal success-body semantics.
 
-This does **not** replace Nitro's `types:extend` route schema. Nuxt's
-`buildServerRoutes()` constructs only `responseType`, `bodyType`, `queryType`,
-and `headersType`; `ServerRouteHandler` has no opaque metadata member. It
-therefore cannot carry Nitro's opaque `contract` field, even
-though the fetchdts compiler beneath it supports
-`RouteMetadataExtension`. The two generated maps currently have separate jobs:
+The local Nuxt fork adds a generic `typeMetadata` member to
+`ServerRouteHandler`. `buildServerRoutes()` preserves that opaque metadata only
+when one handler unambiguously owns a method, and lets the builder override the
+ordinary successful response when it has a richer contract-derived type. The
+result is one generated map:
 
 ```text
-Nuxt server:routes -> ordinary $fetch / useFetch success and request types
-Nitro types:extend -> success response + opaque contract -> status-aware $endpoint
+Nitro getRouteContracts()
+  -> Nuxt server:routes metadata
+  -> fetchdts ServerRoutes
+     -> ordinary $fetch / useFetch
+     -> status-aware $endpoint / useEndpoint
 ```
 
-Keeping both is compatible and avoids a second NE-owned route scanner. Removing
-the Nitro-side projection requires a generic metadata contribution point in
-Nuxt's compile path; adding private properties to `server:routes` handlers or
-substituting generated wrapper handlers would only create an undocumented
-overlay.
+Nuxt treats the expressions as builder-owned TypeScript source and does not
+interpret contract semantics. Nitro remains responsible only for extracting
+and exposing the contract, while H3 owns its type normalization.
 
 `@nuxt/nitro-server` derives body/query/header types from the handler's
 `H3Event` call signature. H3 now projects Standard Schema input types into that
@@ -463,12 +440,12 @@ Every row is UNVERIFIED until this branch proves it. Rows are filled in as the
 phases land; the table is deliberately empty of claims rather than populated
 with expectations.
 
-| Capability                                         | Local implementation                                                      | Upstream status                                                                                                           | Local patch                                                        | Removal condition                                                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Repeated query parsing                             | `getRuntimeQuery` preserves duplicate keys for contract validation        | h3 `getQuery` preserves them, but `defineValidatedHandler` loses them before validation on rc.22 and main `1892ee9`       | h3#1539                                                            | The fix ships in the h3 version pinned by Nuxt/Nitro and the real-request array test passes through `defineValidatedHandler`             |
-| Validated-handler contract introspection           | Discovery evaluates route modules and extracts their endpoint definitions | h3 retains `.validate` schemas by identity, but the property is undocumented and untyped                                  | Prototype shared on h3#1538; h3#1437 tracks the contract direction | h3 intentionally types/tests schema identity and Nitro provides a supported way to obtain evaluated handlers or equivalent rich metadata |
-| Nitro 3 platform imports and generated route types | Platform seam plus integration assertions                                 | Nuxt's patched Nitro serves the module successfully; Nitro 3 uses `nitro/*` and generates `types/nitro/nitro-routes.d.ts` | Local import/test-path adaptation only                             | Complete for the pinned stack; retain the seam for upstream version isolation                                                            |
-| Route matching and typed-fetch metadata            | Named route-template params and rich `EndpointRouteEntry` union           | fetchdts #192 machinery is connected through Nitro's generated `InternalRouteSchema`; opaque fields remain consumer-owned | Nitro `routeMetadata` + fetchdts generic extension                 | Upstream accepts the shared projection; NE then retains only named-template/operation/result client policy                               |
+| Capability                               | Local implementation                                                      | Upstream status                                                                                                     | Local patch                                                        | Removal condition                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Repeated query parsing                   | `getRuntimeQuery` preserves duplicate keys for contract validation        | h3 `getQuery` preserves them, but `defineValidatedHandler` loses them before validation on rc.22 and main `1892ee9` | h3#1539                                                            | The fix ships in the h3 version pinned by Nuxt/Nitro and the real-request array test passes through `defineValidatedHandler`             |
+| Validated-handler contract introspection | Discovery evaluates route modules and extracts their endpoint definitions | h3 retains `.validate` schemas by identity, but the property is undocumented and untyped                            | Prototype shared on h3#1538; h3#1437 tracks the contract direction | h3 intentionally types/tests schema identity and Nitro provides a supported way to obtain evaluated handlers or equivalent rich metadata |
+| Nitro 3 platform integration             | Platform seam plus integration assertions                                 | Nitro owns contract extraction and `getRouteContracts()`; it no longer generates typed-fetch routes                 | Local Nitro contract provider                                      | The provider and H3 contract helpers ship in versions pinned by Nuxt                                                                     |
+| Route matching and typed-fetch metadata  | NE consumes `contractType` from generated `ServerRoutes`                  | Nuxt owns route joining and fetchdts compilation; the local Nuxt fork preserves opaque builder metadata             | Nuxt `typeMetadata` + fetchdts generic extension                   | Nuxt and fetchdts accept the generic metadata transport; NE keeps only status-aware consumer semantics                                   |
 
 ## Method
 
@@ -489,107 +466,30 @@ because the local implementation already works.
 
 ## What Nuxt Endpoints becomes
 
-The integration experiment answered its own question: most of what this module
-did belongs upstream, and it is now there. This section records the direction
-the remainder takes, so the split is a decision rather than a drift.
-
-### The contract graduated; the projections stay
-
-`defineEndpoint`'s value was never that one function did everything. It was that
-**one declaration was read by everything** — validation, client types, OpenAPI,
-idempotency, cache keys. That declaration still exists, and it is still one. It
-moved upstream: Nitro's macro extracts it, `getRouteContracts()` exposes it at
-build time, and `InternalRouteSchema` carries its types.
-
-So this module is not losing a source of truth. It is losing ownership of one it
-should never have owned. What is left is the set of things that read the
-contract and project it somewhere else:
+The source of truth remains the first argument to `defineRouteHandler`. H3 owns
+the contract's type interpretation, Nitro extracts and exposes it at build
+time, and Nuxt joins it to the route tree. NE consumes that shared declaration:
 
 ```text
-route contract (owned upstream)
-  -> OpenAPI document          projection
-  -> per-status client types    projection
-  -> cache keys and factories   projection
-  -> file() lives inside the contract as a schema
-  -> withIdempotency() reads the contract's metadata
+defineRouteHandler contract
+  -> runtime validation and response checks
+  -> OpenAPI
+  -> status-aware $endpoint / useEndpoint
+  -> Pinia Colada query and mutation options
+  -> HTTP idempotency policy and replay
 ```
 
-That is one idea with several outputs, not a utility grab bag. The unifying
-sentence is: **write the route contract once, then add only the projections you
-need.**
+`$endpoint` and `useEndpoint` are intentionally retained. Ordinary
+`$fetch` / `useFetch` use Nuxt's success response, while NE uses the opaque
+contract metadata in the same `ServerRoutes` tree to expose per-status results.
+Pinia Colada integration remains downstream because it combines those request
+objects with Nuxt-native cache, SSR, hydration, mutation state, and retry.
 
-### Add, never overlay
+Idempotency also remains an NE feature. The contract carries the declarative
+policy needed by OpenAPI and client behavior; runtime-only storage and
+authorization stay in module configuration. A request object owns its generated
+idempotency key so retries of that object reuse the same key.
 
-Two shapes are available for every capability here, and only one is acceptable
-going forward.
-
-- **Additive**: the caller uses the upstream API directly and opts into the
-  extra capability at the point of use. Removing it leaves working code. There
-  is no mandatory entry point.
-- **Overlay**: everything must pass through an entry point of ours that
-  re-implements or intercepts what upstream does. Removing it requires a
-  rewrite.
-
-This module is currently an overlay, and it pays for it. Its
-`defineRouteHandler` shares h3's identifier and first-argument grammar but never
-calls h3's implementation, so request validation, method dispatch, HEAD/OPTIONS
-handling and media-type body reading are all duplicated locally. Behaviour has
-already forked in both directions: our JSON media-type predicate is stricter
-than h3's, and an h3 bug we did not share (repeated form fields collapsing)
-existed for a while in only one of the two.
-
-The additive forms are known for each remaining capability:
-
-| Capability          | Additive shape                                         | Already upstream                                                 |
-| ------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
-| File uploads        | `file({ maxSize, accept })` as a Standard Schema       | `parseFormData` already hands `File` through; `true` streams raw |
-| Idempotency         | `withIdempotency(options, handler)` wrapping a handler | nothing — this is the most differentiated code here              |
-| WebSocket payloads  | `withSchema(schema, hook)` wrapping one hook           | `defineWebSocket` / `defineWebSocketHandler`                     |
-| OpenAPI             | build-time `contracts -> meta.openAPI`                 | Nitro owns the `meta.openAPI` slot and serves `/_openapi.json`   |
-| Status-aware result | `resultOf()` over an existing raw response             | `.raw()`, `InternalRouteSchema`, `TypedFetchMetadataField`       |
-
-`withIdempotency` matters beyond its own feature: h3 wires `middleware` outside
-`runValidatedHandler`, so middleware cannot see coerced values, but wrapping the
-`handler` itself can. That removes the need to ask h3 for a post-validation hook
-phase. The one thing it cannot do is apply a policy application-wide without
-touching each route, which is an accepted cost of being additive.
-
-### The status-aware client shrinks
-
-Measured, the genuinely status-aware logic is 212 lines — 198 of types and 14 of
-runtime. The rest of the current client is fetch plumbing, caller-signature
-types, a copy of Nuxt's `AsyncData` shape, and a reconstruction of a native
-`Response` from ofetch's wrapper. Since `TypedFetchMetadataField` is keyed by
-route template and method, the types need no client of ours at all.
-
-Reducing it to a helper over `$fetch.raw()` deletes the `$endpoint` entry point,
-which is the overlay in this area.
-
-It is unlikely to be absorbed upstream. ofetch#364 and ofetch#370 are open and
-point at a two-way `{ data, error }` split with one shared error type, not
-per-status discrimination, and the maintainer's own comment on #370 prefers
-keeping that on `$fetch.raw` rather than branching `$fetch`'s return type.
-Nuxt's `ServerRoutes` carries one response type per route and method, and
-fetchdts deliberately refuses status semantics while providing
-`RouteMetadataExtension` so a consumer can carry them itself. Three layers drew
-the same line independently.
-
-### Two capabilities belong upstream, not here
-
-- **Content negotiation.** Grepping h3 for `406`, `negotiat` and `quality`
-  returns nothing; it owns the `{ media: [...] }` response contract shape and
-  performs no negotiation on it. Whoever owns the declaration should own the
-  negotiation.
-- **`respond()` / `StatusResponse`.** `validate.response` lets an author declare
-  statuses; h3 offers no way to produce one. A client-side result API needs this
-  server-side counterpart to discriminate against.
-
-### Consequence for packaging
-
-Splitting means each piece competes on its own merits and can be proposed
-upstream on its own. For a reference implementation that is the point, not a
-regression — a single package can only say "adopt this module", while separate
-pieces can each be offered to the layer that should own them. If the name
-survives, it is most honest as documentation that shows how the projections
-compose, not as a package that co-locates code which no longer needs to be
-co-located.
+Content negotiation and a typed server-side status response primitive are
+still candidates for H3 because H3 owns the response contract grammar. They are
+not reimplemented in Nitro or Nuxt merely to serve NE.

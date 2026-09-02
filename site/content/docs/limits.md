@@ -37,7 +37,8 @@ Unsupported Zod or Valibot constructs fail according to their converter librarie
 
 ## Planned work
 
-- Land the route-contract work in h3, Nitro, and fetchdts upstream.
+- Land the route-contract work and generic metadata transport in h3, Nitro,
+  Nuxt, and fetchdts upstream.
 - Add first-class endpoint metadata for OpenAPI-specific fields.
 - Add better component and reference controls for shared schemas.
 - Claim released-package support once those integration APIs ship and the test matrix covers them.

@@ -16,6 +16,7 @@ One route file declares the contract and the handler:
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
   summary: 'Get a user',
