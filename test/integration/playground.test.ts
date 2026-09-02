@@ -7,6 +7,10 @@ import { afterAll, describe, expect, it } from 'vitest'
 const playgroundRoot = fileURLToPath(new URL('../../playground', import.meta.url))
 const browserE2E = process.env.NUXT_ENDPOINTS_BROWSER_E2E === '1'
 
+// Each browser flow drives a dozen or more real round trips through Chromium,
+// so Vitest's 5s default expires mid-scenario rather than on a real failure.
+const browserFlowTimeout = 120000
+
 if (process.env.NUXT_ENDPOINTS_E2E === '1') {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), 'nuxt-endpoints-playground-'))
   process.env.NUXT_PLAYGROUND_DATABASE_PATH = join(temporaryDirectory, 'playground.sqlite')
@@ -173,128 +177,144 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
     // reason the outer NUXT_ENDPOINTS_E2E gate has a skipped placeholder.
     const describeBrowser = browserE2E ? describe : describe.skip
     describeBrowser('browser flows (NUXT_ENDPOINTS_BROWSER_E2E=1)', () => {
-      it('runs the status-aware HTTP contract inspector', async () => {
-        const page = await createPage('/endpoints')
+      it(
+        'runs the status-aware HTTP contract inspector',
+        async () => {
+          const page = await createPage('/endpoints')
 
-        await page.getByRole('button', { name: 'Run 404 Not Found scenario' }).click()
-        await page.getByRole('status').filter({ hasText: '404 Not Found' }).waitFor()
+          await page.getByRole('button', { name: 'Run 404 Not Found scenario' }).click()
+          await page.getByRole('status').filter({ hasText: '404 Not Found' }).waitFor()
 
-        const responseStage = page.getByRole('article').filter({ hasText: 'HTTP response' })
-        await expect(responseStage.locator('pre').textContent()).resolves.toContain(
-          'User not found',
-        )
+          const responseStage = page.getByRole('article').filter({ hasText: 'HTTP response' })
+          await expect(responseStage.locator('pre').textContent()).resolves.toContain(
+            'User not found',
+          )
 
-        await page.getByRole('button', { name: 'Run 201 Created scenario' }).click()
-        await page.getByRole('status').filter({ hasText: '201 Created' }).waitFor()
-        await expect(responseStage.locator('pre').textContent()).resolves.toContain('"name": "Sid"')
+          await page.getByRole('button', { name: 'Run 201 Created scenario' }).click()
+          await page.getByRole('status').filter({ hasText: '201 Created' }).waitFor()
+          await expect(responseStage.locator('pre').textContent()).resolves.toContain(
+            '"name": "Sid"',
+          )
 
-        await page.getByRole('button', { name: 'Run 400 Validation Error scenario' }).click()
-        await page.getByRole('status').filter({ hasText: '400 Validation Error' }).waitFor()
-        await expect(responseStage.locator('pre').textContent()).resolves.toContain('max_value')
-        await expect(responseStage.locator('pre').textContent()).resolves.not.toContain('stack')
+          await page.getByRole('button', { name: 'Run 400 Validation Error scenario' }).click()
+          await page.getByRole('status').filter({ hasText: '400 Validation Error' }).waitFor()
+          await expect(responseStage.locator('pre').textContent()).resolves.toContain('max_value')
+          await expect(responseStage.locator('pre').textContent()).resolves.not.toContain('stack')
 
-        await page.close()
-      })
+          await page.close()
+        },
+        browserFlowTimeout,
+      )
 
-      it('keeps the selected request, guidance, form, and result together', async () => {
-        const page = await createPage('/endpoints')
-        const inspector = page.getByRole('region', { name: 'HTTP contract inspector' })
-        const tryItYourself = page.getByRole('region', {
-          name: 'Choose what you want to verify',
-        })
-        const exercise = page.getByRole('article', { name: 'Request form' })
-        const output = page.getByRole('article', { name: 'Request result' })
-        const sectionStyles = async (locator: typeof inspector) =>
-          locator.evaluate((element) => {
-            const style = getComputedStyle(element)
-            return {
-              borderTopWidth: style.borderTopWidth,
-              borderRadius: style.borderRadius,
-              backgroundColor: style.backgroundColor,
-              paddingTop: style.paddingTop,
-            }
+      it(
+        'keeps the selected request, guidance, form, and result together',
+        async () => {
+          const page = await createPage('/endpoints')
+          const inspector = page.getByRole('region', { name: 'HTTP contract inspector' })
+          const tryItYourself = page.getByRole('region', {
+            name: 'Choose what you want to verify',
           })
-        const exerciseBox = await exercise.boundingBox()
-        const outputBox = await output.boundingBox()
+          const exercise = page.getByRole('article', { name: 'Request form' })
+          const output = page.getByRole('article', { name: 'Request result' })
+          const sectionStyles = async (locator: typeof inspector) =>
+            locator.evaluate((element) => {
+              const style = getComputedStyle(element)
+              return {
+                borderTopWidth: style.borderTopWidth,
+                borderRadius: style.borderRadius,
+                backgroundColor: style.backgroundColor,
+                paddingTop: style.paddingTop,
+              }
+            })
+          const exerciseBox = await exercise.boundingBox()
+          const outputBox = await output.boundingBox()
 
-        await expect(sectionStyles(tryItYourself)).resolves.toEqual(await sectionStyles(inspector))
-        expect(exerciseBox).not.toBeNull()
-        expect(outputBox).not.toBeNull()
-        expect(Math.abs(exerciseBox!.y - outputBox!.y)).toBeLessThan(8)
-        expect(outputBox!.x).toBeGreaterThan(exerciseBox!.x)
+          await expect(sectionStyles(tryItYourself)).resolves.toEqual(
+            await sectionStyles(inspector),
+          )
+          expect(exerciseBox).not.toBeNull()
+          expect(outputBox).not.toBeNull()
+          expect(Math.abs(exerciseBox!.y - outputBox!.y)).toBeLessThan(8)
+          expect(outputBox!.x).toBeGreaterThan(exerciseBox!.x)
 
-        await page.getByLabel('User ID').fill('1')
-        await page.getByRole('button', { name: 'Fetch user' }).click()
-        await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"name": "Tom"')
+          await page.getByLabel('User ID').fill('1')
+          await page.getByRole('button', { name: 'Fetch user' }).click()
+          await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"name": "Tom"')
 
-        await page.getByLabel('User ID').fill('999')
-        await page.getByRole('button', { name: 'Fetch user' }).click()
-        await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"status": 404')
+          await page.getByLabel('User ID').fill('999')
+          await page.getByRole('button', { name: 'Fetch user' }).click()
+          await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"status": 404')
 
-        await page.getByRole('button', { name: /\$endpoint\.searchUsers/ }).click()
-        await expect(exercise.textContent()).resolves.toContain(
-          'Valibot transforms the query string',
-        )
-        await expect(output.locator('pre').textContent()).resolves.toContain(
-          'Run the selected request',
-        )
+          await page.getByRole('button', { name: /api\/users\/search/ }).click()
+          await expect(exercise.textContent()).resolves.toContain(
+            'Valibot transforms the query string',
+          )
+          await expect(output.locator('pre').textContent()).resolves.toContain(
+            'Run the selected request',
+          )
 
-        await page.getByRole('button', { name: /\$endpoint\('\/api\/users'\)/ }).click()
-        await page.getByLabel('Name').fill('')
-        await page.getByLabel('Age').fill('-1')
-        await page.getByRole('button', { name: 'Create user' }).click()
-        await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"status": 400')
+          await page.getByRole('button', { name: /\$endpoint\('\/api\/users'\)/ }).click()
+          await page.getByLabel('Name').fill('')
+          await page.getByLabel('Age').fill('-1')
+          await page.getByRole('button', { name: 'Create user' }).click()
+          await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"status": 400')
 
-        await page.getByLabel('Name').fill('Ada')
-        await page.getByLabel('Age').fill('36')
-        await page.getByRole('button', { name: 'Create user' }).click()
-        await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"status": 201')
+          await page.getByLabel('Name').fill('Ada')
+          await page.getByLabel('Age').fill('36')
+          await page.getByRole('button', { name: 'Create user' }).click()
+          await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"status": 201')
 
-        await page.getByRole('button', { name: /api\/users\/search/ }).click()
-        await page.getByLabel('Query').fill('ja')
-        await page.getByLabel('Limit').fill('1')
-        await page.getByRole('button', { name: 'Search users' }).click()
-        await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"total": 2')
+          await page.getByRole('button', { name: /api\/users\/search/ }).click()
+          await page.getByLabel('Query').fill('ja')
+          await page.getByLabel('Limit').fill('1')
+          await page.getByRole('button', { name: 'Search users' }).click()
+          await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"total": 2')
 
-        await page.getByLabel('Limit').fill('11')
-        await page.getByRole('button', { name: 'Search users' }).click()
-        await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"status": 400')
+          await page.getByLabel('Limit').fill('11')
+          await page.getByRole('button', { name: 'Search users' }).click()
+          await output.getByRole('status').filter({ hasText: 'error' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"status": 400')
 
-        await page.getByRole('button', { name: /plain \$fetch/ }).click()
-        await page.getByRole('button', { name: 'Fetch legacy stats' }).click()
-        await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
-        await expect(output.locator('pre').textContent()).resolves.toContain('"totalUsers": 4')
+          await page.getByRole('button', { name: /plain \$fetch/ }).click()
+          await page.getByRole('button', { name: 'Fetch legacy stats' }).click()
+          await output.getByRole('status').filter({ hasText: 'success' }).waitFor()
+          await expect(output.locator('pre').textContent()).resolves.toContain('"totalUsers": 4')
 
-        await page.close()
-      })
+          await page.close()
+        },
+        browserFlowTimeout,
+      )
 
-      it('hydrates Pinia Colada, invalidates after a mutation, and replays without another row', async () => {
-        const page = await createPage('/sqlite-colada')
-        const input = page.getByLabel('New SQLite user')
-        const users = page.getByRole('list', { name: 'SQLite users' }).getByRole('listitem')
-        const initialCount = await users.count()
+      it(
+        'hydrates Pinia Colada, invalidates after a mutation, and replays without another row',
+        async () => {
+          const page = await createPage('/sqlite-colada')
+          const input = page.getByLabel('New SQLite user')
+          const users = page.getByRole('list', { name: 'SQLite users' }).getByRole('listitem')
+          const initialCount = await users.count()
 
-        await input.fill('Dorothy Vaughan')
-        await page.getByRole('button', { name: 'Add with a new idempotency key' }).click()
-        await page.getByText('Dorothy Vaughan', { exact: true }).waitFor()
+          await input.fill('Dorothy Vaughan')
+          await page.getByRole('button', { name: 'Add with a new idempotency key' }).click()
+          await page.getByText('Dorothy Vaughan', { exact: true }).waitFor()
 
-        expect(await users.count()).toBe(initialCount + 1)
+          expect(await users.count()).toBe(initialCount + 1)
 
-        await input.fill('Keep this draft')
-        await page.getByRole('button', { name: 'Replay the same POST' }).click()
-        await page.getByText('The completed response was replayed', { exact: false }).waitFor()
+          await input.fill('Keep this draft')
+          await page.getByRole('button', { name: 'Replay the same POST' }).click()
+          await page.getByText('The completed response was replayed', { exact: false }).waitFor()
 
-        expect(await input.inputValue()).toBe('Keep this draft')
-        expect(await users.count()).toBe(initialCount + 1)
+          expect(await input.inputValue()).toBe('Keep this draft')
+          expect(await users.count()).toBe(initialCount + 1)
 
-        await page.close()
-      })
+          await page.close()
+        },
+        browserFlowTimeout,
+      )
     })
   })
 } else {

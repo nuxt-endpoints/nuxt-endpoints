@@ -67,5 +67,13 @@ jobs:
       - name: Check Nuxt 5 integration
         run: vp run check
 
+      # `vp run check` gates the browser flows off, so without this step the
+      # Pinia Colada hydrate/mutate/replay scenarios only ever run locally.
+      - name: Install Chromium for browser E2E
+        run: vp run test:e2e:browser:install
+
+      - name: Browser E2E
+        run: vp run test:e2e:browser
+
       - name: Build Nuxt Endpoints
         run: vp run build

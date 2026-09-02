@@ -199,6 +199,44 @@ describe('createEndpointClient', () => {
     })
   })
 
+  it('derives the same query key regardless of request key order', async () => {
+    fetchMock.mockResolvedValue({ items: [] })
+    const client = createEndpointClient([{ path: '/api/users/search', method: 'get' }])
+    const declaredOrder = client('/api/users/search', {
+      method: 'get',
+      query: { limit: 10, q: 'ada', filter: { role: 'admin', active: true } },
+    }).queryOptions()
+    const reversedOrder = client('/api/users/search', {
+      method: 'get',
+      query: { filter: { active: true, role: 'admin' }, q: 'ada', limit: 10 },
+    }).queryOptions()
+
+    // Nested objects are sorted too, so this holds at every depth rather than
+    // only for the top-level request record.
+    expect(reversedOrder.key).toEqual(declaredOrder.key)
+    expect(declaredOrder.key.at(-1)).toBe(
+      '{"query":{"filter":{"active":true,"role":"admin"},"limit":10,"q":"ada"}}',
+    )
+  })
+
+  it('keeps array order significant in the query key', async () => {
+    fetchMock.mockResolvedValue({ items: [] })
+    const client = createEndpointClient([{ path: '/api/users/search', method: 'get' }])
+    const ascending = client('/api/users/search', {
+      method: 'get',
+      query: { tags: ['a', 'b'] },
+    }).queryOptions()
+    const descending = client('/api/users/search', {
+      method: 'get',
+      query: { tags: ['b', 'a'] },
+    }).queryOptions()
+
+    // Sorting request keys must not extend to array members: a reordered array
+    // is a different request, and collapsing the two would serve stale data.
+    expect(descending.key).not.toEqual(ascending.key)
+    expect(ascending.key.at(-1)).toBe('{"query":{"tags":["a","b"]}}')
+  })
+
   it('reuses an automatically generated key across repeated Colada mutation execution', async () => {
     fetchMock.mockResolvedValue({ id: 1 })
     const client = createEndpointClient([
