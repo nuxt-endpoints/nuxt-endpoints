@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** the TanStack Vue Query dependency, adapter, and
+  `endpoints.client.query` auto-setup option have been removed.
+  `.queryOptions()` and `.mutationOptions()` now return standard Pinia Colada
+  options; its official Nuxt module owns SSR prefetching and hydration.
+  Required idempotency keys are generated when the request object is created
+  and reused by repeated execution of that same logical request.
+
 ## 0.7.2 - 2026-08-29
 
 ### Fixed

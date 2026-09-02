@@ -13,7 +13,7 @@ without hiding the broader roadmap.
 
 | Document                                                        | Responsibility                                                                                                                 |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| This roadmap                                                    | Cross-feature status, priorities, non-TanStack proposals, delegation decisions, and review questions                           |
+| This roadmap                                                    | Cross-feature status, priorities, client integrations, delegation decisions, and review questions                              |
 | [Nuxt Actions comparison](./nuxt-actions-comparison.md)         | Verified upstream feature comparison and the adopt/delegate/defer ledger                                                       |
 | [Idempotency-Key helper](./idempotency.md)                      | Guarantees, state model, storage correctness, security boundary, and delivery sequence                                         |
 | [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
@@ -30,7 +30,7 @@ without hiding the broader roadmap.
 | H3 event in endpoint handler context                                  | Implemented                      | Learn whether application-wide H3 augmentation is sufficient                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Immutable typed `.use()` endpoint builder                             | Not implemented                  | Add only if endpoint-local context composition solves real application pain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Shared fresh-request and fetcher extension boundary                   | Implemented                      | `createEndpointRequest`, fetcher injection, and shared key normalization                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| TanStack Query adapter                                                | Phases 1-3 implemented           | Initial public decisions confirmed; monitor adoption and compatibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Pinia Colada options                                                  | Implemented                      | Standard request-object options; the official Nuxt module owns cache setup and hydration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Idempotency-Key helper                                                | Implemented                      | Application-owned durable adapters must pass the conformance contract                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Idempotency central runtime policy                                    | Implemented                      | `server/endpoints/runtime.ts` supplies storage/scope/authorization defaults under its `idempotency` key; endpoints keep contract metadata and overrides                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Operation-aware observability                                         | Proposed, later                  | Stabilize operation metadata and hook boundaries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -74,7 +74,7 @@ core endpoint handler context.
 | H3 event in handler context                 | Adopted and implemented            | Complete                                               |
 | Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                      |
 | Shared client extension primitives          | Adopt                              | Foundation work                                        |
-| TanStack Query integration                  | Adopted and implemented            | Stabilization and compatibility                        |
+| Pinia Colada integration                    | Adopted and implemented            | Stabilization and compatibility                        |
 | Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API |
 | Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                    |
 | DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                            |
@@ -89,7 +89,7 @@ core endpoint handler context.
 
 ## Shared client extension track
 
-The following primitives are useful beyond TanStack Query and should be
+The following primitives are useful beyond Pinia Colada and should be
 designed as shared client infrastructure:
 
 - typed fetcher injection for authentication, base URL, tracing, metrics,
@@ -99,16 +99,15 @@ designed as shared client infrastructure:
 - generated operation-to-request-options types;
 - one deterministic request-key normalization implementation;
 - documented SSR cookie and authorization forwarding behavior;
-- a stable extension API for optional clients such as Effect and TanStack
-  Query.
+- a stable extension API for optional clients such as Effect and Pinia Colada.
 
-The TanStack adapter is the first concrete consumer and therefore contains the
-current detailed requirements. The shared boundary must not be named or shaped
-so narrowly that Effect, testing, tracing, or future adapters need to bypass it.
+The Pinia Colada options are the first concrete cache consumer. The shared
+boundary must not be named or shaped so narrowly that Effect, testing, tracing,
+or future adapters need to bypass it.
 
 ## Typed server middleware context
 
-Typed server context is independent of TanStack Query. It supports request
+Typed server context is independent of Pinia Colada. It supports request
 authentication, tenant resolution, database transactions, request IDs,
 permissions, and tracing inside endpoint handlers.
 
@@ -283,7 +282,7 @@ A future tab could show:
 - OpenAPI document links;
 - discovery and operation-name collision diagnostics.
 
-It must not expose sensitive payloads or duplicate TanStack Query Devtools'
+It must not expose sensitive payloads or duplicate Pinia Colada Devtools'
 cache inspector.
 
 ## Multipart and typed streams
@@ -328,7 +327,7 @@ Everything this module owns divides in two:
 - **Primitive layer** — contract definition, request/response validation,
   JSON wire projection, typed client plumbing, OpenAPI generation, and
   build-time contract discovery. This is the layer upstream is growing into.
-- **Application layer** — idempotency, the TanStack Query adapter, the Effect
+- **Application layer** — idempotency, the Pinia Colada options, the Effect
   adapter, Nuxt async-data integration, and operation-named call targets.
   Nothing upstream is proposing to own this.
 
@@ -500,9 +499,9 @@ the next case. Revisit only if concrete demand appears.
 
 ## Delegated and deliberately omitted features
 
-- Cache storage, stale policy, retry, request deduplication, optimistic rollback,
-  polling, offline persistence, and infinite-page state belong to TanStack
-  Query when that adapter is used.
+- Cache storage, stale policy, request deduplication, optimistic rollback,
+  polling, persistence, and infinite-page state belong to Pinia Colada when
+  that integration is used.
 - Form fields, dirtiness, touched state, and client validation belong to form
   libraries or application code.
 - Authentication presets, rate limiting, and CSRF policy belong to application
@@ -574,5 +573,5 @@ Reviewers should answer:
 7. Which proposed item blocks current adoption, and which can remain a
    backward-compatible later extension?
 
-Vue Query integration now uses `.queryOptions()` and `.mutationOptions()` on
+Pinia Colada integration uses `.queryOptions()` and `.mutationOptions()` on
 the endpoint request itself; the public guide documents the supported boundary.

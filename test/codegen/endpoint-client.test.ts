@@ -72,7 +72,7 @@ describe('generateEndpointClient', () => {
   // `useFetch` swaps in `useRequestFetch()` for relative paths during SSR, so
   // the composables that stand in for it have to forward the request too.
   // Direct `$endpoint` awaits stand in for `$fetch`; query options need the
-  // request-aware fetcher for TanStack SSR.
+  // request-aware fetcher for Pinia Colada SSR.
   it('captures the request-aware fetcher for useEndpoint and endpoint query options', () => {
     const content = generateEndpointClient(resolve, [healthHandler], {
       client: { raw: true },

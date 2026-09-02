@@ -108,9 +108,11 @@ await $endpoint('/api/points/grants', {
 })
 ```
 
-The generated key belongs to the request object, not to an individual fetch attempt. Directly awaiting the object is memoized, while a TanStack mutation retry performs a fresh HTTP attempt with the same key:
+The generated key belongs to the request object, not to an individual fetch attempt. Directly awaiting the object is memoized, while re-executing its Pinia Colada mutation performs a fresh HTTP attempt with the same key:
 
 ```ts
+import { useMutation } from '@pinia/colada'
+
 const request = $endpoint('/api/points/grants', {
   method: 'post',
   body: { userId: 'u_1', amount: 10 },
@@ -119,7 +121,9 @@ const request = $endpoint('/api/points/grants', {
 const mutation = useMutation(request.mutationOptions())
 ```
 
-Query and mutation keys include the resolved `idempotencyKey` in their request-identity segment.
+The key belongs to `request`. Re-executing that logical mutation performs a
+fresh HTTP attempt with the same key, and the resolved key is included in its
+Pinia Colada mutation identity. Create a new request object for a separate action.
 
 ## Storage
 

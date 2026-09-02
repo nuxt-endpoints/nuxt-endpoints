@@ -210,7 +210,7 @@ await $endpoint('/api/users', {
 ```
 
 Maps without a JSON member make `mediaType` required at the type level. The
-option also participates in `useEndpoint` and Vue Query cache keys, so calls
+option also participates in `useEndpoint` and Pinia Colada cache keys, so calls
 differing only by media type never share a cache entry.
 
 Send `multipart/form-data` from the client. Its `Content-Type` carries a
@@ -473,7 +473,7 @@ const result = await $endpoint('/api/users/export', {
 })
 ```
 
-It is optional — omitting it takes the endpoint's preference — and it is part of the TanStack Query cache key, so two calls that differ only in `accept` are two cached values.
+It is optional — omitting it takes the endpoint's preference — and it is part of the Pinia Colada cache key, so two calls that differ only in `accept` are two cached values.
 
 An endpoint that negotiates and also uses [`Idempotency-Key`](/docs/idempotency) counts the negotiated media type as part of request identity: a retry that reuses the key but asks for a different representation is answered with `422`, not with the representation it did not ask for. Producing the other one would mean re-running a handler whose side effect already happened, which is what the key exists to prevent — use a separate key.
 
@@ -518,7 +518,7 @@ const response = await $endpoint('/api/users/export', { method: 'get', query: {}
 Two consequences follow from the client never parsing the response:
 
 - Every status of that route arrives as a stream, including a validated `404` the contract still declares. Those declarations remain true for the server and for OpenAPI; the client just hands you the bytes.
-- `useEndpoint` and the Vue Query options are the wrong tools for such a route — an unread stream cannot be cached or serialized into the Nuxt payload.
+- `useEndpoint` and the Pinia Colada options are the wrong tools for such a route — an unread stream cannot be cached or serialized into the Nuxt payload.
 
 Pass an explicit `responseType` when you want the fetcher to decode after all, which is the usual choice for a file download:
 

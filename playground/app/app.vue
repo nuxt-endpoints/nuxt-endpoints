@@ -9,7 +9,7 @@
       </NuxtLink>
       <nav class="nav" aria-label="Playground demos">
         <NuxtLink class="pv-nuxt-link" to="/endpoints">Typed endpoints</NuxtLink>
-        <NuxtLink class="pv-nuxt-link" to="/sqlite-vue-query">SQLite + Vue Query</NuxtLink>
+        <NuxtLink class="pv-nuxt-link" to="/sqlite-colada">SQLite + Pinia Colada</NuxtLink>
         <a class="link" href="/_endpoints/schema" target="_blank">OpenAPI JSON</a>
       </nav>
     </header>

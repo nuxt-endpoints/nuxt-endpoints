@@ -57,7 +57,7 @@ by every JSON client response surface:
 - `.raw().json()`;
 - `useEndpoint`;
 - Effect result values;
-- TanStack Query request options.
+- Pinia Colada request options.
 
 Runtime response validation still runs against the server/schema output before
 the HTTP framework serializes it. Native `Response`, streams, files, redirects,
@@ -110,7 +110,7 @@ The implemented prototype integration is:
 2. Read it through Nitro's build-time registry provider.
 3. Add opaque NE fields to Nitro's generated fetch schema.
 4. Keep status-specific results, runtime validation, OpenAPI, idempotency,
-   Effect, and TanStack Query at the Nuxt Endpoints layer.
+   Effect, and Pinia Colada at the Nuxt Endpoints layer.
 5. Make awaited `$endpoint` requests status-aware while keeping `.raw()` for native responses.
 
 ## Nuxt 5 acceptance conditions
@@ -125,7 +125,7 @@ released package versions:
 - handler context retains schema output types;
 - status-specific result and raw-response unions remain intact;
 - `Date` and other serialization boundaries match actual HTTP values;
-- runtime validation, OpenAPI, idempotency, Effect, and TanStack Query tests
+- runtime validation, OpenAPI, idempotency, Effect, Pinia Colada, and SSR tests
   pass;
 - Nitro 2 support is either preserved through an explicit adapter or removed
   in a documented major-version change.

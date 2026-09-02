@@ -12,6 +12,7 @@ export type {
   EndpointAsyncDataState,
   EndpointAsyncDataStatus,
   EndpointCall,
+  EndpointCacheKey,
   EndpointCallMutationOptions,
   EndpointCallQueryOptions,
   EndpointCallRuntime,

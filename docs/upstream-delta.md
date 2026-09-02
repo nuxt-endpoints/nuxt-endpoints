@@ -101,7 +101,7 @@ official classification.
 |   9 | Status-aware endpoint request API                                  | Nuxt         |    C     | A in NE: awaited `$endpoint(...)`                                    |
 |  10 | Raw status/body/header transport                                   | ofetch       |    A     | unchanged; NE uses `.raw()`                                          |
 |  11 | OpenAPI projection from the full contract                          | NE consumer  |    C     | A                                                                    |
-|  12 | Vue Query projection from endpoint request objects                 | NE consumer  |    C     | A                                                                    |
+|  12 | Pinia Colada projection from endpoint request objects              | NE consumer  |    C     | A                                                                    |
 |  13 | Build-safe idempotency metadata separated from runtime policy      | NE extension |    C     | A                                                                    |
 |  14 | Full request/status-response contract validation runtime           | H3           |    B     | A: Standard Schema runtime in unified handler                        |
 
@@ -386,7 +386,7 @@ the h3 v2 event shape expressed without depending on h3.
 The focused Nuxt integration suite has now run against the pinned stack through
 Nuxt's patched Nitro: all 41 tests pass. This exercises real bound servers,
 generated clients and types, SSR request forwarding, per-status responses,
-OpenAPI, Vue Query hydration, and the SQLite-backed idempotency implementation.
+OpenAPI, Pinia Colada hydration, and the SQLite-backed idempotency implementation.
 The default suite also passes all 381 enabled tests, including the five native
 `better-sqlite3` tests; three opt-in integration files remain skipped there.
 

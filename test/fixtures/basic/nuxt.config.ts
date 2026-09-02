@@ -5,7 +5,7 @@ const resolver = createResolver(import.meta.url)
 const resolve = (...paths: string[]) => resolver.resolve(...paths)
 
 export default defineNuxtConfig({
-  modules: [NuxtEndpoints],
+  modules: ['@pinia/nuxt', '@pinia/colada-nuxt', NuxtEndpoints],
   endpoints: {
     openApi: true,
     client: {},

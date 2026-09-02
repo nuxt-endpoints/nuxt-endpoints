@@ -179,27 +179,27 @@ describe('createEndpointClient', () => {
     expect(headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i)
   })
 
-  it('connects one request object to queryOptions', async () => {
+  it('connects one request object to Pinia Colada query options', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
     const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
     const request = client('/api/users/:id', { method: 'get', params: { id: 123 } })
     const options = request.queryOptions()
 
-    expect(options.queryKey).toEqual([
+    expect(options.key).toEqual([
       'nuxt-endpoints',
       'v2',
       'get',
       '/api/users/:id',
-      { params: { id: 123 } },
+      '{"params":{"id":123}}',
     ])
-    await expect(options.queryFn({ signal: new AbortController().signal })).resolves.toEqual({
+    await expect(options.query({ signal: new AbortController().signal })).resolves.toEqual({
       status: 200,
       ok: true,
       body: { id: 123, name: 'Tom' },
     })
   })
 
-  it('reuses an automatically generated key across mutation retries', async () => {
+  it('reuses an automatically generated key across repeated Colada mutation execution', async () => {
     fetchMock.mockResolvedValue({ id: 1 })
     const client = createEndpointClient([
       {
@@ -211,14 +211,14 @@ describe('createEndpointClient', () => {
     const request = client('/api/items', { method: 'post', body: { amount: 100 } })
     const options = request.mutationOptions()
 
-    await options.mutationFn()
-    await options.mutationFn()
+    await options.mutation()
+    await options.mutation()
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const firstHeaders = fetchMock.mock.calls[0]![1].headers as Record<string, string>
     const secondHeaders = fetchMock.mock.calls[1]![1].headers as Record<string, string>
     expect(firstHeaders['Idempotency-Key']).toBe(secondHeaders['Idempotency-Key'])
-    expect(options.mutationKey.at(-1)).toEqual({
+    expect(JSON.parse(options.key.at(-1)!)).toEqual({
       body: { amount: 100 },
       idempotencyKey: firstHeaders['Idempotency-Key'],
     })
@@ -790,7 +790,7 @@ describe('createEndpointClient', () => {
       })
       expect(captured).not.toHaveBeenCalled()
 
-      await direct.queryOptions().queryFn({ signal: new AbortController().signal })
+      await direct.queryOptions().query({ signal: new AbortController().signal })
       expect(captured).toHaveBeenCalledWith('/api/users/9', {
         method: 'get',
         signal: expect.any(AbortSignal),

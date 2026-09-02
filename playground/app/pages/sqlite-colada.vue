@@ -1,7 +1,7 @@
 <template>
-  <div class="ne-sqlite-vue-query-page">
+  <div class="ne-sqlite-colada-page">
     <header class="header">
-      <p class="text -eyebrow">SQLite + Vue Query</p>
+      <p class="text -eyebrow">SQLite + Pinia Colada</p>
       <h1 class="title">Persistent queries and idempotent mutations</h1>
       <p class="text -lede">
         The list is server-rendered through <code class="code">useQuery</code>. Adding a row uses
@@ -91,10 +91,10 @@
 </template>
 
 <script setup lang="ts">
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, onServerPrefetch, ref } from 'vue'
+import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
+import { computed, ref } from 'vue'
 
-const queryClient = useQueryClient()
+const queryCache = useQueryCache()
 const sqliteUserName = ref('Margaret Hamilton')
 const lastSqliteRequest = ref<{
   key: string
@@ -103,17 +103,14 @@ const lastSqliteRequest = ref<{
   replayId?: number
 }>()
 const sqliteUsersRequest = $endpoint('/api/sqlite/users', { method: 'get' })
-const sqliteUsersQuery = useQuery({
-  ...sqliteUsersRequest.queryOptions(),
-  select: (result) => result.body,
-})
-const sqliteUsers = sqliteUsersQuery.data
+const sqliteUsersQuery = useQuery(sqliteUsersRequest.queryOptions())
+const sqliteUsers = computed(() => sqliteUsersQuery.data.value?.body)
 const sqliteUsersStatus = sqliteUsersQuery.status
-const sqliteUsersFetching = sqliteUsersQuery.isFetching
+const sqliteUsersFetching = sqliteUsersQuery.isLoading
 const sqliteUsersError = computed(() => errorMessage(sqliteUsersQuery.error.value))
 
 const sqliteUserMutation = useMutation({
-  mutationFn: async (request: { name: string; idempotencyKey: string }) => {
+  mutation: async (request: { name: string; idempotencyKey: string }) => {
     const result = await $endpoint('/api/sqlite/users', {
       method: 'post',
       body: { name: request.name },
@@ -122,49 +119,38 @@ const sqliteUserMutation = useMutation({
     if (!result.ok) throw result.body
     return result.body
   },
-  onSuccess: async () => {
-    await queryClient.invalidateQueries({
-      queryKey: sqliteUsersRequest.queryOptions().queryKey,
+  onSuccess: async (created, request) => {
+    if (lastSqliteRequest.value?.key === request.idempotencyKey) {
+      lastSqliteRequest.value.replayId = created.id
+    } else {
+      sqliteUserName.value = ''
+      lastSqliteRequest.value = {
+        key: request.idempotencyKey,
+        name: request.name,
+        firstId: created.id,
+      }
+    }
+    await queryCache.invalidateQueries({
+      key: sqliteUsersRequest.queryOptions().key,
     })
   },
 })
-const sqliteUserCreating = sqliteUserMutation.isPending
+const sqliteUserCreating = sqliteUserMutation.isLoading
 const sqliteUserCreateError = computed(() => errorMessage(sqliteUserMutation.error.value))
-
-onServerPrefetch(() => sqliteUsersQuery.suspense())
 
 function addSqliteUser() {
   const name = sqliteUserName.value.trim()
   if (!name) return
 
   const key = globalThis.crypto.randomUUID()
-  sqliteUserMutation.mutate(
-    { name, idempotencyKey: key },
-    {
-      onSuccess: (created) => {
-        sqliteUserName.value = ''
-        lastSqliteRequest.value = {
-          key,
-          name,
-          firstId: created.id,
-        }
-      },
-    },
-  )
+  sqliteUserMutation.mutate({ name, idempotencyKey: key })
 }
 
 function replaySqliteUser() {
   const previous = lastSqliteRequest.value
   if (!previous) return
 
-  sqliteUserMutation.mutate(
-    { name: previous.name, idempotencyKey: previous.key },
-    {
-      onSuccess: (replayed) => {
-        previous.replayId = replayed.id
-      },
-    },
-  )
+  sqliteUserMutation.mutate({ name: previous.name, idempotencyKey: previous.key })
 }
 
 function refetchSqliteUsers() {
@@ -199,7 +185,7 @@ function errorMessage(error: unknown) {
 </script>
 
 <style scoped>
-.ne-sqlite-vue-query-page {
+.ne-sqlite-colada-page {
   > .header {
     margin-bottom: var(--pg-space-600);
 
@@ -423,7 +409,7 @@ function errorMessage(error: unknown) {
 }
 
 @media (max-width: 760px) {
-  .ne-sqlite-vue-query-page {
+  .ne-sqlite-colada-page {
     > .header > .title {
       font-size: var(--pg-text-mobile-title);
     }

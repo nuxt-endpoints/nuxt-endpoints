@@ -1,9 +1,7 @@
 import fsp from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import {
   addImports,
-  addPluginTemplate,
   addServerHandler,
   addServerImports,
   addServerPlugin,
@@ -19,7 +17,6 @@ import { camelCase } from 'scule'
 import {
   generateEndpointClient,
   generateEndpointHandlerManifest,
-  generateEndpointQueryPlugin,
   generateEndpointTypes,
   toImportPath,
 } from './codegen'
@@ -60,12 +57,6 @@ export type EndpointsOpenApiModuleOptions = {
 
 export type EndpointsClientModuleOptions = {
   raw?: boolean
-  query?: false | EndpointsQueryClientModuleOptions
-}
-
-export type EndpointsQueryClientModuleOptions = {
-  setup: 'auto'
-  staleTime?: number
 }
 
 type ResolvedEndpointsModuleOptions = {
@@ -77,9 +68,6 @@ type ResolvedEndpointsModuleOptions = {
   }
   client: {
     raw: boolean
-    query: boolean
-    querySetup: 'external' | 'auto'
-    queryStaleTime: number
   }
 }
 
@@ -175,28 +163,6 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       ? await resolveExplicitConventionPath(nuxt, options.runtime.path, 'endpoints.runtime.path')
       : undefined
     let runtimePathResolved = options.runtime?.path !== undefined
-
-    if (resolvedOptions.client.query && !isTanstackVueQueryResolvable(nuxt.options.rootDir)) {
-      throw new Error(
-        '[nuxt-endpoints] endpoints.client.query.setup is "auto" but "@tanstack/vue-query" could not be resolved. Install it, or remove automatic setup.',
-      )
-    }
-
-    if (resolvedOptions.client.query && resolvedOptions.client.querySetup === 'auto') {
-      // Registered through Nuxt's template pipeline (not a plain fsp write)
-      // so the file's content is produced by the same `generateApp()` pass
-      // that reads it back for plugin annotation. `nuxi build`/`prepare`
-      // clear the build directory and then call `generateApp()` once before
-      // any module-registered lifecycle hook fires, so a file written
-      // directly to disk during `setup()` (or any later hook) always loses
-      // that race; `addPluginTemplate` has no such race because Nuxt itself
-      // materializes the template as part of generating the app.
-      addPluginTemplate({
-        filename: 'endpoints-query-plugin.ts',
-        write: true,
-        getContents: () => generateEndpointQueryPlugin(resolvedOptions.client.queryStaleTime),
-      })
-    }
 
     addServerTemplate({
       filename: `#nuxt-${moduleName}/options`,
@@ -600,16 +566,18 @@ export function resolveModuleOptions(
     },
     client: {
       raw: true,
-      query: false,
-      querySetup: 'external',
-      queryStaleTime: 60_000,
     },
+  }
+
+  if (options.client && 'query' in options.client) {
+    throw new TypeError(
+      'endpoints.client.query was removed with the TanStack Query adapter. Install @pinia/colada-nuxt and @pinia/nuxt; endpoint request objects now expose Pinia Colada options directly.',
+    )
   }
 
   const client = {
     ...defaults.client,
     ...options.client,
-    ...resolveQueryClientOption(options.client?.query),
   }
 
   if (options.openApi === false) {
@@ -647,34 +615,6 @@ export function resolveModuleOptions(
       enabled: options.openApi.enabled ?? defaults.openApi.enabled,
       path: normalizePath(options.openApi.path ?? defaults.openApi.path),
     },
-  }
-}
-
-// Exported for focused unit testing of optional automatic Query setup.
-export function resolveQueryClientOption(
-  query: false | EndpointsQueryClientModuleOptions | undefined,
-): {
-  query: boolean
-  querySetup: 'external' | 'auto'
-  queryStaleTime: number
-} {
-  if (!query) {
-    return { query: false, querySetup: 'external', queryStaleTime: 60_000 }
-  }
-
-  if (query === (true as unknown)) {
-    throw new TypeError(
-      'endpoints.client.query: true was removed because endpoint requests expose Query options directly. Remove it, or use { setup: "auto" } for automatic Vue Query setup.',
-    )
-  }
-  if (query.setup !== 'auto') {
-    throw new TypeError('endpoints.client.query only supports { setup: "auto", staleTime? }.')
-  }
-
-  return {
-    query: true,
-    querySetup: 'auto',
-    queryStaleTime: query.staleTime ?? 60_000,
   }
 }
 
@@ -719,17 +659,6 @@ export async function resolveConventionPath(
     }
   }
   return undefined
-}
-
-function isTanstackVueQueryResolvable(rootDir: string): boolean {
-  try {
-    const require = createRequire(`${rootDir}/package.json`)
-    require.resolve('@tanstack/vue-query')
-
-    return true
-  } catch {
-    return false
-  }
 }
 
 function normalizePath(path: string): string {

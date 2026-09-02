@@ -15,11 +15,11 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` style calls with typed request options. The returned lazy request can be awaited, passed to TanStack Query, or read as a raw Web Response. A route is addressed by its path and method; there is no second, named form of the same call.
+Each endpoint route is generated onto `$endpoint('/path', { method })` calls with typed request options. The returned lazy request can be awaited, passed to Pinia Colada, or read as a raw Web Response. Paths and HTTP methods are the public identity; there is no second operation-name API to keep in sync.
 
 ## 4. Response handling is explicit
 
-Await the request to receive a typed status union. Use `.raw()` only when code needs a low-level Web `Response`. `useEndpoint` and the TanStack bridge keep the same status-aware data shape while omitting native headers.
+Await the request to receive a typed status union. Use `.raw()` only when code needs a low-level Web `Response`. `useEndpoint` and the Pinia Colada options keep the same status-aware data shape while omitting native headers.
 
 ## 5. OpenAPI is generated from the same source
 
@@ -27,4 +27,4 @@ The module can serve an OpenAPI 3.1 document without maintaining a separate rout
 
 ## 6. Server-state adapters remain optional
 
-Named endpoint contracts can generate ordinary query, mutation, and infinite-query options for Vue Query. Vue Query owns cache behavior while Nuxt Endpoints keeps request and response types aligned with the server contract.
+Endpoint request objects expose ordinary query or mutation options for Pinia Colada. Colada owns cache behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and response types aligned with the server contract.

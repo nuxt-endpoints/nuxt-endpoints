@@ -14,7 +14,6 @@ import {
   resolveConventionPath,
   resolveExplicitConventionPath,
   resolveModuleOptions,
-  resolveQueryClientOption,
 } from '../src/module'
 
 describe('Nitro route contract provider', () => {
@@ -257,38 +256,13 @@ describe('resolveModuleOptions', () => {
   it('resolves client defaults when no client options are provided', () => {
     expect(resolveModuleOptions({}, false).client).toEqual({
       raw: true,
-      query: false,
-      querySetup: 'external',
-      queryStaleTime: 60_000,
-    })
-  })
-})
-
-describe('resolveQueryClientOption', () => {
-  it('disables the query client when query is undefined or false', () => {
-    const disabled = { query: false, querySetup: 'external', queryStaleTime: 60_000 } as const
-    expect(resolveQueryClientOption(undefined)).toEqual(disabled)
-    expect(resolveQueryClientOption(false)).toEqual(disabled)
-  })
-
-  it('applies automatic setup and defaults staleTime', () => {
-    expect(resolveQueryClientOption({ setup: 'auto' })).toEqual({
-      query: true,
-      querySetup: 'auto',
-      queryStaleTime: 60_000,
-    })
-    expect(resolveQueryClientOption({ setup: 'auto', staleTime: 1_000 })).toEqual({
-      query: true,
-      querySetup: 'auto',
-      queryStaleTime: 1_000,
     })
   })
 
-  it('rejects removed factory-era Query configuration at runtime', () => {
-    expect(() => resolveQueryClientOption(true as never)).toThrow(/query: true was removed/)
-    expect(() => resolveQueryClientOption({ staleTime: 1_000 } as never)).toThrow(
-      /only supports.*setup.*auto/,
-    )
+  it('rejects the removed TanStack Query setup option at runtime', () => {
+    expect(() =>
+      resolveModuleOptions({ client: { query: { setup: 'auto' } } } as never, false),
+    ).toThrow(/client\.query was removed.*Pinia Colada/)
   })
 })
 

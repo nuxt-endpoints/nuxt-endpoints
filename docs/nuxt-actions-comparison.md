@@ -31,13 +31,13 @@ source, playground examples, and tests before being used in this ledger.
 | End-to-end input/output inference | Already supported                     | Generated path, method, and operation clients are broader than action references   |
 | Output validation                 | Already supported                     | Runtime response validation remains optional                                       |
 | Typed middleware context          | Adopt in the core roadmap             | H3 event exposure is implemented; evaluate an immutable context builder separately |
-| Optimistic updates                | Delegate to TanStack Query            | Provide generated keys and recipes, not a second rollback engine                   |
-| SSR queries and cache             | Delegate state to TanStack Query      | Nuxt Endpoints supplies only optional Nuxt integration and a request-aware fetcher |
-| Cache invalidation and tags       | Delegate to TanStack Query            | Prefer generated hierarchical keys over a separate tag registry                    |
-| Infinite queries                  | Delegate page state to TanStack Query | Provide only a typed pageParam-to-request mapper                                   |
-| Prefetching                       | Delegate to TanStack Query            | Standard options should work with `prefetchQuery` and `ensureQueryData`            |
+| Optimistic updates                | Delegate to Pinia Colada              | Provide generated keys and recipes, not a second rollback engine                   |
+| SSR queries and cache             | Delegate state to Pinia Colada        | Its official Nuxt module owns prefetching, serialization, and hydration            |
+| Cache invalidation and tags       | Delegate to Pinia Colada              | Prefer generated hierarchical keys over a separate tag registry                    |
+| Infinite queries                  | Delegate page state to Pinia Colada   | Provide only a typed pageParam-to-request mapper                                   |
+| Prefetching                       | Delegate to Pinia Colada              | Standard options work with its query cache                                         |
 | Retry and backoff                 | Delegate client policy                | Server-side mutation idempotency is a separate concern                             |
-| Request deduplication             | Delegate to TanStack Query            | Preserve AbortSignal support in the endpoint request primitive                     |
+| Request deduplication             | Delegate to Pinia Colada              | Preserve AbortSignal support in the endpoint request primitive                     |
 | Form state and field dirtiness    | Delegate to form libraries            | Typed mutation inputs are the integration boundary                                 |
 | Progressive form enhancement      | Defer                                 | Revisit only with a concrete native-form/SSR requirement                           |
 | Idempotency-Key replay protection | Adopt as an optional server helper    | Require scoped keys and pluggable durable storage                                  |
@@ -55,7 +55,7 @@ source, playground examples, and tests before being used in this ledger.
 | Grouped action namespace          | No immediate need                     | Typed path-and-method endpoint calls provide the main ergonomics                   |
 
 The product-level outcomes are maintained in the
-[Nuxt Endpoints roadmap](./roadmap.md). Vue Query usage is documented in the public guide.
+[Nuxt Endpoints roadmap](./roadmap.md). Pinia Colada usage is documented in the public guide.
 
 ## Verified streaming findings
 

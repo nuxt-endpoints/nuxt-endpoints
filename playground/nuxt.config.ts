@@ -6,7 +6,7 @@ const resolve = (...paths: string[]) => resolver.resolve(...paths)
 
 export default defineNuxtConfig({
   css: ['~/assets/css/base.css'],
-  modules: [NuxtEndpoints],
+  modules: ['@pinia/nuxt', '@pinia/colada-nuxt', NuxtEndpoints],
   devtools: { enabled: true },
   compatibilityDate: '2024-08-24',
   future: {
@@ -14,11 +14,6 @@ export default defineNuxtConfig({
   },
   endpoints: {
     openApi: true,
-    client: {
-      query: {
-        setup: 'auto',
-      },
-    },
   },
   runtimeConfig: {
     playgroundDatabasePath: resolve('.data/playground.sqlite'),

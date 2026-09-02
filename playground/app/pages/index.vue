@@ -23,11 +23,11 @@
         </span>
       </NuxtLink>
 
-      <NuxtLink class="pv-nuxt-link -topic" to="/sqlite-vue-query">
+      <NuxtLink class="pv-nuxt-link -topic" to="/sqlite-colada">
         <span class="nuxt-link-default">
           <span class="unit">
             <span class="text -eyebrow">Integration</span>
-            <strong class="strong">SQLite + Vue Query</strong>
+            <strong class="strong">SQLite + Pinia Colada</strong>
             <span class="text">
               Exercise SSR hydration, request-object query options, invalidation, and idempotent
               replay against a real SQLite database.
