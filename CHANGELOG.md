@@ -11,6 +11,13 @@
   Required idempotency keys are generated when the request object is created
   and reused by repeated execution of that same logical request.
 
+### Fixed
+
+- JavaScript route definitions now enforce the complete runtime-only
+  idempotency boundary already enforced by TypeScript. `fingerprint`,
+  `replayStatuses`, `leaseTtlMs`, and `replayTtlMs` are rejected instead of
+  being silently discarded.
+
 ## 0.7.2 - 2026-08-29
 
 ### Fixed

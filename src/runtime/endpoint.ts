@@ -21,7 +21,11 @@ import {
   normalizeBodyContentType,
   validateBodyMediaTypeMapDefinition,
 } from './body-media-type'
-import { idempotencyRuntimeOptionKeys, validateIdempotencyTtl } from './idempotency'
+import {
+  idempotencyRouteContractForbiddenOptionKeys,
+  idempotencyRuntimeOptionKeys,
+  validateIdempotencyTtl,
+} from './idempotency'
 import {
   createRuntimeError,
   defineRuntimeHandler,
@@ -832,7 +836,7 @@ function validateEndpointIdempotencyDefinition(
 ): void {
   if (typeof idempotency !== 'object' || idempotency === null) return
 
-  for (const runtimeOption of idempotencyRuntimeOptionKeys) {
+  for (const runtimeOption of idempotencyRouteContractForbiddenOptionKeys) {
     if (runtimeOption in idempotency) {
       throw new TypeError(
         `Runtime-only idempotency option \`${runtimeOption}\` cannot be declared in a route contract. Keep only enabled, headerName, and required in the contract.`,

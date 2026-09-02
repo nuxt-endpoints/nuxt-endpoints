@@ -261,18 +261,32 @@ describe('DefinedEndpoint', () => {
     ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
   })
 
-  it('rejects runtime-only idempotency options in route contracts', async () => {
-    const { defineRouteHandler } = await import('./internal-runtime')
-    const metadata = { enabled: true, headerName: 'Idempotency-Key', required: true }
+  it.each([
+    ['storage', (): undefined => undefined],
+    ['scope', (): string => 'public'],
+    ['authorization', 'middleware'],
+    ['fingerprint', (): Record<string, never> => ({})],
+    ['replayStatuses', [409]],
+    ['leaseTtlMs', 1000],
+    ['replayTtlMs', 1000],
+  ] as const)(
+    'rejects runtime-only idempotency option %s in a route contract',
+    async (key, value) => {
+      const { defineRouteHandler } = await import('./internal-runtime')
+      const metadata = { enabled: true, headerName: 'Idempotency-Key', required: true }
 
-    for (const runtimeOption of ['storage', 'scope', 'authorization'] as const) {
       expect(() =>
         defineRouteHandler({
-          idempotency: { ...metadata, [runtimeOption]: () => undefined },
+          idempotency: { ...metadata, [key]: value },
           handler: () => ({ ok: true }),
         } as never),
-      ).toThrow(new RegExp(`Runtime-only idempotency option.*${runtimeOption}`))
-    }
+      ).toThrow(new RegExp(`Runtime-only idempotency option.*${key}`))
+    },
+  )
+
+  it('rejects runtime-only idempotency options in method route contracts', async () => {
+    const { defineRouteHandler } = await import('./internal-runtime')
+    const metadata = { enabled: true, headerName: 'Idempotency-Key', required: true }
 
     expect(() =>
       defineRouteHandler({
