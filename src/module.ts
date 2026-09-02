@@ -302,9 +302,6 @@ export function contributeEndpointRouteTypes(
     types.routeMetadata[handler.route] ??= {}
     types.routeMetadata[handler.route][method] ??= {}
     const metadata = types.routeMetadata[handler.route][method]!
-    metadata.contract = [
-      `NitroRouteContractDefinition<typeof import('${routeImport}').default, '${method}'>`,
-    ]
     metadata.handlerReturn = [handlerReturn]
   }
 }

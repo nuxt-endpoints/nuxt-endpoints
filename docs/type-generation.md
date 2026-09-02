@@ -2,7 +2,7 @@
 
 Status: maintainer architecture note.
 
-Last verified: 2026-09-01
+Last verified: 2026-09-02
 
 This document is the source of truth for how Nuxt Endpoints discovers route
 contracts, generates client types, and stays aligned with Nitro 3 and Nuxt 5.
@@ -23,8 +23,9 @@ The current build flow is:
    bindings. Handler-only code is not imported during the build.
 3. NE reads the supported `nitro.getRouteContracts()` provider; it no longer
    scans or Jiti-evaluates route files.
-4. Nitro generates `InternalRouteSchema`; NE contributes opaque `contract` and
-   `handlerReturn` fields through Nitro's type-generation input.
+4. Nitro populates opaque `contract` metadata from its provider and generates
+   `InternalRouteSchema`; NE contributes only its consumer-specific
+   `handlerReturn` field through Nitro's type-generation input.
 5. The endpoint client reads those fields through
    `TypedFetchMetadataField`.
 

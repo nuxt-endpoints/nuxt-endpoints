@@ -66,13 +66,14 @@ shared multi-method fields, preservation of the actual schema object, exclusion
 of handler-only imports and side effects, generated NE client types, and the
 running Nuxt fixture.
 
-The provider is also connected to Nitro's standard type pipeline. During
-`types:extend`, NE contributes each method's success body to `NitroTypes.routes`
-and opaque `contract` and `handlerReturn` expressions to
-`NitroTypes.routeMetadata`. Nitro compiles both maps into one fetchdts schema,
-augments `InternalRouteSchema`, and still generates the ordinary `InternalApi`.
-Nuxt 5 receives the latter through `@nuxt/nitro-server`, while NE resolves the
-opaque fields with `TypedFetchMetadataField` for status-aware endpoint results.
+The provider is also connected to Nitro's standard type pipeline. Nitro now
+populates each discovered method's opaque `contract` metadata itself before
+`types:extend`; NE contributes its success-body projection to
+`NitroTypes.routes` and its remaining consumer-specific `handlerReturn`
+metadata. Nitro compiles both maps into one fetchdts schema, augments
+`InternalRouteSchema`, and still generates the ordinary `InternalApi`. Nuxt 5
+receives the latter through `@nuxt/nitro-server`, while NE resolves the opaque
+fields with `TypedFetchMetadataField` for status-aware endpoint results.
 
 The first provider slice retained `jiti` as a compatibility fallback. That
 migration is complete: `src/discovery.ts`, its dedicated tests, and NE's direct
@@ -110,8 +111,9 @@ PR #192. It lets Nitro preserve arbitrary typed metadata through
 `compileRoutes` and lets a downstream client recover a field without fetchdts
 interpreting its semantics. The local Nitro fork now uses that extension for a
 parallel `InternalRouteSchema`: `response` remains the ordinary success body,
-while `contract` and `handlerReturn` carry NE's status-aware source types. This
-is one compiled route tree, not another scanner or source of truth.
+Nitro populates `contract` from its route-contract provider, and NE adds
+`handlerReturn` for its status-aware projection. This is one compiled route
+tree, not another scanner or source of truth.
 
 ## Validation runtime ownership
 
@@ -356,8 +358,8 @@ need an NE adapter for their normal success-body semantics.
 This does **not** replace Nitro's `types:extend` route schema. Nuxt's
 `buildServerRoutes()` constructs only `responseType`, `bodyType`, `queryType`,
 and `headersType`; `ServerRouteHandler` has no opaque metadata member. It
-therefore cannot carry the `contract` and `handlerReturn` fields NE contributes
-to Nitro, even though the fetchdts compiler beneath it supports
+therefore cannot carry Nitro's `contract` or NE's `handlerReturn` field, even
+though the fetchdts compiler beneath it supports
 `RouteMetadataExtension`. The two generated maps currently have separate jobs:
 
 ```text

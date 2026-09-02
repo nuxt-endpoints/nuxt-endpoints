@@ -36,12 +36,16 @@ describe('Nitro route contract provider', () => {
     ])
   })
 
-  it('projects provider handlers into InternalApi and opaque fetchdts metadata', () => {
+  it('adds NE response metadata without replacing Nitro-owned contract metadata', () => {
     const types: NitroTypes = {
       routes: {
         '/api/multi': { default: ['OriginalDispatcherResponse'] },
       },
-      routeMetadata: {},
+      routeMetadata: {
+        '/api/multi': {
+          get: { contract: ['NitroOwnedContract'] },
+        },
+      },
     }
 
     contributeEndpointRouteTypes(
@@ -59,9 +63,7 @@ describe('Nitro route contract provider', () => {
 
     expect(types.routes['/api/multi']).not.toHaveProperty('default')
     expect(types.routes['/api/multi']?.get?.[0]).toContain('EndpointHandlerSuccessBody')
-    expect(types.routeMetadata['/api/multi']?.get?.contract?.[0]).toContain(
-      "NitroRouteContractDefinition<typeof import('/project/server/api/multi.ts').default, 'get'>",
-    )
+    expect(types.routeMetadata['/api/multi']?.get?.contract).toEqual(['NitroOwnedContract'])
     expect(types.routeMetadata['/api/multi']?.get?.handlerReturn?.[0]).toContain(
       'EndpointHandlerReturnFromRoute',
     )
