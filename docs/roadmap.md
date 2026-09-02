@@ -83,7 +83,6 @@ core endpoint handler context.
 | Progressive form enhancement                | Defer                              | Only with a concrete native-form requirement           |
 | Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                 |
 | Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                      |
-| Form field state and dirtiness              | Delegate                           | TanStack Form, VeeValidate, or application code        |
 | CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize              |
 | Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics             |
 
