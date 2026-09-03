@@ -320,7 +320,6 @@ const stackItems = [
         </div>
 
         <p class="text -readiness">
-          <Icon name="lucide:shield-check" size="0.95rem" aria-hidden="true" />
           <span>
             Nuxt 4.5+ today, built for the Nuxt 5 generation. Upstream primitives will replace
             internal plumbing while <code>$endpoint</code> and <code>useEndpoint</code> stay the
@@ -548,10 +547,7 @@ const stackItems = [
           }
 
           > .text.-readiness {
-            display: inline-flex;
             max-width: 52rem;
-            align-items: center;
-            gap: var(--space-075);
             margin: calc(-1 * var(--space-150)) 0 0;
             color: var(--muted);
             font-size: var(--text-xs);
