@@ -51,7 +51,15 @@ jobs:
 
       - name: Browser E2E
         if: matrix.node-version == '22.19.0'
-        run: vp run test:e2e:browser
+        run: vp run test:e2e:browser 2>&1 | tee browser-e2e.log
+
+      - name: Upload Browser E2E log
+        if: always() && matrix.node-version == '22.19.0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-e2e-node-${{ matrix.node-version }}
+          path: browser-e2e.log
+          if-no-files-found: error
 
       - name: Build package
         run: vp run build
