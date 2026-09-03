@@ -44,10 +44,10 @@ npm registry. Use the `main` branch for that.
 The goal of this branch is to stop maintaining a second copy of infrastructure that belongs to
 the platform. What the module no longer owns:
 
-- **Contract authoring, dispatch, and validation** live in h3. `defineRouteHandler`, single and
-  multi-method dispatch, request and response validation, `params`, and media-type body maps are
-  h3's. The module re-exports h3's `validateRouteContractRequest` / `validateRouteContractResponse`
-  instead of implementing its own.
+- **Contract authoring, dispatch, and validation primitives** live in h3. `defineRouteHandler`,
+  single and multi-method dispatch, request validation, `params`, response checks, and media-type
+  body maps are h3's. NE chooses when the defensive response body/header traversal runs
+  (`development` by default) and re-exports h3's validation helpers instead of reimplementing them.
 - **Route discovery and contract extraction** live in Nitro. Nitro extracts contracts at build
   time and exposes them through `getRouteContracts()`, so the module no longer evaluates route
   files itself — the previous jiti-based scanner is gone.

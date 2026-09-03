@@ -21,7 +21,11 @@ import {
   setRuntimeResponseStatus,
 } from './platform'
 import type { RuntimeEvent } from './platform'
-import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
+import type {
+  EndpointRouteRuntime,
+  EndpointRuntime,
+  EndpointRuntimeAttachmentOptions,
+} from './endpoint-runtime'
 
 type MaybePromise<VALUE> = VALUE | Promise<VALUE>
 
@@ -101,6 +105,7 @@ export type EndpointMethodsEventHandler<
     runtime: EndpointRuntime | undefined,
     endpointRuntime?: EndpointRouteRuntime,
     identity?: EndpointRouteIdentity,
+    attachment?: EndpointRuntimeAttachmentOptions,
   ) => void
 }
 
@@ -197,6 +202,7 @@ export function defineEndpointMethodHandlers<
       runtime: EndpointRuntime | undefined,
       endpointRuntime?: EndpointRouteRuntime,
       identity?: EndpointRouteIdentity,
+      attachment?: EndpointRuntimeAttachmentOptions,
     ) => {
       if (identity) {
         const subHandler = subHandlers[normalizeRouteIdentity(identity).method]
@@ -205,11 +211,11 @@ export function defineEndpointMethodHandlers<
             `[nuxt-endpoints] Cannot attach endpoint runtime for method "${identity.method}" to a method-dispatch handler that only declares: ${Object.keys(subHandlers).join(', ')}.`,
           )
         }
-        subHandler.__set_endpoint_runtime__(runtime, endpointRuntime)
+        subHandler.__set_endpoint_runtime__(runtime, endpointRuntime, identity, attachment)
         return
       }
       for (const subHandler of Object.values(subHandlers)) {
-        subHandler.__set_endpoint_runtime__(runtime)
+        subHandler.__set_endpoint_runtime__(runtime, undefined, undefined, attachment)
       }
     },
   }) as unknown as EndpointMethodsEventHandler<METHODS, HANDLERS>

@@ -95,6 +95,10 @@ That single definition gives you:
 
 **1. Runtime validation** — `params`, `query`, `headers`, and `body` are validated before the handler runs. Handler code sees the parsed schema output, so coercion and transforms are already applied.
 
+Declared response bodies and headers are also checked while developing. Production skips that
+second traversal by default; set `validation.response` in `server/endpoints/runtime.ts` to
+`'always'` or `'never'` when the application needs a different policy.
+
 **2. A contract-derived client** — no codegen step to run, no types to import:
 
 ```vue

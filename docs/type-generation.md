@@ -67,10 +67,13 @@ by every JSON client response surface:
 - Effect result values;
 - Pinia Colada request options.
 
-Runtime response validation still runs against the server/schema output before
-the HTTP framework serializes it. Native `Response`, streams, files, redirects,
-and custom non-JSON transports are outside this mapping and should use the raw
-HTTP APIs.
+When enabled, runtime response validation runs against the server/schema output
+before the HTTP framework serializes it. It defaults to development builds so a
+production server does not traverse a typed response twice; `validation.response`
+in `server/endpoints/runtime.ts` can select `always`, `development`, or `never`.
+This policy does not change the generated client type. Native `Response`, streams,
+files, redirects, and custom non-JSON transports are outside this mapping and
+should use the raw HTTP APIs.
 
 ## `ServerRoutes` agreement
 

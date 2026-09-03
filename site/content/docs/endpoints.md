@@ -244,6 +244,10 @@ defaults; a generated route and method can override either hook in the same
 import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
 
 export default defineEndpointRuntime({
+  validation: {
+    // The default is 'development'. Use 'always' at an untyped output boundary.
+    response: 'development',
+  },
   onValidationError: ({ kind, source, event }) => ({
     status: 422,
     body: { error: 'invalid_request', field: source, reason: kind },
@@ -555,7 +559,19 @@ const blob = result.body
 
 ## Response validation
 
-Declared response schemas are validated automatically before the handler value is serialized. The value is checked as the schema's output type; HTTP clients see its JSON wire form.
+Declared response schemas and headers are validated before serialization during development. This catches values that escaped TypeScript through external APIs, `JSON.parse`, inaccurate database types, `any`, or assertions. Production skips the extra traversal by default; status declaration checks, content negotiation, request validation, and idempotency remain active.
+
+Configure the application-wide policy in `server/endpoints/runtime.ts`:
+
+```ts
+export default defineEndpointRuntime({
+  validation: {
+    response: 'always', // 'development' (default) | 'always' | 'never'
+  },
+})
+```
+
+Use `always` when response values cross an untyped or independently deployed boundary. The value is checked as the schema's output type; HTTP clients see its JSON wire form. `never` disables body and declared-header schema checks in every environment, but still rejects a status absent from the route contract.
 
 ```ts
 export default defineRouteHandler({
@@ -566,7 +582,7 @@ export default defineRouteHandler({
 })
 ```
 
-A status can also declare the headers it promises, per header name. Those are validated against what is actually being sent, so a declared header the handler forgets — or sets to a value its schema rejects — fails the same way a wrong body does: a `500`, because the server broke its own contract rather than the client sending something wrong. Header names are matched case-insensitively, and a header that was never set validates as `undefined`, so use an optional schema for one that is not always present.
+A status can also declare the headers it promises, per header name. When response validation is active, those are checked against what is actually being sent, so a declared header the handler forgets — or sets to a value its schema rejects — fails the same way a wrong body does: a `500`, because the server broke its own contract rather than the client sending something wrong. Header names are matched case-insensitively, and a header that was never set validates as `undefined`, so use an optional schema for one that is not always present.
 
 ```ts
 export default defineRouteHandler({
