@@ -211,6 +211,11 @@ describe('findUnsupportedRouteTemplateSyntax', () => {
 })
 
 describe('resolveModuleOptions', () => {
+  it('carries Nuxt dev state into the server runtime options', () => {
+    expect(resolveModuleOptions({}, true).dev).toBe(true)
+    expect(resolveModuleOptions({}, false).dev).toBe(false)
+  })
+
   it('enables OpenAPI by default only in dev mode', () => {
     expect(resolveModuleOptions({}, true).openApi).toEqual({
       enabled: true,

@@ -46,7 +46,22 @@ export type EndpointRouteRuntimeMap = Record<
   Partial<Record<EndpointRuntimeRouteMethod, EndpointRouteRuntime>>
 >
 
+export type EndpointResponseValidationMode = 'always' | 'development' | 'never'
+
+/** Internal startup decision attached to every discovered endpoint handler. */
+export type EndpointRuntimeAttachmentOptions = {
+  responseValidation: boolean
+}
+
 export type EndpointRuntime = {
+  /**
+   * Runtime checks for values produced by the server. Request validation is
+   * always enabled and is not controlled here.
+   */
+  validation?: {
+    /** Defaults to `development`; use `always` for untyped output boundaries. */
+    response?: EndpointResponseValidationMode
+  }
   /**
    * Shapes the response for any request that does not match its contract. An
    * A route override wins; this runs when that override is absent or declines
@@ -100,6 +115,22 @@ export function validateEndpointRuntime(runtime: unknown): asserts runtime is En
     throw new TypeError('defineEndpointRuntime() expects an object.')
   }
   const candidate = runtime as EndpointRuntime
+  if (candidate.validation !== undefined) {
+    if (
+      typeof candidate.validation !== 'object' ||
+      candidate.validation === null ||
+      Array.isArray(candidate.validation)
+    ) {
+      throw new TypeError('defineEndpointRuntime(): "validation" must be an object.')
+    }
+    assertOnlyRuntimeKeys(candidate.validation, ['response'], 'validation')
+    const mode = candidate.validation.response
+    if (mode !== undefined && !['always', 'development', 'never'].includes(mode)) {
+      throw new TypeError(
+        'defineEndpointRuntime(): "validation.response" must be "always", "development", or "never".',
+      )
+    }
+  }
   for (const key of ['onValidationError', 'wrapHandler'] as const) {
     const value = candidate[key]
     if (value !== undefined && typeof value !== 'function') {
@@ -126,6 +157,14 @@ export function validateEndpointRuntime(runtime: unknown): asserts runtime is En
       throw new TypeError('defineEndpointRuntime(): "openApi.extend" must be a function.')
     }
   }
+}
+
+export function resolveEndpointResponseValidation(
+  runtime: EndpointRuntime | undefined,
+  isDevelopment: boolean,
+): boolean {
+  const mode = runtime?.validation?.response ?? 'development'
+  return mode === 'always' || (mode === 'development' && isDevelopment)
 }
 
 export function resolveEndpointRouteRuntime(

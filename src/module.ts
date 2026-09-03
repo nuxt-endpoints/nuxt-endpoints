@@ -77,6 +77,7 @@ export type EndpointsClientModuleOptions = {
 }
 
 type ResolvedEndpointsModuleOptions = {
+  dev: boolean
   openApi: {
     enabled: boolean
     path: string
@@ -693,6 +694,7 @@ export function resolveModuleOptions(
   isDev: boolean,
 ): ResolvedEndpointsModuleOptions {
   const defaults: ResolvedEndpointsModuleOptions = {
+    dev: isDev,
     openApi: {
       enabled: isDev,
       path: '/_endpoints/schema',
@@ -717,6 +719,7 @@ export function resolveModuleOptions(
 
   if (options.openApi === false) {
     return {
+      dev: defaults.dev,
       client,
       openApi: {
         ...defaults.openApi,
@@ -727,6 +730,7 @@ export function resolveModuleOptions(
 
   if (options.openApi === true) {
     return {
+      dev: defaults.dev,
       client,
       openApi: {
         ...defaults.openApi,
@@ -743,6 +747,7 @@ export function resolveModuleOptions(
   }
 
   return {
+    dev: defaults.dev,
     client,
     openApi: {
       ...defaults.openApi,

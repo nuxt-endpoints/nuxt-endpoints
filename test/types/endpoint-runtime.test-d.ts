@@ -2,6 +2,18 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { defineEndpointRuntime } from '../../src/runtime'
 
 describe('defineEndpointRuntime route overrides', () => {
+  it('accepts only the public response-validation modes', () => {
+    defineEndpointRuntime({ validation: { response: 'development' } })
+    defineEndpointRuntime({ validation: { response: 'always' } })
+    defineEndpointRuntime({ validation: { response: 'never' } })
+    defineEndpointRuntime({
+      validation: {
+        // @ts-expect-error unsupported mode
+        response: 'sometimes',
+      },
+    })
+  })
+
   it('keeps application policy separate from the four idempotency overrides', () => {
     defineEndpointRuntime({
       wrapHandler: async (_context, next) => next(),

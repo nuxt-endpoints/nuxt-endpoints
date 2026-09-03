@@ -60,8 +60,11 @@ The published Nuxt 4 line uses Nitro 2 and H3 1:
    JSON wire mapping.
 
 Because the complete route module is evaluated, build-time dependencies must be
-deterministic. Runtime idempotency storage, scope, and authorization are kept in
-`server/endpoints/runtime.ts` and rejected in the route contract.
+deterministic. Runtime idempotency storage, scope, authorization, and the response
+validation mode are kept in `server/endpoints/runtime.ts` and rejected in the
+route contract. Response body/header schema traversal defaults to development;
+`always` and `never` override that without changing generated types or the
+declared-status check.
 
 ## Nuxt 5 prototype branch
 

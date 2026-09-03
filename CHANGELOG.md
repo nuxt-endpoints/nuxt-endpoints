@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Response body and declared-header schema validation now defaults to
+  development builds instead of traversing every production response. Set
+  `validation.response` in `server/endpoints/runtime.ts` to `always`,
+  `development`, or `never`; request/protocol validation and undeclared-status
+  rejection remain active in every mode.
+
 ## 0.8.0 - 2026-09-02
 
 ### Added

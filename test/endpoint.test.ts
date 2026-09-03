@@ -243,6 +243,56 @@ describe('DefinedEndpoint', () => {
     })
   })
 
+  it('can disable response validation when the server runtime resolves it off', async () => {
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
+
+    const endpoint = defineEndpoint(
+      { responses: { 200: strictUserResponse } },
+      { validation: { response: true } },
+    )
+    const handler = defineEndpointHandler(endpoint, () => ({ id: 'wrong', name: 'Tom' }) as any)
+    const attachRuntime = handler.__set_endpoint_runtime__ as (...args: unknown[]) => void
+    attachRuntime(undefined, undefined, undefined, { responseValidation: false })
+
+    await expect(handler(createEvent({}))).resolves.toEqual({ id: 'wrong', name: 'Tom' })
+  })
+
+  it('still rejects an undeclared status when response schema validation is off', async () => {
+    const { defineEndpoint, defineEndpointHandler, respond } = await import('./internal-runtime')
+
+    const endpoint = defineEndpoint(
+      { responses: { 200: strictUserResponse } },
+      { validation: { response: false } },
+    )
+    const handler = defineEndpointHandler(
+      endpoint,
+      () => respond(201, { id: 1, name: 'Tom' }) as never,
+    )
+
+    await expect(handler(createEvent({}))).rejects.toMatchObject({
+      statusCode: 500,
+      statusMessage: 'Response Contract Error',
+      data: { status: 201, issues: [{ message: 'Response status 201 is not declared' }] },
+    })
+  })
+
+  it('can enable response validation when the server runtime resolves it on', async () => {
+    const { defineEndpoint, defineEndpointHandler } = await import('./internal-runtime')
+
+    const endpoint = defineEndpoint(
+      { responses: { 200: strictUserResponse } },
+      { validation: { response: false } },
+    )
+    const handler = defineEndpointHandler(endpoint, () => ({ id: 'wrong', name: 'Tom' }) as any)
+    const attachRuntime = handler.__set_endpoint_runtime__ as (...args: unknown[]) => void
+    attachRuntime(undefined, undefined, undefined, { responseValidation: true })
+
+    await expect(handler(createEvent({}))).rejects.toMatchObject({
+      statusCode: 500,
+      statusMessage: 'Response Contract Error',
+    })
+  })
+
   it('can validate declared response headers at runtime', async () => {
     const { defineEndpoint, defineEndpointHandler, respond } = await import('./internal-runtime')
 

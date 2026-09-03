@@ -143,6 +143,18 @@ describe('defineEndpointRuntime', () => {
     )
   })
 
+  it('accepts only supported response-validation modes', () => {
+    expect(() => defineEndpointRuntime({ validation: { response: 'development' } })).not.toThrow()
+    expect(() => defineEndpointRuntime({ validation: { response: 'always' } })).not.toThrow()
+    expect(() => defineEndpointRuntime({ validation: { response: 'never' } })).not.toThrow()
+    expect(() => defineEndpointRuntime({ validation: { response: 'sometimes' as never } })).toThrow(
+      /validation\.response.*always.*development.*never/i,
+    )
+    expect(() => defineEndpointRuntime({ validation: { responses: 'never' } as never })).toThrow(
+      /validation\.responses is not supported/i,
+    )
+  })
+
   it('rejects a malformed route runtime entry', () => {
     expect(() =>
       defineEndpointRuntime({

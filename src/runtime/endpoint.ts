@@ -58,7 +58,11 @@ import type {
   EndpointHandlerWrapper,
   EndpointRuntimeResponse,
 } from './interceptor'
-import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
+import type {
+  EndpointRouteRuntime,
+  EndpointRuntime,
+  EndpointRuntimeAttachmentOptions,
+} from './endpoint-runtime'
 import { isValidationErrorResponse } from './validation-error'
 import type {
   EndpointValidationErrorHandler,
@@ -293,6 +297,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     let appValidationErrorHandler: EndpointValidationErrorHandler | undefined
     let appHandlerWrapper: EndpointHandlerWrapper<EndpointDefinition> | undefined
     let routeRuntime: EndpointRouteRuntime | undefined
+    let responseValidation = this.options.validation?.response === true
     const idempotencyOptions = this.idempotencyOptions
 
     // `routeIdentity` and `idempotencyPolicy` are injected after `.handler()`
@@ -340,7 +345,8 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           idempotencyWrapper,
         ].filter((wrapper): wrapper is EndpointHandlerWrapper<DEFINITION> => wrapper !== undefined)
 
-        const execute: EndpointHandlerNext = () => this.executeHandler(handler, context)
+        const execute: EndpointHandlerNext = () =>
+          this.executeHandler(handler, context, responseValidation)
         const response = await wrappers.reduceRight<EndpointHandlerNext>(
           (next, wrapper) => () => wrapper(context, next),
           execute,
@@ -371,11 +377,16 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       __set_endpoint_runtime__: (
         runtime: EndpointRuntime | undefined,
         endpointRuntime?: EndpointRouteRuntime,
+        _identity?: EndpointRouteIdentity,
+        attachment?: EndpointRuntimeAttachmentOptions,
       ) => {
         appValidationErrorHandler = runtime?.onValidationError
         appHandlerWrapper = runtime?.wrapHandler
         idempotencyPolicy = runtime?.idempotency
         routeRuntime = endpointRuntime
+        if (attachment) {
+          responseValidation = attachment.responseValidation
+        }
       },
     })
   }
@@ -383,14 +394,15 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   private async executeHandler(
     handler: (context: EndpointContext<DEFINITION>) => unknown,
     context: EndpointContext<DEFINITION>,
+    responseValidation: boolean,
   ): Promise<EndpointRuntimeResponse> {
     const negotiated = context.responseMediaType as string | undefined
     const result = await handler(context)
 
     if (isStatusResponse(result)) {
-      await this.validateResponse(result.status, result.body)
+      await this.validateResponse(result.status, result.body, responseValidation)
       const headers = this.withResponseHeaders(result.status, negotiated, result.headers)
-      await this.validateResponseHeaders(result.status, headers, result.body)
+      await this.validateResponseHeaders(result.status, headers, result.body, responseValidation)
       return {
         status: result.status,
         body: result.body,
@@ -399,9 +411,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
       }
     }
 
-    await this.validateResponse(200, result)
+    await this.validateResponse(200, result, responseValidation)
     const headers = this.withResponseHeaders(200, negotiated, undefined)
-    await this.validateResponseHeaders(200, headers, result)
+    await this.validateResponseHeaders(200, headers, result, responseValidation)
     return {
       status: 200,
       body: result,
@@ -441,13 +453,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     return withVaryOnAccept(this.negotiates, { ...contentType, ...headers })
   }
 
-  private async validateResponse(status: number, body: unknown) {
-    if (!this.options.validation?.response) {
-      return
-    }
-
+  private async validateResponse(status: number, body: unknown, enabled: boolean) {
     const contract = getResponseContract(this.definition, status)
-    if (!contract) {
+    if (this.definition.responses && !contract) {
       throw createRuntimeError({
         statusCode: 500,
         statusMessage: 'Response Contract Error',
@@ -456,6 +464,10 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
           issues: [{ message: `Response status ${status} is not declared` }],
         },
       })
+    }
+
+    if (!enabled || !contract) {
+      return
     }
 
     // A media response is declared, never checked. There is no schema to
@@ -484,8 +496,9 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
     status: number,
     headers: Readonly<Record<string, string>> | undefined,
     body: unknown,
+    enabled: boolean,
   ) {
-    if (!this.options.validation?.response) {
+    if (!enabled) {
       return
     }
 
@@ -551,6 +564,8 @@ export type EndpointEventHandler<
   __set_endpoint_runtime__: (
     runtime: EndpointRuntime | undefined,
     endpointRuntime?: EndpointRouteRuntime,
+    identity?: EndpointRouteIdentity,
+    attachment?: EndpointRuntimeAttachmentOptions,
   ) => void
 }
 

@@ -103,6 +103,7 @@ export type {
 export { defineEndpointRuntime } from './endpoint-runtime'
 export type {
   EndpointOpenApiRuntime,
+  EndpointResponseValidationMode,
   EndpointRouteIdempotencyRuntime,
   EndpointRouteRuntime,
   EndpointRouteRuntimeMap,

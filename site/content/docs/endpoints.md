@@ -132,8 +132,8 @@ response contract.
 
 ## Response validation
 
-Response schemas drive types, OpenAPI, and runtime response validation. A
-declared response is validated automatically before it is serialized:
+Response schemas drive types, OpenAPI, and optional runtime response validation.
+During development, a declared response is validated before it is serialized:
 
 ```ts
 export default defineRouteHandler({
@@ -147,9 +147,26 @@ export default defineRouteHandler({
 The server value is validated as `Date`; generated HTTP clients see the JSON
 wire value as `string`.
 
-A status can also declare the headers it promises. Declared headers are validated against what is
-actually sent, so a missing or rejected header fails with a `500` response contract error. Header
-names are matched case-insensitively; use an optional schema when a header is not always present.
+Production skips this extra traversal by default. Configure the application-wide
+policy in `server/endpoints/runtime.ts` when response values cross an untyped or
+independently deployed boundary:
+
+```ts
+export default defineEndpointRuntime({
+  validation: {
+    response: 'always', // 'development' (default) | 'always' | 'never'
+  },
+})
+```
+
+The setting controls body and declared-header schema checks only. Request
+validation, status declaration checks, content negotiation, and idempotency stay
+active. In particular, `never` still rejects a status absent from the route contract.
+
+A status can also declare the headers it promises. When response validation is active, declared
+headers are checked against what is actually sent, so a missing or rejected header fails with a
+`500` response contract error. Header names are matched case-insensitively; use an optional schema
+when a header is not always present.
 
 ```ts
 export default defineRouteHandler({
@@ -253,6 +270,10 @@ Application hooks and per-route overrides also live in
 
 ```ts
 export default defineEndpointRuntime({
+  validation: {
+    // The default is 'development'. Use 'always' at an untyped output boundary.
+    response: 'development',
+  },
   onValidationError: ({ kind, source }) => ({
     status: 422,
     body: { error: 'invalid_request', field: source, reason: kind },

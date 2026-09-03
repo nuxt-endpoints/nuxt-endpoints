@@ -488,7 +488,7 @@ Sensitive and hop-by-hop headers, including `set-cookie`, `authorization`,
 must never be stored. The implementation should begin with a small allowlist or
 declared response headers rather than a permissive blocklist.
 
-If the handler throws, response validation fails, or response recording fails,
+If the handler throws, enabled response validation fails, or response recording fails,
 the library releases the matching lease instead of storing the failure. The
 next retry may execute again. This policy does not imply that the handler had no
 side effects before it failed; applications must design those effects accordingly.
@@ -538,7 +538,7 @@ instead of trusting application-instance clocks.
 
 `IdempotencyStoredResponse.hasBody` distinguishes a JSON body from an empty
 endpoint response. When it is `true`, `serializedBody` is JSON text produced by
-the core after response validation. When it is `false`, `serializedBody` is the
+the core after the configured response-validation phase. When it is `false`, `serializedBody` is the
 empty string. Storage adapters persist both fields without parsing or
 re-encoding them, so Redis and database implementations replay the same HTTP
 representation. Values that cannot be serialized as JSON are not recordable

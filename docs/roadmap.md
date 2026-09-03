@@ -42,7 +42,7 @@ belong behind the platform adapter and build-time metadata boundary.
 - Direct, canonical `defineRouteHandler({...})` authoring, including grouped
   method definitions for method-suffix-free routes.
 - Standard Schema request validation with Zod, Valibot, and Effect Schema.
-- Declared per-status responses, runtime response validation, status-aware
+- Declared per-status responses, development-default response validation, status-aware
   client results, and native `.raw()` access.
 - Per-header response contracts in OpenAPI and runtime validation, including
   case-insensitive matching and native `Response` headers.

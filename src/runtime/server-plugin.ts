@@ -11,14 +11,23 @@ import type {
   EndpointRouteIdentity,
 } from './endpoint'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
-import { resolveEndpointRouteRuntime, validateEndpointRuntime } from './endpoint-runtime'
-import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
+import {
+  resolveEndpointResponseValidation,
+  resolveEndpointRouteRuntime,
+  validateEndpointRuntime,
+} from './endpoint-runtime'
+import type {
+  EndpointRouteRuntime,
+  EndpointRuntime,
+  EndpointRuntimeAttachmentOptions,
+} from './endpoint-runtime'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 import { resolveServerRouteResponseMaps, validateServerRouteConfig } from './server-route-config'
 import type { ServerRouteConfig } from './server-route-config'
 
 type EndpointsRuntimeOptions = {
+  dev: boolean
   openApi: {
     enabled: boolean
     title: string
@@ -35,6 +44,7 @@ type HandlerFunction = {
     runtime: EndpointRuntime | undefined,
     endpointRuntime?: EndpointRouteRuntime,
     identity?: EndpointRouteIdentity,
+    attachment?: EndpointRuntimeAttachmentOptions,
   ) => void
 }
 
@@ -66,7 +76,7 @@ export async function initializeEndpointHandlers(
   runtime?: EndpointRuntime,
   serverRouteConfig?: ServerRouteConfig,
 ) {
-  const endpoints = await extractEndpoints(handlers, runtime, serverRouteConfig)
+  const endpoints = await extractEndpoints(handlers, runtime, serverRouteConfig, options.dev)
   if (!options.openApi.enabled) {
     return undefined
   }
@@ -86,6 +96,7 @@ export async function extractEndpoints(
   definitions: HandlerDefinition[],
   runtime?: EndpointRuntime,
   serverRouteConfig?: ServerRouteConfig,
+  isDevelopment = true,
 ) {
   const endpoints = []
   const matchedRuntimeEntries = new Set<string>()
@@ -93,6 +104,9 @@ export async function extractEndpoints(
     HandlerFunction,
     { identity: string; hasOverride: boolean }
   >()
+  const attachment: EndpointRuntimeAttachmentOptions = {
+    responseValidation: resolveEndpointResponseValidation(runtime, isDevelopment),
+  }
 
   for (const definition of definitions) {
     const handler = await resolveHandler(definition)
@@ -118,11 +132,11 @@ export async function extractEndpoints(
           `[nuxt-endpoints] Endpoint ${identity.method} ${identity.routeTemplate} does not expose a runtime attachment hook.`,
         )
       }
-      handler.__set_endpoint_runtime__(runtime, routeRuntime, identity)
+      handler.__set_endpoint_runtime__(runtime, routeRuntime, identity, attachment)
     } else {
-      // Every endpoint receives the application defaults. Preserve the
-      // one-argument path for handlers without a route-specific override.
-      handler.__set_endpoint_runtime__?.(runtime)
+      // Every endpoint receives application defaults and the build-mode
+      // decision even when it has no route-specific runtime override.
+      handler.__set_endpoint_runtime__?.(runtime, undefined, identity, attachment)
     }
 
     if (routeRuntime?.idempotency && !contract.definition.idempotency) {

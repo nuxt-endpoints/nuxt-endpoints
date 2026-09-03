@@ -12,6 +12,7 @@ import type { EndpointRuntime } from './internal-runtime'
 
 vi.mock('#nuxt-endpoints/options', () => ({
   default: {
+    dev: true,
     openApi: { enabled: false, path: '/schema', title: 'Test', version: '1.0.0' },
   },
 }))
@@ -22,6 +23,7 @@ const { extractEndpoints, initializeEndpointHandlers } =
   await import('../src/runtime/server-plugin')
 
 const disabledOpenApiOptions = {
+  dev: true,
   openApi: { enabled: false, path: '/schema', title: 'Test', version: '1.0.0' },
 }
 
@@ -120,10 +122,63 @@ describe('idempotency runtime option resolution at startup', () => {
     await expect(
       extractEndpoints([route('/api/items', 'post', handler)], runtime),
     ).resolves.toHaveLength(1)
-    expect(setRuntime).toHaveBeenCalledWith(runtime, endpointRuntime, {
-      method: 'post',
-      routeTemplate: '/api/items',
-    })
+    expect(setRuntime).toHaveBeenCalledWith(
+      runtime,
+      endpointRuntime,
+      {
+        method: 'post',
+        routeTemplate: '/api/items',
+      },
+      { responseValidation: true },
+    )
+  })
+
+  it('resolves the default response-validation mode from Nuxt dev state', async () => {
+    const developmentHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const productionHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const developmentRuntime = vi.spyOn(developmentHandler, '__set_endpoint_runtime__')
+    const productionRuntime = vi.spyOn(productionHandler, '__set_endpoint_runtime__')
+
+    await extractEndpoints(
+      [route('/api/development', 'get', developmentHandler)],
+      undefined,
+      undefined,
+      true,
+    )
+    await extractEndpoints(
+      [route('/api/production', 'get', productionHandler)],
+      undefined,
+      undefined,
+      false,
+    )
+
+    expect(developmentRuntime).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      { method: 'get', routeTemplate: '/api/development' },
+      { responseValidation: true },
+    )
+    expect(productionRuntime).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      { method: 'get', routeTemplate: '/api/production' },
+      { responseValidation: false },
+    )
+  })
+
+  it('lets an explicit response-validation mode override Nuxt dev state', async () => {
+    const always = defineEndpointRuntime({ validation: { response: 'always' } })
+    const never = defineEndpointRuntime({ validation: { response: 'never' } })
+    const alwaysHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const neverHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const alwaysRuntime = vi.spyOn(alwaysHandler, '__set_endpoint_runtime__')
+    const neverRuntime = vi.spyOn(neverHandler, '__set_endpoint_runtime__')
+
+    await extractEndpoints([route('/api/always', 'get', alwaysHandler)], always, undefined, false)
+    await extractEndpoints([route('/api/never', 'get', neverHandler)], never, undefined, true)
+
+    expect(alwaysRuntime.mock.calls[0]?.[3]).toEqual({ responseValidation: true })
+    expect(neverRuntime.mock.calls[0]?.[3]).toEqual({ responseValidation: false })
   })
 
   it('rejects a runtime entry that does not match a discovered endpoint', async () => {
@@ -219,7 +274,12 @@ describe('idempotency runtime option resolution at startup', () => {
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)])).resolves.toHaveLength(1)
     expect(setPolicy).toHaveBeenCalledOnce()
-    expect(setPolicy).toHaveBeenCalledWith(undefined)
+    expect(setPolicy).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      { method: 'post', routeTemplate: '/api/items' },
+      { responseValidation: true },
+    )
   })
 
   it('resolves runtime options the endpoint omits from the central policy', async () => {
@@ -243,7 +303,12 @@ describe('idempotency runtime option resolution at startup', () => {
       extractEndpoints([route('/api/items', 'post', handler)], runtime),
     ).resolves.toHaveLength(1)
     expect(setPolicy).toHaveBeenCalledOnce()
-    expect(setPolicy).toHaveBeenCalledWith(runtime)
+    expect(setPolicy).toHaveBeenCalledWith(
+      runtime,
+      undefined,
+      { method: 'post', routeTemplate: '/api/items' },
+      { responseValidation: true },
+    )
   })
 
   it('fails startup listing the runtime options missing without any central policy', async () => {
@@ -276,6 +341,7 @@ describe('idempotency runtime option resolution at startup', () => {
 
 describe('OpenAPI document layering from the endpoint runtime file', () => {
   const enabledOpenApiOptions = {
+    dev: true,
     openApi: { enabled: true, path: '/schema', title: 'Test', version: '1.0.0' },
   }
 
