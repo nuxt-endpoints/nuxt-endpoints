@@ -129,6 +129,7 @@ export type OpenApiRoute = {
   path: string
   method: string
   definition: EndpointDefinition
+  serverResponseMaps?: readonly EndpointResponsesContract[]
 }
 
 export function createOpenApiDocument(
@@ -155,7 +156,7 @@ export function createOpenApiDocument(
       tags: endpoint.definition.tags,
       parameters: createParameters(endpoint, schemaContext),
       requestBody: createRequestBody(endpoint.definition, schemaContext),
-      responses: createResponses(endpoint.definition, schemaContext),
+      responses: createResponses(endpoint.definition, schemaContext, endpoint.serverResponseMaps),
     })
   }
 
@@ -325,47 +326,102 @@ function createRequestBody(
 function createResponses(
   definition: EndpointDefinition,
   schemaContext: JsonSchemaConversionContext,
+  serverResponseMaps: readonly EndpointResponsesContract[] = [],
 ): OpenApiOperation['responses'] {
   const responses = normalizeResponses(definition)
   const generated = Object.fromEntries(
     Object.entries(responses).map(([status, response]) => {
-      return [
-        status,
-        omitUndefined({
-          description: responseDescription(response),
-          headers: responseHeaders(response, schemaContext),
-          content: Object.fromEntries(
-            responseContentTypes(response).map((contentType) => [
-              contentType,
-              { schema: responseSchema(response, contentType, schemaContext) },
-            ]),
-          ),
-        }),
-      ]
+      return [status, createDeclaredOpenApiResponse(response, schemaContext)]
     }),
   ) as OpenApiOperation['responses']
+
+  for (const responseMap of serverResponseMaps) {
+    for (const [status, response] of Object.entries(responseMap)) {
+      mergeOpenApiResponse(
+        generated,
+        status,
+        createDeclaredOpenApiResponse(response, schemaContext),
+      )
+    }
+  }
 
   // The framework answers some requests itself, and a document that lists only
   // the statuses an author wrote down is incomplete in a way a consumer cannot
   // detect. Every generated status is merged in, never overwritten: an author
   // who also declared that status keeps their schema alongside this one.
   for (const { status, description, mediaType, schema } of frameworkResponses(definition)) {
-    const existing = generated[status]
-    const existingMedia = existing?.content[mediaType]
-    generated[status] = {
-      ...existing,
-      description: existing?.description ?? description,
+    mergeOpenApiResponse(generated, status, {
+      description,
       content: {
-        ...existing?.content,
         [mediaType]: {
-          ...existingMedia,
-          schema: existingMedia ? { oneOf: [existingMedia.schema, schema] } : schema,
+          schema,
         },
       },
-    }
+    })
   }
 
   return generated
+}
+
+function createDeclaredOpenApiResponse(
+  response: ResponseContract,
+  schemaContext: JsonSchemaConversionContext,
+): OpenApiResponse {
+  return omitUndefined({
+    description: responseDescription(response),
+    headers: responseHeaders(response, schemaContext),
+    content: Object.fromEntries(
+      responseContentTypes(response).map((contentType) => [
+        contentType,
+        { schema: responseSchema(response, contentType, schemaContext) },
+      ]),
+    ),
+  })
+}
+
+function mergeOpenApiResponse(
+  responses: OpenApiOperation['responses'],
+  status: string | number,
+  incoming: OpenApiResponse,
+): void {
+  const existing = responses[status]
+  if (!existing) {
+    responses[status] = incoming
+    return
+  }
+
+  const content = { ...existing.content }
+  for (const [mediaType, incomingMedia] of Object.entries(incoming.content)) {
+    const existingMedia = content[mediaType]
+    content[mediaType] = existingMedia
+      ? {
+          ...existingMedia,
+          schema: { oneOf: [existingMedia.schema, incomingMedia.schema] },
+        }
+      : incomingMedia
+  }
+
+  const headers = { ...existing.headers }
+  for (const [name, incomingHeader] of Object.entries(incoming.headers ?? {})) {
+    const existingHeader = Object.entries(headers).find(
+      ([existingName]) => existingName.toLowerCase() === name.toLowerCase(),
+    )
+    if (existingHeader) {
+      headers[existingHeader[0]] = {
+        ...existingHeader[1],
+        schema: { oneOf: [existingHeader[1].schema, incomingHeader.schema] },
+      }
+    } else {
+      headers[name] = incomingHeader
+    }
+  }
+
+  responses[status] = omitUndefined({
+    ...existing,
+    description: existing.description,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    content,
+  })
 }
 
 type FrameworkResponse = {

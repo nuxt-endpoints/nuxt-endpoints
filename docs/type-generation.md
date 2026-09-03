@@ -2,7 +2,7 @@
 
 Status: maintainer architecture note.
 
-Last verified: 2026-09-02
+Last verified: 2026-09-03
 
 ## Public boundary
 
@@ -39,6 +39,12 @@ const state = await useEndpoint('/api/items/:id', {
 
 Path plus method is the canonical client identity. There are no operation-name
 aliases or generated operation factories.
+
+Application-wide responses live separately in `server/routes.config.ts`.
+Nuxt Endpoints adds matching global, exact-path, prefix (`/**`), and method
+responses to the generated `$endpoint` union and OpenAPI. This is declarative
+composition only: middleware registration and execution remain Nitro's job,
+while NE-specific runtime policy remains in `defineEndpointRuntime`.
 
 ## Nuxt 4 main branch
 

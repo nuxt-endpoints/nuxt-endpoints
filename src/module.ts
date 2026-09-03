@@ -37,12 +37,21 @@ export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
   client?: EndpointsClientModuleOptions
   runtime?: EndpointsRuntimeModuleOptions
+  serverRouteConfig?: EndpointsServerRouteConfigModuleOptions
 }
 
 export type EndpointsRuntimeModuleOptions = {
   /**
    * Path to the application-wide endpoint runtime module, resolved from the
    * project root. Defaults to `server/endpoints/runtime`.
+   */
+  path?: string
+}
+
+export type EndpointsServerRouteConfigModuleOptions = {
+  /**
+   * Path to the application response contract, resolved from the project
+   * root. Defaults to `server/routes.config`.
    */
   path?: string
 }
@@ -171,6 +180,14 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       ? await resolveExplicitConventionPath(nuxt, options.runtime.path, 'endpoints.runtime.path')
       : undefined
     let runtimePathResolved = options.runtime?.path !== undefined
+    let serverRouteConfigPath = options.serverRouteConfig?.path
+      ? await resolveExplicitConventionPath(
+          nuxt,
+          options.serverRouteConfig.path,
+          'endpoints.serverRouteConfig.path',
+        )
+      : undefined
+    let serverRouteConfigPathResolved = options.serverRouteConfig?.path !== undefined
 
     const jiti = createJiti(nuxt.options.rootDir, {
       alias: nuxt.options.alias,
@@ -218,6 +235,19 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           : 'export default undefined\n'
       },
     })
+    addServerTemplate({
+      filename: `#nuxt-${moduleName}/server-route-config`,
+      getContents: () => {
+        if (!serverRouteConfigPathResolved) {
+          throw new Error(
+            '[nuxt-endpoints] Server route config template was requested before Nitro route discovery completed.',
+          )
+        }
+        return serverRouteConfigPath
+          ? `import * as configModule from '${toImportPath(serverRouteConfigPath)}'\nexport default configModule.default\n`
+          : 'export default undefined\n'
+      },
+    })
 
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
     hook('nitro:init', async (nitro) => {
@@ -235,13 +265,27 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           )
           runtimePathResolved = true
         }
+        if (!options.serverRouteConfig?.path) {
+          serverRouteConfigPath = await resolveConventionPath(
+            nuxt.options.rootDir,
+            nitro.options.scanDirs,
+            'routes.config',
+          )
+          serverRouteConfigPathResolved = true
+        }
         const handlers = await composeHandlers(
           collectNitroRouteHandlers(nitro),
           loaders,
           runtimePath !== undefined,
         )
         endpointHandlerManifest = handlers
-        await writeGenerated(typeFile, generateEndpointTypes(resolve, handlers, resolvedOptions))
+        await writeGenerated(
+          typeFile,
+          generateEndpointTypes(resolve, handlers, {
+            ...resolvedOptions,
+            serverRouteConfigPath,
+          }),
+        )
         await writeGenerated(
           runtimeFile,
           generateEndpointClient(resolve, handlers, resolvedOptions),

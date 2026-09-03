@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
-import type { EndpointClient } from '../internal-runtime'
+import type { EndpointClient, EndpointRequestValidationProblem } from '../internal-runtime'
 
 type Client = EndpointClient<{
   path: '/api/users/:id'
@@ -72,11 +72,19 @@ describe('Zod support', () => {
     // @ts-expect-error params.id must match the Zod input.
     client('/api/users/:id', { method: 'get', params: { id: 1 } })
 
-    expectTypeOf<Awaited<typeof user>>().toEqualTypeOf<{
-      status: 200
-      ok: true
-      body: { id: number; name: string }
-      headers: Headers
-    }>()
+    expectTypeOf<Awaited<typeof user>>().toEqualTypeOf<
+      | {
+          status: 200
+          ok: true
+          body: { id: number; name: string }
+          headers: Headers
+        }
+      | {
+          status: 400
+          ok: false
+          body: EndpointRequestValidationProblem
+          headers: Headers
+        }
+    >()
   })
 })

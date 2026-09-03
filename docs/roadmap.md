@@ -52,6 +52,11 @@ belong behind the platform adapter and build-time metadata boundary.
 - Required idempotency keys generated when the request object is created and
   reused by retries of that object.
 - Application-owned idempotency storage and central runtime policy.
+- Global, path-prefix, and method response contracts from
+  `server/routes.config.ts`, composed into client unions and OpenAPI without
+  changing middleware execution.
+- Route-reachable validation (`400`/`406`/`415`) and idempotency
+  (`400`/`409`/`422`) defaults in the generated client status union.
 - OpenAPI 3.1 generation, document extension, media request/response support,
   and Zod native JSON Schema conversion including `z.file()`.
 - Incremental adoption beside ordinary Nitro routes.

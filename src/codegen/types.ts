@@ -32,4 +32,5 @@ export type EndpointClientCodegenOptions = {
   client: {
     raw: boolean
   }
+  serverRouteConfigPath?: string
 }

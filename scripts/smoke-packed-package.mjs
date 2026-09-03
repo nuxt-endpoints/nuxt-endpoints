@@ -84,6 +84,18 @@ export default defineEndpointRuntime({
 `,
   )
   await writeFile(
+    join(smokeRoot, 'server/routes.config.ts'),
+    `import { z } from 'zod'
+import { defineServerRouteConfig } from 'nuxt-endpoints/runtime'
+
+export default defineServerRouteConfig({
+  responses: {
+    503: z.object({ error: z.literal('unavailable') }),
+  },
+})
+`,
+  )
+  await writeFile(
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
@@ -135,6 +147,11 @@ export default defineRouteHandler({
   const serverImports = await readFile(join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'), 'utf8')
 
   assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
+  assertIncludes(
+    endpointTypes,
+    'serverResponses: ServerRouteResponsesFor',
+    'generated application response contract',
+  )
   assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
   assertSymbolExcludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
   assertSymbolExcludes(
@@ -174,6 +191,12 @@ export default defineRouteHandler({
   assertEqual(file.contentEncoding, 'binary', 'z.file() OpenAPI content encoding')
   assertEqual(file.contentMediaType, 'text/plain', 'z.file() OpenAPI media type')
   assertEqual(file.maxLength, 5000, 'z.file() OpenAPI maximum length')
+  assertEqual(
+    schema.paths['/api/echo'].post.responses['503'].content['application/json'].schema.properties
+      .error.const,
+    'unavailable',
+    'application response OpenAPI schema',
+  )
   console.log(`Packed artifact smoke test passed with Nuxt ${nuxtVersion}.`)
 } finally {
   await stopApplication(application)

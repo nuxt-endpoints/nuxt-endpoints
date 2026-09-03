@@ -133,4 +133,15 @@ describe('generateEndpointTypes', () => {
 
     expect(content).toContain('export type $EndpointClient = EndpointClient<')
   })
+
+  it('adds path-aware server responses from the central route config', () => {
+    const content = generateEndpointTypes(resolve, [listUsersHandler], {
+      client: { raw: true },
+      serverRouteConfigPath: '/server/routes.config.ts',
+    })
+
+    expect(content).toContain(
+      "serverResponses: ServerRouteResponsesFor<typeof import('/server/routes.config.ts').default, '/api/users', 'get'>",
+    )
+  })
 })

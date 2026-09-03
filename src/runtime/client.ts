@@ -7,8 +7,10 @@ import type {
   HasEndpointResponses,
   HasMediaResponseContract,
   HttpMethod,
+  IsEndpointBodyMediaTypeMap,
   IsSuccessStatus,
   NormalizeResponses,
+  ResponseMediaTypes,
   ResponseBody,
   StatusNumber,
   UnknownIfNever,
@@ -23,6 +25,7 @@ export type EndpointRouteEntry = {
   method: HttpMethod
   definition: EndpointDefinition
   handlerReturn?: unknown
+  serverResponses?: EndpointResponsesContract
 }
 
 export type EndpointClientFeatureOptions = {
@@ -168,20 +171,212 @@ type EndpointRawCallFeature<
     }
   : {}
 
-export type EndpointResult<ROUTE extends EndpointRouteEntry> =
+type EndpointContractResult<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
     ? EndpointResultValue<NormalizeResponses<ROUTE['definition']>>
     : InferredEndpointResultValue<RouteHandlerReturn<ROUTE>>
 
-export type EndpointResultData<ROUTE extends EndpointRouteEntry> =
+type EndpointContractResultData<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
     ? EndpointResultDataValue<NormalizeResponses<ROUTE['definition']>>
     : InferredEndpointResultDataValue<RouteHandlerReturn<ROUTE>>
 
-export type EndpointRawResponse<ROUTE extends EndpointRouteEntry> =
+type EndpointContractRawResponse<ROUTE extends EndpointRouteEntry> =
   HasEndpointResponses<ROUTE['definition']> extends true
     ? EndpointRawResponseValue<NormalizeResponses<ROUTE['definition']>>
     : InferredEndpointRawResponseValue<RouteHandlerReturn<ROUTE>>
+
+type ServerResponsesForRoute<ROUTE extends EndpointRouteEntry> = ROUTE extends {
+  serverResponses: infer RESPONSES extends EndpointResponsesContract
+}
+  ? RESPONSES
+  : {}
+
+type ServerResultForRoute<ROUTE extends EndpointRouteEntry> = [
+  keyof ServerResponsesForRoute<ROUTE>,
+] extends [never]
+  ? never
+  : {
+      [STATUS in keyof ServerResponsesForRoute<ROUTE>]: StatusNumber<STATUS> extends infer STATUS_NUMBER extends
+        number
+        ? InferredResult<
+            STATUS_NUMBER,
+            IsSuccessStatus<STATUS_NUMBER>,
+            ServerResponseBody<ROUTE, STATUS>,
+            true
+          >
+        : never
+    }[keyof ServerResponsesForRoute<ROUTE>]
+
+type ServerResultDataForRoute<ROUTE extends EndpointRouteEntry> = [
+  keyof ServerResponsesForRoute<ROUTE>,
+] extends [never]
+  ? never
+  : {
+      [STATUS in keyof ServerResponsesForRoute<ROUTE>]: StatusNumber<STATUS> extends infer STATUS_NUMBER extends
+        number
+        ? InferredResult<
+            STATUS_NUMBER,
+            IsSuccessStatus<STATUS_NUMBER>,
+            ServerResponseBody<ROUTE, STATUS>,
+            false
+          >
+        : never
+    }[keyof ServerResponsesForRoute<ROUTE>]
+
+type ServerRawResponseForRoute<ROUTE extends EndpointRouteEntry> = [
+  keyof ServerResponsesForRoute<ROUTE>,
+] extends [never]
+  ? never
+  : {
+      [STATUS in keyof ServerResponsesForRoute<ROUTE>]: StatusNumber<STATUS> extends infer STATUS_NUMBER extends
+        number
+        ? TypedRawResponse<
+            STATUS_NUMBER,
+            IsSuccessStatus<STATUS_NUMBER>,
+            ServerResponseBody<ROUTE, STATUS>
+          >
+        : never
+    }[keyof ServerResponsesForRoute<ROUTE>]
+
+type ServerResponseBody<ROUTE extends EndpointRouteEntry, STATUS> =
+  HasMediaResponseContract<NormalizeResponses<ROUTE['definition']>> extends true
+    ? EndpointMediaResponseStream
+    : HasMediaResponseContract<ServerResponsesForRoute<ROUTE>> extends true
+      ? EndpointMediaResponseStream
+      : STATUS extends keyof ServerResponsesForRoute<ROUTE>
+        ? EndpointWireValue<ResponseBody<ServerResponsesForRoute<ROUTE>[STATUS]>>
+        : never
+
+export type EndpointRequestValidationIssue = {
+  path?: (string | number)[]
+  message: string
+  code?: string
+}
+
+export type EndpointRequestValidationProblem = {
+  statusCode: 400
+  statusMessage: 'Validation Error'
+  data: Partial<Record<'params' | 'query' | 'headers' | 'body', EndpointRequestValidationIssue[]>>
+}
+
+export type EndpointMediaTypeProblem<STATUS extends 406 | 415> = {
+  statusCode: STATUS
+  statusMessage: STATUS extends 406 ? 'Not Acceptable' : 'Unsupported Media Type'
+  data: {
+    message: string
+    received: string | null
+    supportedMediaTypes: string[]
+  }
+}
+
+export type EndpointIdempotencyProblem<STATUS extends 400 | 409 | 422> = {
+  type: 'about:blank'
+  title: string
+  status: STATUS
+  detail: string
+  code: STATUS extends 400
+    ? 'IDEMPOTENCY_KEY_REQUIRED' | 'IDEMPOTENCY_KEY_INVALID'
+    : STATUS extends 409
+      ? 'IDEMPOTENCY_REQUEST_IN_FLIGHT' | 'IDEMPOTENCY_LEASE_LOST'
+      : 'IDEMPOTENCY_KEY_REUSED'
+}
+
+type HasRequestValidation<DEFINITION extends EndpointDefinition> = DEFINITION extends
+  | { params: unknown }
+  | { query: unknown }
+  | { headers: unknown }
+  | { body: unknown }
+  ? true
+  : false
+
+type HasMediaTypeRequest<DEFINITION extends EndpointDefinition> = DEFINITION extends {
+  body: infer BODY
+}
+  ? IsEndpointBodyMediaTypeMap<BODY> extends true
+    ? true
+    : false
+  : false
+
+type IsUnion<VALUE, WHOLE = VALUE> = [VALUE] extends [never]
+  ? false
+  : VALUE extends WHOLE
+    ? [WHOLE] extends [VALUE]
+      ? false
+      : true
+    : false
+
+type HasResponseNegotiation<DEFINITION extends EndpointDefinition> =
+  true extends IsUnion<ResponseMediaTypes<DEFINITION>> ? true : false
+
+type HasIdempotency<DEFINITION extends EndpointDefinition> = DEFINITION extends {
+  idempotency: { enabled: true }
+}
+  ? true
+  : false
+
+type FrameworkClientBody<DEFINITION extends EndpointDefinition, BODY> =
+  HasMediaResponseContract<NormalizeResponses<DEFINITION>> extends true
+    ? EndpointMediaResponseStream
+    : EndpointWireValue<BODY>
+
+type EndpointFrameworkResult<ROUTE extends EndpointRouteEntry, WITH_HEADERS extends boolean> =
+  | (HasRequestValidation<ROUTE['definition']> extends true
+      ? InferredResult<
+          400,
+          false,
+          FrameworkClientBody<ROUTE['definition'], EndpointRequestValidationProblem>,
+          WITH_HEADERS
+        >
+      : never)
+  | (HasMediaTypeRequest<ROUTE['definition']> extends true
+      ? InferredResult<
+          415,
+          false,
+          FrameworkClientBody<ROUTE['definition'], EndpointMediaTypeProblem<415>>,
+          WITH_HEADERS
+        >
+      : never)
+  | (HasResponseNegotiation<ROUTE['definition']> extends true
+      ? InferredResult<
+          406,
+          false,
+          FrameworkClientBody<ROUTE['definition'], EndpointMediaTypeProblem<406>>,
+          WITH_HEADERS
+        >
+      : never)
+  | (HasIdempotency<ROUTE['definition']> extends true
+      ? {
+          [STATUS in 400 | 409 | 422]: InferredResult<
+            STATUS,
+            false,
+            FrameworkClientBody<ROUTE['definition'], EndpointIdempotencyProblem<STATUS>>,
+            WITH_HEADERS
+          >
+        }[400 | 409 | 422]
+      : never)
+
+export type EndpointResult<ROUTE extends EndpointRouteEntry> =
+  | EndpointContractResult<ROUTE>
+  | ServerResultForRoute<ROUTE>
+  | EndpointFrameworkResult<ROUTE, true>
+
+export type EndpointResultData<ROUTE extends EndpointRouteEntry> =
+  | EndpointContractResultData<ROUTE>
+  | ServerResultDataForRoute<ROUTE>
+  | EndpointFrameworkResult<ROUTE, false>
+
+export type EndpointRawResponse<ROUTE extends EndpointRouteEntry> =
+  | EndpointContractRawResponse<ROUTE>
+  | ServerRawResponseForRoute<ROUTE>
+  | FrameworkRawResponseForRoute<ROUTE>
+
+type FrameworkRawResponseForRoute<ROUTE extends EndpointRouteEntry> =
+  EndpointFrameworkResult<ROUTE, false> extends infer RESULT
+    ? RESULT extends { status: infer STATUS extends number; body: infer BODY }
+      ? TypedRawResponse<STATUS, false, BODY>
+      : never
+    : never
 
 export type EndpointResultValue<RESPONSES extends EndpointResponsesContract> = [
   keyof RESPONSES,
