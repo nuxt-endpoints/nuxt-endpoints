@@ -91,7 +91,7 @@ const pitches = [
       },
       {
         icon: 'lucide:sparkles',
-        text: '$endpoint and useEndpoint are fully inferred — auto-imported, routes stay ordinary server/api files',
+        text: '$endpoint and useEndpoint derive request options and status unions from ordinary server/api routes',
       },
       {
         icon: 'lucide:package',
@@ -226,13 +226,13 @@ if (result.status === 404) {
   queryPitch,
   {
     key: 'openapi',
-    title: 'OpenAPI that',
-    titleAccent: "can't go stale.",
-    lead: 'The OpenAPI 3.1 document is generated from the same contracts that run your validation, so there is no spec to keep in sync. Endpoints stay plain HTTP routes.',
+    title: 'OpenAPI from',
+    titleAccent: 'the same contract.',
+    lead: 'The OpenAPI 3.1 document is generated from the contracts that run your validation, removing a separately maintained spec from the normal workflow. Endpoints stay plain HTTP routes.',
     points: [
       {
         icon: 'lucide:file-json',
-        text: 'Served at /_endpoints/schema — always matching the code',
+        text: 'Served at /_endpoints/schema — regenerated from the route contracts',
       },
       {
         icon: 'lucide:wrench',
@@ -332,7 +332,8 @@ const stackItems = [
           <Icon name="lucide:shield-check" size="0.95rem" aria-hidden="true" />
           <span>
             Requires Nuxt 5 with Nitro 3 and h3 v2. This branch builds against prototype forks of
-            h3, Nitro, and fetchdts, so it is an integration branch rather than a released line —
+            h3, Nitro, Nuxt, and fetchdts, so it is an integration branch rather than a released
+            line —
             <NuxtLink to="/docs/getting-started#compatibility">how compatibility works</NuxtLink>
             · <NuxtLink to="/docs/nuxt5-progress">Nuxt 5 integration progress</NuxtLink>
           </span>

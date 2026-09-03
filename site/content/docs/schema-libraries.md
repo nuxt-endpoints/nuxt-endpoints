@@ -19,8 +19,9 @@ Effect Schema can be passed directly to endpoint definitions. Runtime parsing us
 
 ```ts
 import { Schema } from 'effect'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
-defineRouteHandler({
+export default defineRouteHandler({
   params: Schema.Struct({
     id: Schema.NumberFromString,
   }),
@@ -44,10 +45,11 @@ For Valibot, request-side OpenAPI schemas use input mode and response-side schem
 
 ```ts
 import * as v from 'valibot'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 const Id = v.pipe(v.string(), v.transform(Number), v.number())
 
-defineRouteHandler({
+export default defineRouteHandler({
   validate: {
     body: v.object({ id: Id }), // OpenAPI request schema: string
     response: { 200: v.object({ id: Id }) }, // OpenAPI response schema: number

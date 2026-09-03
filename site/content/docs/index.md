@@ -6,8 +6,8 @@ description: Typed APIs, generated clients, and OpenAPI for Nuxt server routes �
 Nuxt Endpoints lets you describe an HTTP endpoint once, next to its handler, with the schema library you already use — Zod, Valibot, or Effect Schema. Everything else is derived from that single definition:
 
 - **Runtime validation** — `params`, `query`, `headers`, and `body` are validated before your handler runs. Handler code sees parsed schema output, so coercion and transforms are already applied.
-- **A fully typed client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses are all inferred. No codegen step, no types to import.
-- **OpenAPI 3.1** — a document generated from the same schemas, served at `/_endpoints/schema`. There is no separate spec to maintain, so it cannot go stale.
+- **A contract-derived client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses come from the route contract. No codegen step, no types to import.
+- **OpenAPI 3.1** — a document generated from the same schemas and served at `/_endpoints/schema`, without a separately maintained spec in the normal workflow.
 
 ## Show me
 

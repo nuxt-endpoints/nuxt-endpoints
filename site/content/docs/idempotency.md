@@ -12,6 +12,7 @@ Storage, scope resolution, and authorization are usually the same for every idem
 ```ts
 // server/endpoints/runtime.ts
 import { createRedisIdempotencyStorage } from '../utils/idempotency-storage'
+import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
 
 const storage = createRedisIdempotencyStorage()
 
@@ -37,6 +38,8 @@ The same file can override request-time behavior for one generated route. Use th
 route template (including `:param` segments) and lowercase HTTP method:
 
 ```ts
+import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
+
 export default defineEndpointRuntime({
   idempotency: {
     storage: () => storage,
@@ -74,6 +77,7 @@ With a central policy in place, an endpoint declares only its contract-side meta
 
 ```ts
 import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
   validate: {

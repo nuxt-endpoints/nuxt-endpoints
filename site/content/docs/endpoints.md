@@ -241,6 +241,8 @@ defaults; a generated route and method can override either hook in the same
 
 ```ts
 // server/endpoints/runtime.ts
+import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
+
 export default defineEndpointRuntime({
   onValidationError: ({ kind, source, event }) => ({
     status: 422,

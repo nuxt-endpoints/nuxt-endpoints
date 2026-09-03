@@ -69,6 +69,18 @@ primitives:
 - Content negotiation and `respond()`. Both are candidates to return to h3, which already owns
   the response contract shape but does not negotiate or provide a way to set a status.
 
+## How the integration is verified
+
+- A fixture-level type test compares every generated Nuxt Endpoints route with Nuxt's
+  `ServerRoutes`, rejects missing or `never` entries, and checks that the ordinary successful
+  response and status-aware contract remain compatible across the two client views.
+- The SQLite idempotency adapter is exercised through independent real database connections in
+  worker threads. The conformance test covers concurrent ownership, replay, fingerprint conflicts,
+  lease fencing, expiry, and release rather than replacing the database with a mock.
+
+These checks prove the current pinned prototype as a unit. They are not a claim that the extension
+points have been accepted by the upstream projects.
+
 ## What stays stable
 
 `$endpoint` and `useEndpoint` are useful application-facing APIs independently of where route

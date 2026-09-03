@@ -20,6 +20,7 @@ Describe the HTTP contract once, next to the handler, with the schema library yo
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
   summary: 'Get a user',
@@ -43,7 +44,7 @@ That single definition gives you:
 
 **1. Runtime validation** — `params`, `query`, `headers`, and `body` are validated before the handler runs. Handler code sees the parsed schema output, so coercion and transforms are already applied.
 
-**2. A fully typed client** — no codegen step to run, no types to import:
+**2. A contract-derived client** — no codegen step to run, no types to import:
 
 ```vue
 <script setup lang="ts">

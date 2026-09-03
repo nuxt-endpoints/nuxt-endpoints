@@ -3,7 +3,7 @@ title: Getting Started
 description: Install the module, define your first endpoint, and call it with types.
 ---
 
-In a few minutes you will have a Nuxt route that validates its input at runtime, a client call with fully inferred types, and an OpenAPI document — all from one endpoint definition.
+In a few minutes you will have a Nuxt route that validates its input at runtime, a client call whose request and declared responses come from the route contract, and an OpenAPI document — all from one endpoint definition.
 
 ## Compatibility
 

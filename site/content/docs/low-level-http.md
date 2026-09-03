@@ -12,6 +12,9 @@ Response type checking only applies when a route opts into a response contract. 
 Non-JSON bodies are not a reason to leave, though: files, streams, XML, CSV, and event streams all have a [first-class declaration](/docs/endpoints#non-json-responses) that keeps them in the contract without pretending their payload is validated.
 
 ```ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: (event) => {
@@ -36,6 +39,9 @@ A download is a media response like any other, so it can stay in the contract:
 
 ```ts
 // server/api/files/[id].get.ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   validate: {
@@ -66,6 +72,9 @@ When the content type varies per file and cannot be declared, drop the response 
 
 ```ts
 // server/api/files/[id].get.ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: async (event) => {
@@ -105,6 +114,8 @@ only when you need streaming part-by-part processing instead of a parsed form.
 
 ```ts
 // server/api/uploads.post.ts
+import { createError, defineEventHandler, readMultipartFormData } from 'h3'
+
 export default defineEventHandler(async (event) => {
   const parts = await readMultipartFormData(event)
   const file = parts?.find((part) => part.name === 'file')
@@ -139,6 +150,8 @@ body so callers receive the live stream.
 
 ```ts
 // server/api/events.get.ts
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   validate: {
     response: {
@@ -186,6 +199,9 @@ For API redirects, return a native redirect response. Browser fetch follows redi
 
 ```ts
 // server/api/auth/callback.get.ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   validate: {
     query: z.object({ next: z.string().optional() }),
@@ -220,6 +236,9 @@ Proxy routes are also raw HTTP routes. Return the upstream `Response` and call `
 
 ```ts
 // server/api/proxy/[id].get.ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   params: z.object({ id: z.string() }),
   handler: async (event) => {
@@ -243,6 +262,8 @@ Use raw `Response` returns when the route owns status, headers, cookies, or a bo
 
 ```ts
 // server/api/report.get.ts
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   handler: () => {
     return new Response('created', {
@@ -267,6 +288,9 @@ For no-content JSON API routes, keep the response contract. Declare `204` and re
 
 ```ts
 // server/api/sessions/current.delete.ts
+import { z } from 'zod'
+import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+
 export default defineRouteHandler({
   validate: {
     response: {

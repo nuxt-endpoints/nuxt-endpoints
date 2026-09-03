@@ -30,6 +30,8 @@ Everything else about the document belongs to the application rather than to any
 
 ```ts
 // server/endpoints/runtime.ts
+import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
+
 export default defineEndpointRuntime({
   openApi: {
     document: {
