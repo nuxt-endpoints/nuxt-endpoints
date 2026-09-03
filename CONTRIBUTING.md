@@ -1,6 +1,6 @@
 # Contributing to Nuxt Endpoints
 
-Thanks for your interest in contributing! The project is in early alpha, so issues, questions, and small focused pull requests are all welcome.
+Thanks for your interest in contributing! The project is in beta, so issues, questions, and small focused pull requests are all welcome.
 
 ## Project layout
 

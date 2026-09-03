@@ -71,7 +71,7 @@ function applyTheme(value: Theme) {
             </svg>
           </span>
           <span class="value">Nuxt Endpoints</span>
-          <small class="note">alpha</small>
+          <small class="note">beta</small>
         </span>
       </NuxtLink>
 
@@ -338,7 +338,7 @@ function applyTheme(value: Theme) {
     }
   }
 
-  /* At phone widths the alpha badge gives way: the name and the controls both
+  /* At phone widths the beta badge gives way: the name and the controls both
      have to survive, and one column of links beats two cramped ones. */
   @media (max-width: 480px) {
     > .unit {
