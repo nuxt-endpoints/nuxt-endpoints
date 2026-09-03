@@ -7,17 +7,17 @@ In a few minutes you will have a Nuxt route that validates its input at runtime,
 
 ## Compatibility
 
-Nuxt Endpoints targets Nuxt 5 with Nitro 3 and h3 v2. It currently resolves forks of h3, Nitro, Nuxt, and fetchdts that carry route-contract work not yet released upstream, so this is an integration branch rather than a support claim for published packages. The Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch.
+Nuxt Endpoints targets Nuxt 5 with Nitro 3 and h3 v2. It currently resolves pinned public forks of h3, Nitro, Nuxt, and fetchdts that carry route-contract work not yet released upstream, so this is a source integration branch rather than a support claim for published packages. The Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch and is the version published to npm.
 
 This section is the single source for the supported platform line; other pages link here instead of restating it.
 
 ## Install
 
-Add Nuxt Endpoints through the Nuxt CLI:
-
-```bash
-npx nuxt module add nuxt-endpoints
-```
+The Nuxt 5 integration is not published to npm yet. Clone the `nuxt5` branch and follow the
+[pinned fork setup in the README](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/nuxt5#try-the-nuxt-5-integration-branch).
+It checks out every fork into the repository-local `.upstream/` directory, so the exact source
+used by this branch remains inspectable. The usual `npx nuxt module add nuxt-endpoints` command
+installs the published Nuxt 4 line instead.
 
 Then install the schema library you want to use in endpoint definitions — Zod, Valibot, and Effect are optional peer dependencies:
 
@@ -82,7 +82,7 @@ From here:
 
 ## Configure Nuxt
 
-The Nuxt CLI adds `nuxt-endpoints` to `modules`. The generated OpenAPI route and optional client helpers can be configured through `endpoints`.
+Add `nuxt-endpoints` to `modules`. The generated OpenAPI route and optional client helpers can be configured through `endpoints`.
 
 ```ts
 export default defineNuxtConfig({

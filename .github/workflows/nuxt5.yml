@@ -32,42 +32,48 @@ jobs:
 
       - name: Checkout pinned route-contract prototypes
         run: |
-          mkdir -p ../upstream
-          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/fetchdts.git ../upstream/fetchdts
-          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/h3.git ../upstream/h3
-          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/nitro.git ../upstream/nitro
-          git clone --depth 1 --branch prototype/route-metadata https://github.com/nuxt-endpoints/nuxt.git ../upstream/nuxt
-          git -C ../upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          git -C ../upstream/h3 fetch --depth 1 origin efdaeb06d71a5f470256f71d600324fcab75a9a2
-          git -C ../upstream/nitro fetch --depth 1 origin 83f2000389a533edb3859f6e1c2244ee55032c48
-          git -C ../upstream/nuxt fetch --depth 1 origin 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
-          git -C ../upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          git -C ../upstream/h3 checkout --detach efdaeb06d71a5f470256f71d600324fcab75a9a2
-          git -C ../upstream/nitro checkout --detach 83f2000389a533edb3859f6e1c2244ee55032c48
-          git -C ../upstream/nuxt checkout --detach 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
-          test "$(git -C ../upstream/fetchdts rev-parse HEAD)" = de56ae24aea700c0ec2b26f8b56811fdd8940a63
-          test "$(git -C ../upstream/h3 rev-parse HEAD)" = efdaeb06d71a5f470256f71d600324fcab75a9a2
-          test "$(git -C ../upstream/nitro rev-parse HEAD)" = 83f2000389a533edb3859f6e1c2244ee55032c48
-          test "$(git -C ../upstream/nuxt rev-parse HEAD)" = 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+          mkdir -p .upstream
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/fetchdts.git .upstream/fetchdts
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/h3.git .upstream/h3
+          git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/nitro.git .upstream/nitro
+          git clone --depth 1 --branch prototype/route-metadata https://github.com/nuxt-endpoints/nuxt.git .upstream/nuxt
+          git -C .upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          git -C .upstream/h3 fetch --depth 1 origin efdaeb06d71a5f470256f71d600324fcab75a9a2
+          git -C .upstream/nitro fetch --depth 1 origin 83f2000389a533edb3859f6e1c2244ee55032c48
+          git -C .upstream/nuxt fetch --depth 1 origin 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+          git -C .upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          git -C .upstream/h3 checkout --detach efdaeb06d71a5f470256f71d600324fcab75a9a2
+          git -C .upstream/nitro checkout --detach 83f2000389a533edb3859f6e1c2244ee55032c48
+          git -C .upstream/nuxt checkout --detach 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+          test "$(git -C .upstream/fetchdts rev-parse HEAD)" = de56ae24aea700c0ec2b26f8b56811fdd8940a63
+          test "$(git -C .upstream/h3 rev-parse HEAD)" = efdaeb06d71a5f470256f71d600324fcab75a9a2
+          test "$(git -C .upstream/nitro rev-parse HEAD)" = 83f2000389a533edb3859f6e1c2244ee55032c48
+          test "$(git -C .upstream/nuxt rev-parse HEAD)" = 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
 
       - name: Build fetchdts prototype
-        working-directory: ../upstream/fetchdts
+        working-directory: .upstream/fetchdts
         run: vp install --frozen-lockfile && vp run build
 
       - name: Build H3 prototype
-        working-directory: ../upstream/h3
+        working-directory: .upstream/h3
         run: vp install --frozen-lockfile && vp run build
 
       - name: Build Nitro prototype
-        working-directory: ../upstream/nitro
-        run: vp install --frozen-lockfile && vp run build
+        working-directory: .upstream/nitro
+        # Nitro's build tooling needs the TypeScript Compiler API. The native
+        # TypeScript 7 package does not provide a stable compatible API yet.
+        run: |
+          vp add -D typescript@npm:@typescript/typescript6@6.0.2
+          vp run build
 
       - name: Pack Nuxt prototype
+        working-directory: .upstream/nuxt
         run: |
-          cd ../upstream/nuxt
           vp install --frozen-lockfile
-          cd "$GITHUB_WORKSPACE"
-          vp run prepare:nuxt5-fork
+          mkdir -p .prototype-pack
+          for package in schema kit nitro-server vite-server vite nuxt; do
+            (cd "packages/$package" && vp pm pack --pack-destination ../../.prototype-pack)
+          done
 
       - name: Install Nuxt Endpoints
         # The six Nuxt packages are built and packed on this runner. Their

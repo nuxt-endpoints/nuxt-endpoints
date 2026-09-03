@@ -62,7 +62,6 @@
     "site:generate": "node site/scripts/generate-magic-tokens.mjs && node site/scripts/check-playground-types.mjs && nuxi generate site",
     "site:preview": "nuxi preview site",
     "prepack": "nuxt-module-build build",
-    "prepare:nuxt5-fork": "node scripts/pack-nuxt-fork.mjs",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",

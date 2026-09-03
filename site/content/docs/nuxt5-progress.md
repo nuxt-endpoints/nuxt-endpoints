@@ -25,8 +25,12 @@ fetchdts, or Nuxt repositories yet**, so nothing here should be read as an upstr
 The branches are kept together because the prototype crosses project boundaries, and this
 repository links these exact forks while the upstream API shape is being worked out.
 
-Because those forks are resolved through local links, this branch cannot be installed from the
-public npm registry. Use the `main` branch for that.
+The exact fork commits can be reproduced from a fresh checkout by following the
+[README setup](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/nuxt5#try-the-nuxt-5-integration-branch).
+It clones all four public source trees into the ignored `.upstream/` directory. h3, Nitro, and
+fetchdts are linked directly; Nuxt is packed from that visible source tree only to preserve its
+monorepo `workspace:` dependency semantics. This branch still cannot be installed from the public
+npm registry. Use the `main` branch for that.
 
 > **Current integration work:** Nitro removed its built-in typed-fetch pipeline in
 > [nitro#4572](https://github.com/nitrojs/nitro/pull/4572), after route type generation moved to

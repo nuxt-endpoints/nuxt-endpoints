@@ -14,12 +14,16 @@ Thanks for your interest in contributing! The project is in early alpha, so issu
 
 Requires Node 22.19+, 24.11+, or 26+ and [Vite+](https://viteplus.dev).
 
-The `tsc` command resolves to TypeScript 7. Build tooling that needs the
+On the `nuxt5` branch, first follow [Try the Nuxt 5 integration branch](./README.md#try-the-nuxt-5-integration-branch)
+to clone and build the pinned public forks inside `.upstream/`. The directory is ignored, but its
+exact source commits are part of the documented and CI-tested setup.
+
+Type-aware linting uses the TypeScript 7 engine. Build tooling that needs the
 Compiler API resolves `typescript` to the official TypeScript 6 compatibility
 package until the TypeScript 7 API is available.
 
 ```bash
-vp install
+vp install # after the Nuxt 5 fork setup above
 vp run dev:prepare   # stub build + prepare (run once, and after changing module entry points)
 vp run dev           # playground with the module loaded
 ```

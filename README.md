@@ -13,6 +13,57 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 
 > Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative.
 
+## Try the Nuxt 5 integration branch
+
+The `nuxt5` branch integrates source changes that are not released by h3, Nitro, Nuxt, or
+fetchdts yet. A normal package install is therefore not enough. From a fresh checkout, clone the
+pinned public forks into the ignored `.upstream/` directory and build them before installing this
+repository:
+
+```bash
+git clone --branch nuxt5 https://github.com/nuxt-endpoints/nuxt-endpoints.git
+cd nuxt-endpoints
+
+mkdir .upstream
+git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/fetchdts.git .upstream/fetchdts
+git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/h3.git .upstream/h3
+git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-endpoints/nitro.git .upstream/nitro
+git clone --depth 1 --branch prototype/route-metadata https://github.com/nuxt-endpoints/nuxt.git .upstream/nuxt
+
+git -C .upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
+git -C .upstream/h3 fetch --depth 1 origin efdaeb06d71a5f470256f71d600324fcab75a9a2
+git -C .upstream/nitro fetch --depth 1 origin 83f2000389a533edb3859f6e1c2244ee55032c48
+git -C .upstream/nuxt fetch --depth 1 origin 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+
+git -C .upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
+git -C .upstream/h3 checkout --detach efdaeb06d71a5f470256f71d600324fcab75a9a2
+git -C .upstream/nitro checkout --detach 83f2000389a533edb3859f6e1c2244ee55032c48
+git -C .upstream/nuxt checkout --detach 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+
+(cd .upstream/fetchdts && vp install --frozen-lockfile && vp run build)
+(cd .upstream/h3 && vp install --frozen-lockfile && vp run build)
+(cd .upstream/nitro && vp add -D typescript@npm:@typescript/typescript6@6.0.2 && vp run build)
+(cd .upstream/nuxt && vp install --frozen-lockfile)
+
+mkdir -p .upstream/nuxt/.prototype-pack
+for package in schema kit nitro-server vite-server vite nuxt; do
+  (cd ".upstream/nuxt/packages/$package" && vp pm pack --pack-destination ../../.prototype-pack)
+done
+
+vp install --no-frozen-lockfile -- --update-checksums
+vp run dev:prepare
+vp run check
+```
+
+The h3, Nitro, and fetchdts dependencies link directly to those visible source trees. The Nuxt
+packages are packed locally from `.upstream/nuxt` only because their monorepo manifests use
+`workspace:` dependencies; the tarballs are generated build inputs, not downloaded opaque forks.
+Nitro temporarily uses the official TypeScript 6 compatibility package for its build tooling
+because TypeScript 7 does not provide the stable Compiler API that its declaration build needs.
+This changes only the build-time development dependency in the ignored Nitro clone; the Nuxt
+Endpoints toolchain remains pinned by this repository. The CI workflow runs the same checkout and
+preparation sequence.
+
 ## One definition, everything typed
 
 Describe the HTTP contract once, next to the handler, with the schema library you already use (Zod, Valibot, or Effect Schema):
@@ -77,9 +128,10 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Pinia Colada integration through standard `.queryOptions()` / `.mutationOptions()`, with its official Nuxt SSR module
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 
-## Quick Start
+## Published Nuxt 4 line
 
-Requires Nuxt 5 with Nitro 3 and h3 v2 — see [Compatibility](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started#compatibility) for the supported platform line.
+The package currently published to npm targets Nuxt 4 with Nitro 2 and h3 v1. Its source and
+documentation live on the [`main` branch](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/main).
 
 ```bash
 npx nuxt module add nuxt-endpoints
@@ -93,7 +145,7 @@ npm install zod
 # or: npm install effect
 ```
 
-That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
 
 Module options (OpenAPI route and optional client methods) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 

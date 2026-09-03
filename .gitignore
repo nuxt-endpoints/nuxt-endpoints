@@ -31,3 +31,6 @@ site/app/utils/magic-tokens.generated.ts
 
 # Local scratch: blog drafts, notes. Never committed.
 .sandbox/
+
+# Pinned Nuxt 5 prototype forks cloned by contributors.
+.upstream/
