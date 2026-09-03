@@ -331,7 +331,7 @@ function collectDiagnostics(
     strict: true,
     target: ts.ScriptTarget.ES2022,
   }
-  const host = createCompilerHost(ts, rootFiles, compilerOptions)
+  const host = createCompilerHost(ts, rootFiles)
   const program = ts.createProgram(Object.keys(rootFiles), compilerOptions, host)
 
   return ts
@@ -480,11 +480,7 @@ function createVirtualFiles(files: Record<PlaygroundFile, string>) {
   }
 }
 
-function createCompilerHost(
-  ts: TypeScriptModule,
-  files: Record<string, string>,
-  compilerOptions: import('typescript').CompilerOptions,
-) {
+function createCompilerHost(ts: TypeScriptModule, files: Record<string, string>) {
   return {
     getSourceFile(fileName, languageVersion) {
       const normalizedFileName = normalizeFileName(fileName)
@@ -613,7 +609,7 @@ declare function $endpoint(
 
 <template>
   <div class="ne-type-playground">
-    <p class="text -intro">
+    <p class="p -intro">
       A real TypeScript compiler runs in your browser against a miniature of the generated endpoint
       types. Pick an example, then edit either file — the diagnostics below update as you type.
     </p>
@@ -632,7 +628,7 @@ declare function $endpoint(
       </button>
     </div>
 
-    <p v-if="activePreset" class="text -hint">{{ activePreset.hint }}</p>
+    <p v-if="activePreset" class="p -hint">{{ activePreset.hint }}</p>
 
     <div class="unit">
       <section class="section" aria-label="Server contract">
@@ -651,7 +647,7 @@ declare function $endpoint(
           <small class="note">Generated from the server endpoint type</small>
         </div>
 
-        <p v-if="resultStatus" class="text" :data-status="resultStatus">{{ resultMessage }}</p>
+        <p v-if="resultStatus" class="p" :data-status="resultStatus">{{ resultMessage }}</p>
         <ul v-else class="list">
           <li v-for="diagnostic in diagnostics" :key="diagnostic.id" class="item">
             <div class="seg">
@@ -726,7 +722,7 @@ declare function $endpoint(
   display: grid;
   gap: var(--space-200);
 
-  > .text {
+  > .p {
     margin: 0;
 
     &.-intro {
@@ -836,7 +832,7 @@ declare function $endpoint(
           }
         }
 
-        > .text {
+        > .p {
           margin: 0;
           padding: var(--space-200);
 
@@ -1047,52 +1043,24 @@ declare function $endpoint(
   }
 
   @media (max-width: 620px) {
-    > .unit > .section {
-      &:last-child > .field {
-        align-items: flex-start;
-        flex-direction: column;
-      }
+    > .unit {
+      > .section {
+        &:last-child {
+          > .field {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+        }
 
-      &:not(:last-child) {
-        grid-template-rows: auto minmax(14rem, 1fr);
+        &:not(:last-child) {
+          grid-template-rows: auto minmax(14rem, 1fr);
 
-        > .media {
-          min-height: 14rem;
+          > .media {
+            min-height: 14rem;
+          }
         }
       }
     }
-  }
-}
-
-/* CodeMirror renders non-owned DOM. These :deep() rules stay un-nested:
-   Vue's scoped compiler mis-emits :deep() inside nested rules. */
-.ne-type-playground > .unit > .section > .media :deep(.cm-editor) {
-  height: 100%;
-  min-height: 18rem;
-  background: transparent;
-  color: var(--code-ink);
-}
-
-.ne-type-playground > .unit > .section > .media :deep(.cm-scroller) {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-}
-
-.ne-type-playground > .unit > .section > .media :deep(.cm-content) {
-  tab-size: 2;
-}
-
-.ne-type-playground > .unit > .section > .media :deep(.cm-tooltip) {
-  border: var(--stroke-default) solid var(--code-border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
-@media (max-width: 620px) {
-  .ne-type-playground > .unit > .section > .media :deep(.cm-editor) {
-    min-height: 14rem;
-    font-size: var(--text-xs);
   }
 }
 </style>

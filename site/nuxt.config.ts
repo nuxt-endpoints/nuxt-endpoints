@@ -3,7 +3,7 @@ import { docsNav } from './app/utils/docs'
 export default defineNuxtConfig({
   compatibilityDate: '2024-08-24',
   devtools: { enabled: false },
-  modules: ['@nuxt/content', '@nuxt/icon'],
+  modules: ['@nuxt/content', '@nuxt/icon', '@nuxt/eslint'],
   css: ['~/assets/css/base.css'],
   app: {
     baseURL: process.env.NUXT_APP_BASE_URL || '/',

@@ -36,12 +36,13 @@ Run the full check — CI runs the same command:
 vp run check
 ```
 
-It covers formatting (`oxfmt`), linting (`oxlint`), type checks, unit tests, and the Nuxt integration tests. Useful subsets while iterating:
+It covers formatting (`oxfmt`), source linting (`oxlint`), the site's Nagi CSS contract (`eslint`), type checks, unit tests, and the Nuxt integration tests. Useful subsets while iterating:
 
 ```bash
 vp run test            # unit tests
 vp run test:e2e        # integration tests through a real Nuxt build
 vp run typecheck       # module types
+vp run lint:css        # Nuxt ESLint + Nagi CSS for the documentation site
 vp run fmt             # apply formatting
 ```
 
