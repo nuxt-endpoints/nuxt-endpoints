@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { docsNav } from '../utils/docs'
-import { contractSteps } from '../utils/snippets'
 
 useHead({
   title: 'Nuxt Endpoints',
@@ -24,9 +23,6 @@ const starterLinks = computed(() =>
     .filter((item) => item.to !== '/docs')
     .map((item) => ({ ...item, description: docsDescriptions.value?.[item.to] ?? '' })),
 )
-const activeStepIndex = ref(0)
-const activeStep = computed(() => contractSteps[activeStepIndex.value] ?? contractSteps[0])
-
 const queryPitch = {
   key: 'query',
   title: 'Your contract,',
@@ -338,23 +334,6 @@ const stackItems = [
             · <NuxtLink to="/docs/nuxt5-progress">Nuxt 5 integration progress</NuxtLink>
           </span>
         </p>
-
-        <div class="seg -step">
-          <Transition name="hero-step-fade" mode="out-in">
-            <div :key="activeStepIndex" class="fr">
-              <h2 class="title">{{ activeStep.title }}</h2>
-              <p class="text">
-                <template v-for="part in activeStep.description" :key="part.text">
-                  <span class="value" :data-tone="part.tone || undefined">{{ part.text }}</span>
-                </template>
-              </p>
-            </div>
-          </Transition>
-        </div>
-      </div>
-
-      <div class="unit -walkthrough">
-        <EndpointWalkthrough v-model="activeStepIndex" />
       </div>
     </section>
 
@@ -468,17 +447,9 @@ const stackItems = [
     margin: 0 auto;
 
     &.-hero {
-      --hero-walkthrough-height: 36.5rem;
-      --hero-code-width: 38rem;
       position: relative;
-      display: grid;
-      grid-template-columns: minmax(0, 40rem) minmax(0, var(--hero-code-width));
-      justify-content: center;
-      column-gap: clamp(var(--space-100), 1.2vw, var(--space-300));
-      row-gap: var(--space-500);
-      align-items: start;
       isolation: isolate;
-      padding: var(--space-1000) 0 var(--space-700);
+      padding: clamp(var(--space-800), 8vw, 7rem) 0 clamp(var(--space-700), 7vw, 6rem);
 
       > .unit {
         position: relative;
@@ -486,11 +457,12 @@ const stackItems = [
 
         &.-copy {
           display: flex;
-          min-height: var(--hero-walkthrough-height);
           flex-direction: column;
-          justify-content: flex-start;
+          align-items: center;
           min-width: 0;
-          max-width: 40rem;
+          max-width: 58rem;
+          margin: 0 auto;
+          text-align: center;
 
           > .title {
             max-width: none;
@@ -501,7 +473,7 @@ const stackItems = [
             );
             background-clip: text;
             color: transparent;
-            font-size: clamp(var(--text-5xl), 4.15vw, var(--text-hero));
+            font-size: clamp(var(--text-5xl), 5.4vw, 4.65rem);
             -webkit-background-clip: text;
 
             > .value {
@@ -513,6 +485,7 @@ const stackItems = [
             &.-stack {
               display: flex;
               align-items: center;
+              justify-content: center;
               flex-wrap: wrap;
               gap: var(--space-150);
               margin-bottom: var(--space-350);
@@ -577,112 +550,18 @@ const stackItems = [
                 }
               }
             }
-
-            &.-step {
-              --local-callout-tail-outer-block: 0.7rem;
-              --local-callout-tail-outer-inline: 1.12rem;
-              --local-callout-tail-inner-block: 0.58rem;
-              --local-callout-tail-inner-inline: 0.94rem;
-              --local-callout-tail-mobile-outer: 1.18rem;
-              --local-callout-tail-mobile-inner: 0.96rem;
-              --hero-step-surface:
-                linear-gradient(145deg, var(--hero-step-glass), transparent 42%),
-                radial-gradient(circle at 12% 0, var(--hero-step-glow), transparent 38%),
-                var(--hero-step-bg);
-              position: relative;
-              display: grid;
-              max-width: 38rem;
-              min-height: 7.2rem;
-              align-content: start;
-              gap: var(--space-100);
-              margin-top: var(--space-075);
-              border: var(--stroke-default) solid var(--hero-step-border);
-              border-radius: var(--radius-md);
-              background: var(--hero-step-surface);
-              backdrop-filter: blur(18px) saturate(1.16);
-              box-shadow: var(--hero-step-shadow);
-              padding: var(--space-200) var(--space-250) var(--space-200);
-              -webkit-backdrop-filter: blur(18px) saturate(1.16);
-
-              &::before {
-                position: absolute;
-                z-index: 2;
-                top: 3.35rem;
-                right: 0;
-                border-style: solid;
-                border-width: var(--local-callout-tail-outer-block) 0
-                  var(--local-callout-tail-outer-block) var(--local-callout-tail-outer-inline);
-                border-color: transparent transparent transparent var(--hero-step-border);
-                content: '';
-                pointer-events: none;
-                transform: skewY(-18deg);
-                transform-origin: left center;
-                translate: 100% -50%;
-              }
-
-              &::after {
-                position: absolute;
-                z-index: 2;
-                top: 3.35rem;
-                right: 0;
-                border-style: solid;
-                border-width: var(--local-callout-tail-inner-block) 0
-                  var(--local-callout-tail-inner-block) var(--local-callout-tail-inner-inline);
-                border-color: transparent transparent transparent var(--hero-step-bg);
-                content: '';
-                pointer-events: none;
-                transform: skewY(-18deg);
-                transform-origin: left center;
-                translate: calc(100% - 1.6px) -50%;
-              }
-
-              > .fr {
-                position: relative;
-                z-index: 3;
-                display: grid;
-                gap: var(--space-100);
-
-                > .title {
-                  margin-bottom: 0;
-                  color: var(--hero-step-ink);
-                  font-size: clamp(var(--text-xl), 1.35vw, var(--text-2xl));
-                  line-height: 1.18;
-                }
-
-                > .text {
-                  margin-bottom: 0;
-                  color: var(--hero-step-body);
-                  font-size: clamp(var(--text-md), 1vw, var(--text-lg));
-                  line-height: 1.58;
-
-                  > .value[data-tone] {
-                    color: var(--hero-step-emphasis);
-                    font-weight: 780;
-                  }
-                }
-              }
-            }
           }
 
           > .text.-readiness {
             display: inline-flex;
-            align-self: flex-start;
+            max-width: 52rem;
             align-items: center;
             gap: var(--space-075);
-            margin: calc(-1 * var(--space-150)) 0 var(--space-350);
+            margin: calc(-1 * var(--space-150)) 0 0;
             color: var(--muted);
             font-size: var(--text-xs);
             font-weight: 680;
           }
-        }
-
-        &.-walkthrough {
-          width: min(100%, var(--hero-code-width));
-          min-height: var(--hero-walkthrough-height);
-          min-width: 0;
-          align-self: start;
-          justify-self: center;
-          padding-top: var(--space-050);
         }
       }
     }
@@ -864,77 +743,10 @@ const stackItems = [
     }
   }
 
-  @media (max-width: 1080px) {
-    > .section {
-      &.-hero {
-        grid-template-columns: minmax(0, 44rem);
-        justify-content: start;
-        gap: 0;
-
-        > .unit {
-          &.-copy {
-            min-height: auto;
-
-            > .seg.-step {
-              max-width: min(100%, var(--hero-code-width));
-              margin-bottom: var(--space-200);
-
-              &::before {
-                top: auto;
-                right: auto;
-                bottom: 0;
-                left: 2.55rem;
-                border-width: var(--local-callout-tail-mobile-outer)
-                  var(--local-callout-tail-mobile-outer) 0 0;
-                border-color: var(--hero-step-border) transparent transparent;
-                transform: skew(-24deg);
-                transform-origin: top;
-                translate: -50% 100%;
-              }
-
-              &::after {
-                top: auto;
-                right: auto;
-                bottom: 0;
-                left: 2.55rem;
-                border-width: var(--local-callout-tail-mobile-inner)
-                  var(--local-callout-tail-mobile-inner) 0 0;
-                border-color: var(--hero-step-bg) transparent transparent;
-                transform: skew(-24deg);
-                transform-origin: top;
-                translate: calc(-50% - 1px) calc(100% - 1px);
-              }
-            }
-          }
-
-          &.-walkthrough {
-            width: min(100%, var(--hero-code-width));
-            min-height: auto;
-            justify-self: start;
-          }
-        }
-      }
-    }
-  }
-
   @media (max-width: 960px) {
     > .section {
       &.-hero {
-        grid-template-columns: 1fr;
-        gap: 0;
         padding-top: var(--space-700);
-
-        > .unit {
-          &.-copy {
-            min-height: auto;
-            justify-content: flex-start;
-          }
-
-          &.-walkthrough {
-            width: min(100%, var(--hero-code-width));
-            justify-self: start;
-          }
-        }
       }
 
       &.-topics > .unit {
@@ -961,7 +773,7 @@ const stackItems = [
 
         > .seg {
           &.-stack {
-            align-items: flex-start;
+            justify-content: center;
 
             > .value {
               width: 100%;
@@ -975,19 +787,6 @@ const stackItems = [
                 font-size: var(--text-sm);
                 padding: 0;
               }
-            }
-          }
-
-          &.-step {
-            min-height: 7.8rem;
-            padding: var(--space-200) var(--space-200) var(--space-200);
-
-            &::before {
-              left: 1.55rem;
-            }
-
-            &::after {
-              left: 1.55rem;
             }
           }
         }

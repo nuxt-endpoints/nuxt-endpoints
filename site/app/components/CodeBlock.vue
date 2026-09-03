@@ -9,7 +9,9 @@ const props = defineProps<{
 
 const highlighted = useState(`code:${props.lang}:${hashSnippet(props.code)}`, () => '')
 
-if (import.meta.server && highlighted.value === '') {
+async function highlightCode() {
+  if (highlighted.value !== '') return
+
   const { codeToHtml } = await import('shiki')
 
   highlighted.value = await codeToHtml(props.code, {
@@ -27,6 +29,12 @@ if (import.meta.server && highlighted.value === '') {
   })
 }
 
+if (import.meta.server) {
+  await highlightCode()
+} else {
+  onMounted(highlightCode)
+}
+
 function hashSnippet(input: string) {
   let hash = 0
 
@@ -41,7 +49,8 @@ function hashSnippet(input: string) {
 <template>
   <figure class="ne-code-block">
     <figcaption v-if="title" class="figcaption">{{ title }}</figcaption>
-    <div class="shiki-block" v-html="highlighted" />
+    <div v-if="highlighted" class="shiki-block" v-html="highlighted" />
+    <pre v-else class="fallback"><code>{{ code }}</code></pre>
   </figure>
 </template>
 
@@ -62,6 +71,10 @@ function hashSnippet(input: string) {
     color: var(--code-muted);
     font-size: var(--text-xs);
     font-weight: 720;
+  }
+
+  > .fallback {
+    background: var(--code-bg);
   }
 }
 </style>

@@ -41,8 +41,9 @@ export default defineNuxtConfig({
   },
   icon: {
     mode: 'svg',
-    serverBundle: {
-      collections: ['lucide'],
+    provider: 'none',
+    clientBundle: {
+      scan: true,
     },
   },
   nitro: {
