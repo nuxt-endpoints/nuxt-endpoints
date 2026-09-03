@@ -11,7 +11,7 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 - [🎮 Browser type playground](https://nuxt-endpoints.github.io/nuxt-endpoints/playground)
 - [🧪 Nuxt 5 integration progress](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
 
-> Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative.
+> Status: beta. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative.
 
 ## Try the Nuxt 5 integration branch
 

@@ -57,7 +57,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 
 Adding the module changes nothing by itself. Only routes that directly default-export `defineRouteHandler({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
-> Status: early alpha. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
+> Status: beta. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
 
 ## Next steps
 

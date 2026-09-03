@@ -1,6 +1,6 @@
 ---
 title: Limits
-description: Early alpha, with the important constraints documented.
+description: Beta, with the important constraints documented.
 ---
 
 The core endpoint flow is usable, but OpenAPI metadata, discovery, and release polish are intentionally conservative.

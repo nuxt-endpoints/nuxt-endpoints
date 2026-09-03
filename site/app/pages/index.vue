@@ -327,13 +327,19 @@ const stackItems = [
 
         <NuxtLink class="seg -nuxt5" to="/docs/nuxt5-progress">
           <span class="fr">
-            <Icon name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
-            <strong class="title">Nuxt 5</strong>
-            <span class="status">In progress</span>
+            <span class="heading">
+              <Icon name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
+              <strong class="title">Nuxt 5</strong>
+            </span>
+            <span class="status">Preview in progress</span>
           </span>
           <span class="text">
             Nuxt 4 is available today. Nuxt 5 integration is following upstream H3 v2 and Nitro 3
             work, and we plan to keep the public API stable.
+          </span>
+          <span class="link">
+            View Nuxt 5 progress
+            <Icon name="lucide:arrow-right" size="0.9rem" aria-hidden="true" />
           </span>
         </NuxtLink>
       </div>
@@ -486,8 +492,7 @@ const stackItems = [
           > .seg {
             &.-nuxt5 {
               display: grid;
-              width: min(100%, 44rem);
-              max-width: 44rem;
+              width: min(100%, 36rem);
               justify-items: center;
               gap: var(--space-075);
               margin-top: var(--space-100);
@@ -510,30 +515,32 @@ const stackItems = [
               text-decoration: none;
 
               > .fr {
-                display: flex;
-                align-items: center;
-                gap: var(--space-150);
+                display: grid;
+                justify-items: center;
+                gap: var(--space-050);
 
-                > svg {
-                  color: var(--stack-nuxt);
-                }
+                > .heading {
+                  display: flex;
+                  align-items: center;
+                  gap: var(--space-150);
 
-                > .title {
-                  color: var(--ink);
-                  font-size: clamp(var(--text-3xl), 3.4vw, var(--text-5xl));
-                  line-height: 1;
-                  letter-spacing: -0.035em;
+                  > svg {
+                    color: var(--stack-nuxt);
+                  }
+
+                  > .title {
+                    color: var(--ink);
+                    font-size: clamp(var(--text-3xl), 3.4vw, var(--text-5xl));
+                    line-height: 1;
+                    letter-spacing: -0.035em;
+                  }
                 }
 
                 > .status {
-                  border: var(--stroke-default) solid var(--button-hover-border);
-                  border-radius: var(--radius-pill);
-                  background: var(--surface-soft);
                   color: var(--accent-strong);
                   font-size: var(--text-2xs);
                   font-weight: 820;
                   letter-spacing: var(--tracking-label);
-                  padding: var(--space-050) var(--space-125);
                   text-transform: uppercase;
                 }
               }
@@ -545,8 +552,13 @@ const stackItems = [
                 line-height: 1.55;
               }
 
-              &:hover > .fr > .status {
-                border-color: var(--accent);
+              > .link {
+                display: inline-flex;
+                align-items: center;
+                gap: var(--space-075);
+                color: var(--accent-strong);
+                font-size: var(--text-xs);
+                font-weight: 760;
               }
             }
 
