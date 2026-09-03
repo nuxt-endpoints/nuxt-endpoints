@@ -78,8 +78,8 @@ const pitches = [
   {
     key: 'contract',
     title: 'One contract,',
-    titleAccent: 'everything typed.',
-    lead: 'Define the HTTP contract once, next to the handler, in the schema library you already use. Runtime validation, the generated client, and OpenAPI all derive from that single definition — no codegen step to run.',
+    titleAccent: 'every status typed.',
+    lead: 'Define the HTTP contract once, next to the handler. Request values are validated before execution, and every declared response status becomes a branchable client result with the matching body type.',
     points: [
       {
         icon: 'lucide:shield-check',
@@ -87,11 +87,11 @@ const pitches = [
       },
       {
         icon: 'lucide:sparkles',
-        text: '$endpoint and useEndpoint are fully inferred — auto-imported, routes stay ordinary server/api files',
+        text: 'Check result.status and TypeScript narrows result.body to the matching response schema',
       },
       {
         icon: 'lucide:package',
-        text: 'Standard Schema based: Zod v4, Valibot, and Effect Schema',
+        text: 'Runtime validation, $endpoint, useEndpoint, and OpenAPI derive from the same contract',
       },
     ],
     cta: { label: 'Define your first endpoint', to: '/docs/getting-started' },
@@ -304,9 +304,10 @@ const stackItems = [
     <section class="section -hero">
       <div class="unit -copy">
         <h1 class="title">
-          <span class="value">Define once.</span><br />
+          <span class="value">Define the HTTP contract.</span><br />
           <span class="value">Validate at runtime.</span><br />
-          <span class="value">Type-safe end-to-end.</span>
+          <span class="value">Handle every status.</span><br />
+          <span class="value">Stay type-safe end to end.</span>
         </h1>
         <div class="seg -stack" aria-label="Nuxt Endpoints stack">
           <span class="value">Tech stack</span>
@@ -319,15 +320,17 @@ const stackItems = [
           </ul>
         </div>
 
-        <p class="text -readiness">
-          <span>
-            Nuxt 4.5+ today, built for the Nuxt 5 generation. Upstream primitives will replace
-            internal plumbing while <code>$endpoint</code> and <code>useEndpoint</code> stay the
-            application-facing UX —
-            <NuxtLink to="/docs/getting-started#compatibility">how compatibility works</NuxtLink>
-            · <NuxtLink to="/docs/nuxt5-progress">Nuxt 5 integration progress</NuxtLink>
+        <NuxtLink class="seg -nuxt5" to="/docs/nuxt5-progress">
+          <span class="fr">
+            <Icon name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
+            <strong class="title">Nuxt 5</strong>
+            <span class="status">In progress</span>
           </span>
-        </p>
+          <span class="text">
+            Nuxt 4 is available today. Nuxt 5 integration is following upstream H3 v2 and Nitro 3
+            work, and we plan to keep the public API stable.
+          </span>
+        </NuxtLink>
       </div>
     </section>
 
@@ -467,7 +470,7 @@ const stackItems = [
             );
             background-clip: text;
             color: transparent;
-            font-size: clamp(var(--text-5xl), 5.4vw, 4.65rem);
+            font-size: clamp(var(--text-4xl), 4.2vw, 3.65rem);
             -webkit-background-clip: text;
 
             > .value {
@@ -476,6 +479,72 @@ const stackItems = [
           }
 
           > .seg {
+            &.-nuxt5 {
+              display: grid;
+              width: min(100%, 44rem);
+              max-width: 44rem;
+              justify-items: center;
+              gap: var(--space-075);
+              margin-top: var(--space-100);
+              overflow: hidden;
+              border: var(--stroke-default) solid
+                color-mix(in srgb, var(--stack-nuxt) 34%, var(--line));
+              border-radius: 1rem;
+              background:
+                radial-gradient(
+                  circle at 50% 0,
+                  color-mix(in srgb, var(--stack-nuxt) 15%, transparent),
+                  transparent 68%
+                ),
+                color-mix(in srgb, var(--surface) 88%, transparent);
+              color: inherit;
+              box-shadow:
+                0 18px 42px color-mix(in srgb, var(--stack-nuxt) 9%, transparent),
+                inset 0 1px 0 color-mix(in srgb, white 58%, transparent);
+              padding: var(--space-200) clamp(var(--space-200), 4vw, var(--space-300));
+              text-decoration: none;
+
+              > .fr {
+                display: flex;
+                align-items: center;
+                gap: var(--space-150);
+
+                > svg {
+                  color: var(--stack-nuxt);
+                }
+
+                > .title {
+                  color: var(--ink);
+                  font-size: clamp(var(--text-3xl), 3.4vw, var(--text-5xl));
+                  line-height: 1;
+                  letter-spacing: -0.035em;
+                }
+
+                > .status {
+                  border: var(--stroke-default) solid var(--button-hover-border);
+                  border-radius: var(--radius-pill);
+                  background: var(--surface-soft);
+                  color: var(--accent-strong);
+                  font-size: var(--text-2xs);
+                  font-weight: 820;
+                  letter-spacing: var(--tracking-label);
+                  padding: var(--space-050) var(--space-125);
+                  text-transform: uppercase;
+                }
+              }
+
+              > .text {
+                margin: 0;
+                color: var(--muted);
+                font-size: var(--text-xs);
+                line-height: 1.55;
+              }
+
+              &:hover > .fr > .status {
+                border-color: var(--accent);
+              }
+            }
+
             &.-stack {
               display: flex;
               align-items: center;
@@ -544,14 +613,6 @@ const stackItems = [
                 }
               }
             }
-          }
-
-          > .text.-readiness {
-            max-width: 52rem;
-            margin: calc(-1 * var(--space-150)) 0 0;
-            color: var(--muted);
-            font-size: var(--text-xs);
-            font-weight: 680;
           }
         }
       }
@@ -759,7 +820,11 @@ const stackItems = [
     > .section {
       &.-hero > .unit.-copy {
         > .title {
-          font-size: clamp(var(--text-hero-mobile-min), 9vw, var(--text-hero-mobile-max));
+          font-size: clamp(1.75rem, 7.7vw, 1.9rem);
+
+          > .value {
+            white-space: normal;
+          }
         }
 
         > .seg {
