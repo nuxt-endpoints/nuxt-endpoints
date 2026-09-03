@@ -325,7 +325,6 @@ const stackItems = [
         </div>
 
         <p class="text -readiness">
-          <Icon name="lucide:shield-check" size="0.95rem" aria-hidden="true" />
           <span>
             Requires Nuxt 5 with Nitro 3 and h3 v2. This branch builds against prototype forks of
             h3, Nitro, Nuxt, and fetchdts, so it is an integration branch rather than a released
@@ -553,10 +552,7 @@ const stackItems = [
           }
 
           > .text.-readiness {
-            display: inline-flex;
             max-width: 52rem;
-            align-items: center;
-            gap: var(--space-075);
             margin: calc(-1 * var(--space-150)) 0 0;
             color: var(--muted);
             font-size: var(--text-xs);
