@@ -298,7 +298,7 @@ const stackItems = [
 <template>
   <main class="ne-index-page">
     <div class="media" aria-hidden="true">
-      <span class="value -grid"></span>
+      <span class="value -grid" />
     </div>
 
     <section class="section -hero">
@@ -314,26 +314,32 @@ const stackItems = [
           <ul class="list">
             <li v-for="item in stackItems" :key="item.label" class="item" :data-tone="item.tone">
               <img v-if="'logo' in item" class="image" :src="item.logo" alt="" aria-hidden="true" />
-              <Icon v-else-if="'icon' in item" :name="item.icon" size="1rem" aria-hidden="true" />
+              <Icon
+                v-else-if="'icon' in item"
+                class="pv-icon"
+                :name="item.icon"
+                size="1rem"
+                aria-hidden="true"
+              />
               <span>{{ item.label }}</span>
             </li>
           </ul>
         </div>
 
-        <NuxtLink class="seg -nuxt5" to="/docs/nuxt5-progress">
-          <span class="fr">
-            <span class="heading">
-              <Icon name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
-              <strong class="title">Nuxt 5</strong>
+        <NuxtLink class="link -nuxt5" to="/docs/nuxt5-progress">
+          <span class="seg">
+            <span class="fr -heading">
+              <Icon class="pv-icon" name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
+              <strong class="strong">Nuxt 5</strong>
             </span>
-            <span class="status">Preview in progress</span>
+            <span class="text -status">Preview in progress</span>
           </span>
           <span class="text">
             Nuxt 4 is available today. Nuxt 5 integration is following upstream H3 v2 and Nitro 3
             work, and we plan to keep the public API stable.
-            <span class="detail">
+            <span class="value -detail">
               View details
-              <Icon name="lucide:arrow-right" size="0.8rem" aria-hidden="true" />
+              <Icon class="pv-icon" name="lucide:arrow-right" size="0.8rem" aria-hidden="true" />
             </span>
           </span>
         </NuxtLink>
@@ -358,23 +364,25 @@ const stackItems = [
       </div>
 
       <div class="unit -copy">
-        <p v-if="pitch.key === 'query'" class="text -eyebrow">
-          <Icon name="simple-icons:pinia" size="1rem" aria-hidden="true" />
+        <p v-if="pitch.key === 'query'" class="p -eyebrow">
+          <Icon class="pv-icon" name="simple-icons:pinia" size="1rem" aria-hidden="true" />
           Pinia Colada integration
         </p>
         <h2 class="title">
           {{ pitch.title }} <span class="value">{{ pitch.titleAccent }}</span>
         </h2>
-        <p class="text">{{ pitch.lead }}</p>
+        <p class="p">{{ pitch.lead }}</p>
         <ul class="list">
           <li v-for="point in pitch.points" :key="point.icon" class="item">
-            <span class="media"><Icon :name="point.icon" size="1.05rem" aria-hidden="true" /></span>
+            <span class="media">
+              <Icon class="pv-icon" :name="point.icon" size="1.05rem" aria-hidden="true" />
+            </span>
             <span class="value">{{ point.text }}</span>
           </li>
         </ul>
-        <NuxtLink class="pv-nuxt-link" :to="pitch.cta.to">
+        <NuxtLink class="link" :to="pitch.cta.to">
           {{ pitch.cta.label }}
-          <Icon name="lucide:arrow-right" size="1rem" aria-hidden="true" />
+          <Icon class="pv-icon" name="lucide:arrow-right" size="1rem" aria-hidden="true" />
         </NuxtLink>
       </div>
     </section>
@@ -388,9 +396,9 @@ const stackItems = [
         <article v-for="item in starterLinks" :key="item.to" class="article">
           <div class="seg">
             <h3 class="title">{{ item.label }}</h3>
-            <p class="text">{{ item.description }}</p>
+            <p class="p">{{ item.description }}</p>
           </div>
-          <NuxtLink class="pv-nuxt-link" :to="item.to">Open guide</NuxtLink>
+          <NuxtLink class="link" :to="item.to">Open guide</NuxtLink>
         </article>
       </div>
     </section>
@@ -399,6 +407,10 @@ const stackItems = [
 
 <style scoped>
 .ne-index-page {
+  --local-hero-padding-start: 7rem;
+  --local-hero-padding-end: 6rem;
+  --local-nuxt5-card-shadow: 0 18px 42px color-mix(in srgb, var(--stack-nuxt) 9%, transparent);
+  --local-nuxt5-card-highlight: inset 0 1px 0 color-mix(in srgb, var(--surface) 58%, transparent);
   overflow: hidden;
   isolation: isolate;
 
@@ -452,7 +464,8 @@ const stackItems = [
     &.-hero {
       position: relative;
       isolation: isolate;
-      padding: clamp(var(--space-800), 8vw, 7rem) 0 clamp(var(--space-700), 7vw, 6rem);
+      padding: clamp(var(--space-800), 8vw, var(--local-hero-padding-start)) 0
+        clamp(var(--space-700), 7vw, var(--local-hero-padding-end));
 
       > .unit {
         position: relative;
@@ -476,7 +489,7 @@ const stackItems = [
             );
             background-clip: text;
             color: transparent;
-            font-size: clamp(var(--text-4xl), 4.2vw, 3.65rem);
+            font-size: clamp(var(--text-4xl), 4.2vw, var(--text-hero));
             -webkit-background-clip: text;
 
             > .value {
@@ -484,7 +497,7 @@ const stackItems = [
             }
           }
 
-          > .seg {
+          > .link {
             &.-nuxt5 {
               display: grid;
               width: min(100%, 36rem);
@@ -494,7 +507,7 @@ const stackItems = [
               overflow: hidden;
               border: var(--stroke-default) solid
                 color-mix(in srgb, var(--stack-nuxt) 34%, var(--line));
-              border-radius: 1rem;
+              border-radius: var(--radius-lg);
               background:
                 radial-gradient(
                   circle at 50% 0,
@@ -503,35 +516,33 @@ const stackItems = [
                 ),
                 color-mix(in srgb, var(--surface) 88%, transparent);
               color: inherit;
-              box-shadow:
-                0 18px 42px color-mix(in srgb, var(--stack-nuxt) 9%, transparent),
-                inset 0 1px 0 color-mix(in srgb, white 58%, transparent);
+              box-shadow: var(--local-nuxt5-card-shadow), var(--local-nuxt5-card-highlight);
               padding: var(--space-200) clamp(var(--space-200), 4vw, var(--space-300));
               text-decoration: none;
 
-              > .fr {
+              > .seg {
                 display: grid;
                 justify-items: center;
                 gap: var(--space-050);
 
-                > .heading {
+                > .fr.-heading {
                   display: flex;
                   align-items: center;
                   gap: var(--space-150);
 
-                  > svg {
+                  > .pv-icon {
                     color: var(--stack-nuxt);
                   }
 
-                  > .title {
+                  > .strong {
                     color: var(--ink);
                     font-size: clamp(var(--text-3xl), 3.4vw, var(--text-5xl));
                     line-height: 1;
-                    letter-spacing: -0.035em;
+                    letter-spacing: var(--tracking-display);
                   }
                 }
 
-                > .status {
+                > .text.-status {
                   color: var(--accent-strong);
                   font-size: var(--text-2xs);
                   font-weight: 820;
@@ -546,7 +557,7 @@ const stackItems = [
                 font-size: var(--text-xs);
                 line-height: 1.55;
 
-                > .detail {
+                > .value.-detail {
                   display: inline-flex;
                   align-items: center;
                   gap: var(--space-050);
@@ -558,7 +569,9 @@ const stackItems = [
                 }
               }
             }
+          }
 
+          > .seg {
             &.-stack {
               display: flex;
               align-items: center;
@@ -624,6 +637,11 @@ const stackItems = [
                     object-fit: contain;
                     filter: drop-shadow(0 0.04rem 0.05rem var(--hero-image-shadow));
                   }
+
+                  > .pv-icon {
+                    flex: 0 0 auto;
+                    color: var(--stack-color);
+                  }
                 }
               }
             }
@@ -673,12 +691,14 @@ const stackItems = [
         gap: var(--space-200);
       }
 
-      &[data-flip='true'] > .unit.-demo {
-        order: 2;
+      &[data-flip='true'] {
+        > .unit.-demo {
+          order: 2;
+        }
       }
 
       > .unit.-copy {
-        > .text.-eyebrow {
+        > .p.-eyebrow {
           display: inline-flex;
           width: fit-content;
           align-items: center;
@@ -701,7 +721,7 @@ const stackItems = [
           }
         }
 
-        > .text {
+        > .p {
           margin-bottom: var(--space-300);
           color: var(--muted);
           font-size: var(--text-lg);
@@ -737,7 +757,7 @@ const stackItems = [
           }
         }
 
-        > .pv-nuxt-link {
+        > .link {
           display: inline-flex;
           min-height: 2.6rem;
           align-items: center;
@@ -795,12 +815,14 @@ const stackItems = [
           background: var(--surface);
           padding: var(--space-200);
 
-          > .seg > .text {
-            margin-bottom: 0;
-            color: var(--muted);
+          > .seg {
+            > .p {
+              margin-bottom: 0;
+              color: var(--muted);
+            }
           }
 
-          > .pv-nuxt-link {
+          > .link {
             color: var(--accent-strong);
             font-weight: 760;
           }
@@ -815,8 +837,10 @@ const stackItems = [
         padding-top: var(--space-700);
       }
 
-      &.-topics > .unit {
-        grid-template-columns: 1fr;
+      &.-topics {
+        > .unit {
+          grid-template-columns: 1fr;
+        }
       }
 
       &.-pitch {
@@ -832,30 +856,32 @@ const stackItems = [
 
   @media (max-width: 620px) {
     > .section {
-      &.-hero > .unit.-copy {
-        > .title {
-          font-size: clamp(1.75rem, 7.7vw, 1.9rem);
-
-          > .value {
-            white-space: normal;
-          }
-        }
-
-        > .seg {
-          &.-stack {
-            justify-content: center;
+      &.-hero {
+        > .unit.-copy {
+          > .title {
+            font-size: clamp(var(--text-hero-mobile-min), 7.7vw, var(--text-hero-mobile-max));
 
             > .value {
-              width: 100%;
+              white-space: normal;
             }
+          }
 
-            > .list {
-              gap: var(--space-075);
+          > .seg {
+            &.-stack {
+              justify-content: center;
 
-              > .item {
-                min-height: 1.7rem;
-                font-size: var(--text-sm);
-                padding: 0;
+              > .value {
+                width: 100%;
+              }
+
+              > .list {
+                gap: var(--space-075);
+
+                > .item {
+                  min-height: 1.7rem;
+                  font-size: var(--text-sm);
+                  padding: 0;
+                }
               }
             }
           }
@@ -863,18 +889,13 @@ const stackItems = [
       }
     }
   }
-}
 
-/* Iconify-rendered icons are non-owned DOM. These :deep() rules stay un-nested:
-   Vue's scoped compiler mis-emits :deep() inside nested rules. */
-.ne-index-page > .section.-hero > .unit.-copy > .seg.-stack > .list > .item :deep(svg) {
-  flex: 0 0 auto;
-  color: var(--stack-color);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ne-index-page > .media > .value {
-    animation: none;
+  @media (prefers-reduced-motion: reduce) {
+    > .media {
+      > .value {
+        animation: none;
+      }
+    }
   }
 }
 </style>

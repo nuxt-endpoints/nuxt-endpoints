@@ -15,7 +15,7 @@ useHead({
     <section class="section">
       <div class="unit">
         <h1 class="title">Type Playground</h1>
-        <p class="text -lead">Edit endpoint contracts and client calls in the browser.</p>
+        <p class="p -lead">Edit endpoint contracts and client calls in the browser.</p>
       </div>
 
       <TypePlayground />
@@ -39,7 +39,7 @@ useHead({
         font-size: var(--text-5xl);
       }
 
-      > .text {
+      > .p {
         &.-lead {
           margin-bottom: 0;
           color: var(--muted);

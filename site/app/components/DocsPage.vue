@@ -24,10 +24,10 @@ useSeoMeta({
 <template>
   <div class="ne-docs-page">
     <aside class="aside" aria-label="Documentation navigation">
-      <section v-for="section in docsNavSections" :key="section.label" class="group">
-        <p class="text -caps">{{ section.label }}</p>
+      <section v-for="section in docsNavSections" :key="section.label" class="section">
+        <p class="p -caps">{{ section.label }}</p>
         <nav class="nav">
-          <NuxtLink v-for="item in section.items" :key="item.to" class="pv-nuxt-link" :to="item.to">
+          <NuxtLink v-for="item in section.items" :key="item.to" class="link" :to="item.to">
             {{ item.label }}
           </NuxtLink>
         </nav>
@@ -37,9 +37,9 @@ useSeoMeta({
     <main class="main">
       <article v-if="page" class="article">
         <header class="header">
-          <p class="text -eyebrow">Documentation</p>
+          <p class="p -eyebrow">Documentation</p>
           <h1 class="title">{{ page.title }}</h1>
-          <p v-if="page.description" class="text -lead">
+          <p v-if="page.description" class="p -lead">
             {{ page.description }}
           </p>
         </header>
@@ -64,12 +64,12 @@ useSeoMeta({
     align-self: start;
     padding-right: var(--space-200);
 
-    > .group {
+    > .section {
       &:not(:first-child) {
         margin-top: var(--space-300);
       }
 
-      > .text.-caps {
+      > .p.-caps {
         margin: 0 0 var(--space-150);
         color: var(--muted);
         font-size: var(--text-xs);
@@ -81,7 +81,7 @@ useSeoMeta({
         display: grid;
         gap: var(--space-050);
 
-        > .pv-nuxt-link {
+        > .link {
           border-radius: var(--radius-md);
           color: var(--muted);
           padding: var(--space-100) var(--space-125);
@@ -108,7 +108,7 @@ useSeoMeta({
       > .header {
         padding: var(--space-200) 0 var(--space-400);
 
-        > .text.-eyebrow {
+        > .p.-eyebrow {
           margin: 0 0 var(--space-150);
           color: var(--accent-strong);
           font-size: var(--text-xs);
@@ -121,14 +121,10 @@ useSeoMeta({
           font-size: var(--text-5xl);
         }
 
-        > .text.-lead {
+        > .p.-lead {
           margin-bottom: 0;
           color: var(--muted);
         }
-      }
-
-      > .value {
-        max-width: 780px;
       }
     }
   }
@@ -142,96 +138,29 @@ useSeoMeta({
       display: none;
     }
 
-    > .main > .article > .header > .title {
-      font-size: var(--text-4xl);
+    > .main {
+      > .article {
+        > .header {
+          > .title {
+            font-size: var(--text-4xl);
+          }
+        }
+      }
     }
   }
 
   @media (max-width: 620px) {
     width: min(var(--page-max), calc(100% - var(--page-gutter)));
 
-    > .main > .article > .header > .title {
-      font-size: var(--text-3xl);
+    > .main {
+      > .article {
+        > .header {
+          > .title {
+            font-size: var(--text-3xl);
+          }
+        }
+      }
     }
   }
-}
-
-/* Markdown rendered by ContentRenderer is non-owned DOM. These :deep() rules
-   stay un-nested: Vue's scoped compiler mis-emits :deep() inside nested rules
-   (`& [data-v] …`), so they must live at the top level of the style block. */
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(h2) {
-  margin: var(--space-500) 0 var(--space-150);
-  padding-top: var(--space-400);
-  border-top: var(--stroke-default) solid var(--line);
-  font-size: var(--text-2xl);
-  line-height: 1.22;
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(h2:first-child) {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(h3) {
-  margin: var(--space-350) 0 var(--space-100);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(p),
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(ul),
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(ol) {
-  margin: var(--space-150) 0 0;
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(ul),
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(ol) {
-  padding-left: var(--space-250);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(li + li) {
-  margin-top: var(--space-100);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(p),
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(li) {
-  color: var(--muted);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(a) {
-  color: var(--accent-strong);
-  font-weight: 720;
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(strong) {
-  color: var(--ink);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(hr) {
-  margin: var(--space-400) 0;
-  border: 0;
-  border-top: var(--stroke-default) solid var(--line);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(blockquote) {
-  margin: var(--space-200) 0 0;
-  border-left: var(--stroke-accent) solid var(--accent);
-  background: var(--surface);
-  padding: var(--space-150) var(--space-200);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(blockquote p) {
-  margin: 0;
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(pre) {
-  margin-top: var(--space-200);
-  border: var(--stroke-default) solid var(--code-border);
-  border-radius: var(--radius-md);
-  background: var(--code-bg);
-  box-shadow: var(--panel-shadow);
-}
-
-.ne-docs-page > .main > .article > .pv-content-renderer :deep(pre code) {
-  color: var(--code-ink);
 }
 </style>

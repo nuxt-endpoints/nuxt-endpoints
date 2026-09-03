@@ -55,10 +55,10 @@ function applyTheme(value: Theme) {
 <template>
   <header class="ne-app-header">
     <div class="unit">
-      <NuxtLink class="pv-nuxt-link -brand" to="/" aria-label="Nuxt Endpoints home">
-        <span class="nuxt-link-default">
+      <NuxtLink class="link -brand" to="/" aria-label="Nuxt Endpoints home">
+        <span class="seg">
           <span class="media">
-            <svg viewBox="0 0 512 512" aria-hidden="true">
+            <svg class="svg" viewBox="0 0 512 512" aria-hidden="true">
               <defs>
                 <linearGradient id="ne-brand-grad" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0" stop-color="#00dc82" />
@@ -76,8 +76,8 @@ function applyTheme(value: Theme) {
       </NuxtLink>
 
       <nav class="nav" aria-label="Primary navigation">
-        <NuxtLink class="pv-nuxt-link" to="/docs">Docs</NuxtLink>
-        <NuxtLink class="pv-nuxt-link" to="/playground">Type Playground</NuxtLink>
+        <NuxtLink class="link" to="/docs">Docs</NuxtLink>
+        <NuxtLink class="link" to="/playground">Type Playground</NuxtLink>
       </nav>
 
       <div class="actions">
@@ -88,7 +88,7 @@ function applyTheme(value: Theme) {
           :title="themeToggleLabel"
           @click="toggleTheme"
         >
-          <Icon :name="themeIcon" size="1.1rem" aria-hidden="true" />
+          <Icon class="pv-icon" :name="themeIcon" size="1.1rem" aria-hidden="true" />
         </button>
         <a
           class="link"
@@ -96,10 +96,10 @@ function applyTheme(value: Theme) {
           aria-label="GitHub repository"
           title="GitHub repository"
         >
-          <Icon name="lucide:github" size="1.15rem" aria-hidden="true" />
+          <Icon class="pv-icon" name="lucide:github" size="1.15rem" aria-hidden="true" />
         </a>
         <button
-          class="button -menu"
+          class="button -navigation"
           type="button"
           aria-controls="site-menu"
           :aria-expanded="menuOpen"
@@ -107,29 +107,29 @@ function applyTheme(value: Theme) {
           :title="menuLabel"
           @click="menuOpen = !menuOpen"
         >
-          <Icon :name="menuOpen ? 'lucide:x' : 'lucide:menu'" size="1.15rem" aria-hidden="true" />
+          <Icon
+            class="pv-icon"
+            :name="menuOpen ? 'lucide:x' : 'lucide:menu'"
+            size="1.15rem"
+            aria-hidden="true"
+          />
         </button>
       </div>
 
-      <div id="site-menu" class="menu" :data-open="menuOpen">
-        <nav class="links" aria-label="Site navigation">
-          <NuxtLink class="pv-nuxt-link" to="/docs">Docs</NuxtLink>
-          <NuxtLink class="pv-nuxt-link" to="/playground">Type Playground</NuxtLink>
+      <div id="site-menu" class="seg -drawer" :data-open="menuOpen">
+        <nav class="nav" aria-label="Site navigation">
+          <NuxtLink class="link" to="/docs">Docs</NuxtLink>
+          <NuxtLink class="link" to="/playground">Type Playground</NuxtLink>
         </nav>
 
         <section
           v-for="section in inDocs ? docsNavSections : []"
           :key="section.label"
-          class="group"
+          class="section"
         >
-          <p class="text -caps">{{ section.label }}</p>
-          <nav class="links" :aria-label="section.label">
-            <NuxtLink
-              v-for="item in section.items"
-              :key="item.to"
-              class="pv-nuxt-link"
-              :to="item.to"
-            >
+          <p class="p -caps">{{ section.label }}</p>
+          <nav class="nav" :aria-label="section.label">
+            <NuxtLink v-for="item in section.items" :key="item.to" class="link" :to="item.to">
               {{ item.label }}
             </NuxtLink>
           </nav>
@@ -154,10 +154,10 @@ function applyTheme(value: Theme) {
     gap: var(--space-200);
     margin: 0 auto;
 
-    > .pv-nuxt-link.-brand {
+    > .link.-brand {
       font-weight: 760;
 
-      .nuxt-link-default {
+      > .seg {
         display: flex;
         align-items: center;
         gap: var(--space-125);
@@ -169,9 +169,9 @@ function applyTheme(value: Theme) {
           place-items: center;
           border-radius: var(--radius-md);
           /* The logomark keeps the icon's midnight tile in both themes. */
-          background: #020420;
+          background: var(--brand-ink);
 
-          > svg {
+          > .svg {
             display: block;
             width: 100%;
             height: 100%;
@@ -214,7 +214,7 @@ function applyTheme(value: Theme) {
       font-size: var(--text-md);
       font-weight: 650;
 
-      > .pv-nuxt-link {
+      > .link {
         flex: 0 0 auto;
 
         &:hover {
@@ -263,12 +263,12 @@ function applyTheme(value: Theme) {
 
       /* Navigation collapses; the theme and repository controls do not, because
          they are one-tap actions rather than places to go. */
-      > .button.-menu {
+      > .button.-navigation {
         display: none;
       }
     }
 
-    > .menu {
+    > .seg.-drawer {
       display: none;
     }
   }
@@ -295,12 +295,12 @@ function applyTheme(value: Theme) {
       > .actions {
         margin-left: auto;
 
-        > .button.-menu {
+        > .button.-navigation {
           display: inline-flex;
         }
       }
 
-      > .menu[data-open='true'] {
+      > .seg.-drawer[data-open='true'] {
         display: grid;
         gap: var(--space-250);
         width: 100%;
@@ -308,20 +308,12 @@ function applyTheme(value: Theme) {
         border-top: var(--stroke-default) solid var(--header-border);
         padding: var(--space-200) 0 var(--space-100);
 
-        > .group > .text.-caps {
-          margin: 0 0 var(--space-100);
-          color: var(--muted);
-          font-size: var(--text-xs);
-          font-weight: 780;
-          text-transform: uppercase;
-        }
-
-        .links {
+        > .nav {
           display: grid;
           gap: var(--space-025);
           grid-template-columns: repeat(2, minmax(0, 1fr));
 
-          > .pv-nuxt-link {
+          > .link {
             border-radius: var(--radius-md);
             color: var(--muted);
             padding: var(--space-100) var(--space-125);
@@ -334,6 +326,35 @@ function applyTheme(value: Theme) {
             }
           }
         }
+
+        > .section {
+          > .p.-caps {
+            margin: 0 0 var(--space-100);
+            color: var(--muted);
+            font-size: var(--text-xs);
+            font-weight: 780;
+            text-transform: uppercase;
+          }
+
+          > .nav {
+            display: grid;
+            gap: var(--space-025);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+
+            > .link {
+              border-radius: var(--radius-md);
+              color: var(--muted);
+              padding: var(--space-100) var(--space-125);
+              font-size: var(--text-md);
+              font-weight: 650;
+
+              &[aria-current='page'] {
+                background: var(--surface-soft);
+                color: var(--accent-strong);
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -342,12 +363,24 @@ function applyTheme(value: Theme) {
      have to survive, and one column of links beats two cramped ones. */
   @media (max-width: 480px) {
     > .unit {
-      > .pv-nuxt-link.-brand .nuxt-link-default > .note {
-        display: none;
+      > .link.-brand {
+        > .seg {
+          > .note {
+            display: none;
+          }
+        }
       }
 
-      > .menu[data-open='true'] .links {
-        grid-template-columns: 1fr;
+      > .seg.-drawer[data-open='true'] {
+        > .nav {
+          grid-template-columns: 1fr;
+        }
+
+        > .section {
+          > .nav {
+            grid-template-columns: 1fr;
+          }
+        }
       }
     }
   }

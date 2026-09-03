@@ -49,8 +49,10 @@ function hashSnippet(input: string) {
 <template>
   <figure class="ne-code-block">
     <figcaption v-if="title" class="figcaption">{{ title }}</figcaption>
-    <div v-if="highlighted" class="shiki-block" v-html="highlighted" />
-    <pre v-else class="fallback"><code>{{ code }}</code></pre>
+    <!-- Shiki escapes source text before producing this trusted highlighted markup. -->
+    <!-- eslint-disable-next-line vue/no-v-html -->
+    <div v-if="highlighted" class="unit -highlighted" v-html="highlighted" />
+    <pre v-else class="pre -fallback"><code>{{ code }}</code></pre>
   </figure>
 </template>
 
@@ -73,7 +75,7 @@ function hashSnippet(input: string) {
     font-weight: 720;
   }
 
-  > .fallback {
+  > .pre.-fallback {
     background: var(--code-bg);
   }
 }

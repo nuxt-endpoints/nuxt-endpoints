@@ -37,9 +37,10 @@
   --text-3xl: 1.9rem;
   --text-4xl: 2.55rem;
   --text-5xl: 3rem;
-  --text-hero: 3.45rem;
-  --text-hero-mobile-min: 2rem;
-  --text-hero-mobile-max: 2rem;
+  --text-hero: 3.65rem;
+  --text-hero-mobile-min: 1.75rem;
+  --text-hero-mobile-max: 1.9rem;
+  --tracking-display: -0.035em;
   --tracking-brand: 0.04em;
   --tracking-label: 0.06em;
   --stroke-default: 1px;
@@ -49,6 +50,7 @@
   --focus-offset-lg: 3px;
   --radius-sm: 6px;
   --radius-md: 8px;
+  --radius-lg: 1rem;
   --radius-pill: 999px;
 
   --bg: #f8fafc;
@@ -281,8 +283,113 @@ pre code {
   text-decoration: var(--shiki-dark-text-decoration, inherit);
 }
 
-.shiki-block pre code .line {
+.ne-code-block > .unit.-highlighted pre code .line {
   display: inline;
+}
+
+/* ContentRenderer owns the rendered Markdown subtree, so its typography stays
+   in the global non-owned layer rather than a component's scoped surface. */
+.ne-docs-page .pv-content-renderer h2 {
+  margin: var(--space-500) 0 var(--space-150);
+  padding-top: var(--space-400);
+  border-top: var(--stroke-default) solid var(--line);
+  font-size: var(--text-2xl);
+  line-height: 1.22;
+}
+
+.ne-docs-page .pv-content-renderer h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ne-docs-page .pv-content-renderer h3 {
+  margin: var(--space-350) 0 var(--space-100);
+}
+
+.ne-docs-page .pv-content-renderer :is(p, ul, ol) {
+  margin: var(--space-150) 0 0;
+}
+
+.ne-docs-page .pv-content-renderer :is(ul, ol) {
+  padding-left: var(--space-250);
+}
+
+.ne-docs-page .pv-content-renderer li + li {
+  margin-top: var(--space-100);
+}
+
+.ne-docs-page .pv-content-renderer :is(p, li) {
+  color: var(--muted);
+}
+
+.ne-docs-page .pv-content-renderer a {
+  color: var(--accent-strong);
+  font-weight: 720;
+}
+
+.ne-docs-page .pv-content-renderer strong {
+  color: var(--ink);
+}
+
+.ne-docs-page .pv-content-renderer hr {
+  margin: var(--space-400) 0;
+  border: 0;
+  border-top: var(--stroke-default) solid var(--line);
+}
+
+.ne-docs-page .pv-content-renderer blockquote {
+  margin: var(--space-200) 0 0;
+  border-left: var(--stroke-accent) solid var(--accent);
+  background: var(--surface);
+  padding: var(--space-150) var(--space-200);
+}
+
+.ne-docs-page .pv-content-renderer blockquote p {
+  margin: 0;
+}
+
+.ne-docs-page .pv-content-renderer pre {
+  margin-top: var(--space-200);
+  border: var(--stroke-default) solid var(--code-border);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  box-shadow: var(--panel-shadow);
+}
+
+.ne-docs-page .pv-content-renderer pre code {
+  color: var(--code-ink);
+}
+
+/* CodeMirror owns its rendered editor subtree. */
+.ne-type-playground .cm-editor {
+  height: 100%;
+  min-height: 18rem;
+  background: transparent;
+  color: var(--code-ink);
+}
+
+.ne-type-playground .cm-scroller {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+.ne-type-playground .cm-content {
+  tab-size: 2;
+}
+
+.ne-type-playground .cm-tooltip {
+  border: var(--stroke-default) solid var(--code-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 620px) {
+  .ne-type-playground .cm-editor {
+    min-height: 14rem;
+    font-size: var(--text-xs);
+  }
 }
 
 @media (max-width: 960px) {
