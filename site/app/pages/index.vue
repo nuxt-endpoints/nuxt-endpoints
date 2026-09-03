@@ -336,10 +336,10 @@ const stackItems = [
           <span class="text">
             Nuxt 4 is available today. Nuxt 5 integration is following upstream H3 v2 and Nitro 3
             work, and we plan to keep the public API stable.
-          </span>
-          <span class="link">
-            View Nuxt 5 progress
-            <Icon name="lucide:arrow-right" size="0.9rem" aria-hidden="true" />
+            <span class="detail">
+              View details
+              <Icon name="lucide:arrow-right" size="0.8rem" aria-hidden="true" />
+            </span>
           </span>
         </NuxtLink>
       </div>
@@ -550,15 +550,17 @@ const stackItems = [
                 color: var(--muted);
                 font-size: var(--text-xs);
                 line-height: 1.55;
-              }
 
-              > .link {
-                display: inline-flex;
-                align-items: center;
-                gap: var(--space-075);
-                color: var(--accent-strong);
-                font-size: var(--text-xs);
-                font-weight: 760;
+                > .detail {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: var(--space-050);
+                  margin-left: var(--space-075);
+                  color: var(--accent-strong);
+                  font-size: var(--text-2xs);
+                  font-weight: 760;
+                  white-space: nowrap;
+                }
               }
             }
 
