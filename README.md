@@ -96,6 +96,8 @@ That's it. Adding the module changes nothing by itself: only routes whose defaul
 
 Module options (OpenAPI route and optional client methods) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 
+Application or middleware responses shared by several routes can be declared by path in `server/routes.config.ts`; `$endpoint` and OpenAPI inherit those statuses without changing middleware execution.
+
 ## Documentation
 
 Guides:

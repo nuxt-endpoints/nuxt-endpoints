@@ -29,6 +29,10 @@ The current build flow is:
    `TypedFetchMetadataField`.
    When a route has no declared response schema, its generated type derives
    the authored handler return directly from the handler's `~routeDef` type.
+6. If `server/routes.config.ts` exists, NE imports its type and adds the
+   matching global, exact-path, prefix (`/**`), and method response contracts
+   to each generated `$endpoint` route entry. The server plugin reads the same
+   file to add those responses to OpenAPI; it does not alter middleware.
 
 The runtime handler keeps `~routeDef` for TypeScript inference, but NE no
 longer writes either `NitroTypes.routes` or consumer-specific route metadata.

@@ -1,6 +1,7 @@
 import { definePlugin } from 'nitro'
 import endpointsOptions from '#nuxt-endpoints/options'
 import endpointRuntimeModule from '#nuxt-endpoints/runtime'
+import serverRouteConfigModule from '#nuxt-endpoints/server-route-config'
 import type { EndpointDefinition } from './contract'
 import { idempotencyMetadataWithoutRuntimeMessage } from './endpoint'
 import { idempotencyRuntimeOptionKeys } from './idempotency'
@@ -14,6 +15,8 @@ import { resolveEndpointRouteRuntime, validateEndpointRuntime } from './endpoint
 import type { EndpointRouteRuntime, EndpointRuntime } from './endpoint-runtime'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
+import { resolveServerRouteResponseMaps, validateServerRouteConfig } from './server-route-config'
+import type { ServerRouteConfig } from './server-route-config'
 
 type EndpointsRuntimeOptions = {
   openApi: {
@@ -49,10 +52,12 @@ export default definePlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
+  const serverRouteConfig = assertValidServerRouteConfig(serverRouteConfigModule)
   const document = await initializeEndpointHandlers(
     endpointHandlerManifest as HandlerDefinition[],
     options,
     endpointRuntime,
+    serverRouteConfig,
   )
   if (document) {
     setOpenApiDocument(document)
@@ -63,8 +68,9 @@ export async function initializeEndpointHandlers(
   handlers: HandlerDefinition[],
   options: EndpointsRuntimeOptions,
   runtime?: EndpointRuntime,
+  serverRouteConfig?: ServerRouteConfig,
 ) {
-  const endpoints = await extractEndpoints(handlers, runtime)
+  const endpoints = await extractEndpoints(handlers, runtime, serverRouteConfig)
   if (!options.openApi.enabled) {
     return undefined
   }
@@ -83,6 +89,7 @@ export async function initializeEndpointHandlers(
 export async function extractEndpoints(
   definitions: HandlerDefinition[],
   runtime?: EndpointRuntime,
+  serverRouteConfig?: ServerRouteConfig,
 ) {
   const endpoints = []
   const matchedRuntimeEntries = new Set<string>()
@@ -167,6 +174,11 @@ export async function extractEndpoints(
       path: definition.route,
       method: definition.method,
       definition: contract.definition,
+      serverResponseMaps: resolveServerRouteResponseMaps(
+        serverRouteConfig,
+        definition.route,
+        definition.method,
+      ),
     })
   }
 
@@ -283,4 +295,19 @@ function assertValidEndpointRuntime(value: unknown): EndpointRuntime | undefined
     )
   }
   return runtime
+}
+
+function assertValidServerRouteConfig(value: unknown): ServerRouteConfig | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  try {
+    validateServerRouteConfig(value)
+  } catch (error) {
+    throw new Error(
+      '[nuxt-endpoints] server/routes.config.ts must default-export a valid defineServerRouteConfig({ ... }) value.',
+      { cause: error },
+    )
+  }
+  return value
 }

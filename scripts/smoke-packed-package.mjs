@@ -90,6 +90,18 @@ export default defineEndpointRuntime({
 `,
   )
   await writeFile(
+    join(smokeRoot, 'server/routes.config.ts'),
+    `import { z } from 'zod'
+import { defineServerRouteConfig } from 'nuxt-endpoints/runtime'
+
+export default defineServerRouteConfig({
+  responses: {
+    503: z.object({ error: z.literal('unavailable') }),
+  },
+})
+`,
+  )
+  await writeFile(
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
@@ -120,6 +132,11 @@ export default defineRouteHandler({
   ])
 
   assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
+  assertIncludes(
+    endpointTypes,
+    'serverResponses: ServerRouteResponsesFor',
+    'generated application response contract',
+  )
   assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
   assertSymbolExcludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
   assertSymbolExcludes(

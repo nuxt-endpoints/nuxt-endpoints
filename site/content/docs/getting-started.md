@@ -100,6 +100,8 @@ export default defineNuxtConfig({
 
 `openApi` can also be set to `false` to disable the generated schema route. By default, the schema route is only served in development; set `openApi: true` or `openApi.enabled: true` to also serve it in production. `client.raw` controls whether `.raw()` is generated on `$endpoint` calls.
 
+Shared application responses use the conventional `server/routes.config.ts` file. Set `endpoints.serverRouteConfig.path` only when that file lives elsewhere; see [Responses](/docs/responses#application-and-middleware-responses).
+
 Endpoint request objects expose standard Pinia Colada query and mutation options. For cache, SSR, and hydration support, install Colada and its official Nuxt modules:
 
 ```bash

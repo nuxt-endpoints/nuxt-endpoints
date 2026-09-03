@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import {
   createMemoryIdempotencyStorage,
   defineEndpoint,
@@ -15,6 +16,7 @@ vi.mock('#nuxt-endpoints/options', () => ({
   },
 }))
 vi.mock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
+vi.mock('#nuxt-endpoints/server-route-config', () => ({ default: undefined }))
 
 const { extractEndpoints, initializeEndpointHandlers } =
   await import('../src/runtime/server-plugin')
@@ -311,6 +313,42 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
     expect(document?.servers).toBeUndefined()
     expect(document?.paths['/api/items']?.get?.operationId).toBe('getApiItems')
   })
+
+  it('adds matching global, path, and method response contracts to OpenAPI', async () => {
+    const endpoint = defineRouteHandler({
+      validate: {
+        response: {
+          200: z.object({ ok: z.literal(true) }),
+          401: z.object({ source: z.literal('endpoint') }),
+        },
+      },
+      handler: () => ({ ok: true as const }),
+    })
+
+    const document = await initializeEndpointHandlers(
+      [route('/api/items', 'get', endpoint as object)],
+      enabledOpenApiOptions,
+      undefined,
+      {
+        responses: { 500: z.object({ error: z.literal('internal') }) },
+        routes: {
+          '/api/**': {
+            responses: { 401: z.object({ source: z.literal('application') }) },
+            methods: { get: { responses: { 429: z.object({ retryAfter: z.number() }) } } },
+          },
+        },
+      },
+    )
+
+    const responses = document?.paths['/api/items']?.get?.responses
+    expect(Object.keys(responses ?? {})).toEqual(['200', '401', '429', '500'])
+    expect(responses?.[401].content['application/json'].schema).toMatchObject({
+      oneOf: [
+        { properties: { source: { const: 'endpoint' } } },
+        { properties: { source: { const: 'application' } } },
+      ],
+    })
+  })
 })
 
 describe('idempotency policy module validation at Nitro startup', () => {
@@ -331,6 +369,30 @@ describe('idempotency policy module validation at Nitro startup', () => {
     vi.doUnmock('#nuxt-endpoints/options')
     vi.doUnmock('#nuxt-endpoints/server-handlers')
     vi.doUnmock('#nuxt-endpoints/runtime')
+    vi.resetModules()
+  })
+})
+
+describe('server route config validation at Nitro startup', () => {
+  it('fails startup when JavaScript exports an invalid config', async () => {
+    vi.resetModules()
+    vi.doMock('#nuxt-endpoints/options', () => ({ default: disabledOpenApiOptions }))
+    vi.doMock('#nuxt-endpoints/server-handlers', () => ({ handlers: [] }))
+    vi.doMock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
+    vi.doMock('#nuxt-endpoints/server-route-config', () => ({
+      default: { routes: { 'api/users': { responses: {} } } },
+    }))
+
+    const plugin = await import('../src/runtime/server-plugin')
+    const runPlugin = plugin.default as unknown as () => Promise<void>
+    await expect(runPlugin()).rejects.toThrow(
+      '[nuxt-endpoints] server/routes.config.ts must default-export a valid defineServerRouteConfig({ ... }) value.',
+    )
+
+    vi.doUnmock('#nuxt-endpoints/options')
+    vi.doUnmock('#nuxt-endpoints/server-handlers')
+    vi.doUnmock('#nuxt-endpoints/runtime')
+    vi.doUnmock('#nuxt-endpoints/server-route-config')
     vi.resetModules()
   })
 })

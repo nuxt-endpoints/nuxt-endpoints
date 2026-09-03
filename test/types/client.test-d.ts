@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import type { UseMutationOptions, UseQueryOptions } from '@pinia/colada'
 import type {
   EndpointClient,
+  EndpointRequestValidationProblem,
   EndpointResult,
   StandardSchemaLike,
   UseEndpointClient,
@@ -28,6 +29,30 @@ type Routes =
         body: Schema<{ name: string }>
         responses: { 201: Schema<{ id: number; name: string }> }
         idempotency: { enabled: true; headerName: 'Idempotency-Key'; required: true }
+      }
+      serverResponses: {
+        401: Schema<{ error: 'unauthorized' }>
+        503: Schema<{ error: 'unavailable' }>
+      }
+    }
+  | {
+      path: '/api/uploads'
+      method: 'post'
+      definition: {
+        body: {
+          'application/json': Schema<{ name: string }>
+          'application/octet-stream': true
+        }
+        responses: { 201: Schema<{ id: number }> }
+      }
+    }
+  | {
+      path: '/api/export'
+      method: 'get'
+      definition: {
+        responses: {
+          200: { media: readonly ['text/csv', 'application/pdf'] }
+        }
       }
     }
 
@@ -60,17 +85,52 @@ describe('path-based endpoint client types', () => {
       params: { id: '1' },
     })
 
-    expectTypeOf(result).toEqualTypeOf<EndpointResult<Extract<Routes, { method: 'get' }>>>()
+    expectTypeOf(result).toEqualTypeOf<
+      EndpointResult<Extract<Routes, { path: '/api/users/:id' }>>
+    >()
+    expectTypeOf(result.status).toEqualTypeOf<200 | 400 | 404>()
     if (result.status === 200) {
       expectTypeOf(result.body).toEqualTypeOf<{ id: number; name: string }>()
-    } else {
+    } else if (result.status === 404) {
       expectTypeOf(result.status).toEqualTypeOf<404>()
       expectTypeOf(result.body).toEqualTypeOf<{ message: string }>()
+    } else {
+      expectTypeOf(result.status).toEqualTypeOf<400>()
+      expectTypeOf(result.body.statusCode).toEqualTypeOf<400>()
     }
 
     const call = $endpoint('/api/users/:id', { method: 'get', params: { id: '1' } })
     // @ts-expect-error .result() was removed; awaiting the call is result-aware.
     call.result()
+  })
+
+  it('includes centrally configured server responses', async () => {
+    const result = await $endpoint('/api/users', {
+      method: 'post',
+      body: { name: 'Tom' },
+    })
+
+    expectTypeOf(result.status).toEqualTypeOf<201 | 400 | 401 | 409 | 422 | 503>()
+
+    if (result.status === 401) {
+      expectTypeOf(result.body).toEqualTypeOf<{ error: 'unauthorized' }>()
+    } else if (result.status === 503) {
+      expectTypeOf(result.body).toEqualTypeOf<{ error: 'unavailable' }>()
+    } else {
+      expectTypeOf(result.status).toEqualTypeOf<201 | 400 | 409 | 422>()
+    }
+  })
+
+  it('includes content-type and response-negotiation failures produced by NE', async () => {
+    const upload = await $endpoint('/api/uploads', {
+      method: 'post',
+      body: { name: 'Tom' },
+    })
+    expectTypeOf(upload.status).toEqualTypeOf<201 | 400 | 415>()
+
+    const exported = await $endpoint('/api/export', { method: 'get' })
+    expectTypeOf(exported.status).toEqualTypeOf<200 | 406>()
+    expectTypeOf(exported.body).toEqualTypeOf<ReadableStream<Uint8Array>>()
   })
 
   it('exposes Pinia Colada options on the same request object', () => {
@@ -83,6 +143,11 @@ describe('path-based endpoint client types', () => {
     expectTypeOf(query.query).returns.resolves.toEqualTypeOf<
       | { status: 200; ok: true; body: { id: number; name: string } }
       | { status: 404; ok: false; body: { message: string } }
+      | {
+          status: 400
+          ok: false
+          body: EndpointRequestValidationProblem
+        }
     >()
     // @ts-expect-error GET calls do not expose mutation options.
     getCall.mutationOptions()
@@ -104,6 +169,11 @@ describe('path-based endpoint client types', () => {
     expectTypeOf(state.data.value).toEqualTypeOf<
       | { status: 200; ok: true; body: { id: number; name: string } }
       | { status: 404; ok: false; body: { message: string } }
+      | {
+          status: 400
+          ok: false
+          body: EndpointRequestValidationProblem
+        }
       | undefined
     >()
   })

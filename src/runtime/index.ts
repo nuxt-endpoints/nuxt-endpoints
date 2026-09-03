@@ -24,6 +24,8 @@ export type {
   EndpointClientRuntimeValue,
   EndpointFetcherRawResponse,
   EndpointFetcherRuntime,
+  EndpointIdempotencyProblem,
+  EndpointMediaTypeProblem,
   EndpointPath,
   EndpointPathCall,
   EndpointPathCaller,
@@ -32,6 +34,8 @@ export type {
   EndpointRequestFunctions,
   EndpointRequestRuntime,
   EndpointRequestRuntimeOptions,
+  EndpointRequestValidationIssue,
+  EndpointRequestValidationProblem,
   EndpointRawResponse,
   EndpointRawResponseValue,
   EndpointResult,
@@ -105,6 +109,13 @@ export type {
   EndpointRuntime,
   EndpointRuntimeRouteMethod,
 } from './endpoint-runtime'
+export { defineServerRouteConfig } from './server-route-config'
+export type {
+  ServerRouteConfig,
+  ServerRouteMethodConfig,
+  ServerRouteResponsesFor,
+  ServerRouteScopeConfig,
+} from './server-route-config'
 export type {
   EndpointHandlerNext,
   EndpointHandlerWrapper,

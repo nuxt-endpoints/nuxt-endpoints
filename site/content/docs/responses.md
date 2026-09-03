@@ -27,7 +27,44 @@ if (result.status === 200) {
 
 Transport failures still reject. A declared `404` does not: it resolves as the `404` member of the union.
 
+Nuxt Endpoints also includes the default failures it can produce before the handler: `400` for request validation, `415` for a content-type mismatch, `406` for failed response negotiation, and `400`/`409`/`422` when idempotency is enabled. Only statuses made reachable by that route's contract are added. A custom validation hook that returns another status should declare it in the route contract or the application response config below.
+
 The request object is memoized when awaited. Calling `then`, `catch`, or `finally` on the same object observes the same execution rather than sending duplicate requests.
+
+## Application and middleware responses
+
+A response can be produced before an endpoint handler runs. Declare those application-wide outcomes once in `server/routes.config.ts` instead of repeating them in every handler contract.
+
+```ts
+// server/routes.config.ts
+import { z } from 'zod'
+import { defineServerRouteConfig } from 'nuxt-endpoints/runtime'
+
+export default defineServerRouteConfig({
+  responses: {
+    500: z.object({ error: z.literal('internal_error') }),
+  },
+  routes: {
+    '/api/admin/**': {
+      responses: {
+        401: z.object({ error: z.literal('unauthorized') }),
+        403: z.object({ error: z.literal('forbidden') }),
+      },
+      methods: {
+        post: {
+          responses: {
+            429: z.object({ retryAfter: z.number() }),
+          },
+        },
+      },
+    },
+  },
+})
+```
+
+Global responses apply to every generated endpoint. Route keys match either one generated route template exactly or a prefix ending in `/**`; method responses are applied after the path scope. The resulting statuses are added to `$endpoint`, `useEndpoint`, Pinia Colada options, raw response types, and OpenAPI. If several scopes declare the same status, its body is a union and OpenAPI uses `oneOf`.
+
+This configuration describes responses that middleware or application infrastructure may produce; it does not register, inspect, or execute middleware. Keep runtime-only NE policy such as idempotency storage in `defineEndpointRuntime`. To use a non-conventional file, set `endpoints.serverRouteConfig.path` in `nuxt.config.ts`.
 
 ## Nuxt async data
 

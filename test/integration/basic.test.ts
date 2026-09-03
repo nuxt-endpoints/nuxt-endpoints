@@ -522,6 +522,21 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       )
     })
 
+    it('applies central path and method response contracts to OpenAPI', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+
+      expect(schema.paths['/api/users/{id}'].get.responses[401].content).toHaveProperty(
+        'application/json',
+      )
+      expect(schema.paths['/api/users'].post.responses[401].content).toHaveProperty(
+        'application/json',
+      )
+      expect(schema.paths['/api/users'].post.responses[429].content).toHaveProperty(
+        'application/json',
+      )
+      expect(schema.paths['/api/search'].get.responses[401]).toBeUndefined()
+    })
+
     it('generates endpoint types from Nuxt/Nitro routes only for endpoint contracts', async () => {
       const buildDir = getBuildDir(useTestContext)
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
