@@ -201,6 +201,12 @@ describe('which rule refused', () => {
       NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
     >()
     expectTypeOf<Constraint<undefined, typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
+    // The GET branch carries its own copy of this refusal, so it is pinned on
+    // its own: a reword or a broken branch on one side must fail a test.
+    expectTypeOf<GetConstraint<typeof Todo, typeof Todo>>().toEqualTypeOf<
+      NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
+    >()
+    expectTypeOf<GetConstraint<typeof Todo, typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
   })
 
   it('names the query rule, and only for a required parameter', () => {
@@ -222,6 +228,17 @@ describe('which rule refused', () => {
   it('names the idempotency rule', () => {
     expectTypeOf<
       Constraint<undefined, undefined, FormBody, { enabled: true; headerName: 'x'; required: true }>
+    >().toEqualTypeOf<
+      NativeFormRefusal<'A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare form.'>
+    >()
+    // The GET branch's copy, pinned for the same reason as the header rule's.
+    expectTypeOf<
+      GetConstraint<
+        typeof Todo,
+        undefined,
+        undefined,
+        { enabled: true; headerName: 'x'; required: true }
+      >
     >().toEqualTypeOf<
       NativeFormRefusal<'A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare form.'>
     >()
