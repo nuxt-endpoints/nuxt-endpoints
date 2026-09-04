@@ -2,10 +2,12 @@ import { describe, expectTypeOf, it } from 'vitest'
 import type { UseMutationOptions, UseQueryOptions } from '@pinia/colada'
 import type {
   EndpointClient,
+  EndpointFormCallOptions,
   EndpointRequestValidationProblem,
   EndpointResult,
   StandardSchemaLike,
   UseEndpointClient,
+  UseEndpointFormClient,
 } from '../../src/runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
@@ -55,11 +57,59 @@ type Routes =
         }
       }
     }
+  | {
+      path: '/api/search'
+      method: 'get'
+      definition: {
+        form: { from: '/search'; method: 'get' }
+        query: Schema<{ q: string; limit?: string }, { q: string; limit?: number }>
+        responses: { 200: Schema<{ items: string[] }> }
+      }
+    }
 
 declare const $endpoint: EndpointClient<Routes>
 declare const useEndpoint: UseEndpointClient<Routes>
+declare const useEndpointForm: UseEndpointFormClient<Routes>
 
 describe('path-based endpoint client types', () => {
+  it('types form validation presentation options', () => {
+    const options: EndpointFormCallOptions = {
+      validation: 'server',
+      resolveMessage: (issue) => `${issue.path?.join('.')}:${issue.message}`,
+    }
+    expectTypeOf(options.resolveMessage).toEqualTypeOf<
+      ((issue: Readonly<import('../../src/runtime').EndpointFormIssue>) => string) | undefined
+    >()
+
+    const invalid: EndpointFormCallOptions = {
+      // @ts-expect-error only browser and server validation modes exist.
+      validation: 'client',
+    }
+    void invalid
+
+    const postOptions: EndpointFormCallOptions<Extract<Routes, { path: '/api/users' }>> = {
+      onSuccess: (result) => {
+        expectTypeOf(result.status).toEqualTypeOf<201>()
+        expectTypeOf(result.body).toEqualTypeOf<{ id: number; name: string }>()
+      },
+    }
+    void postOptions
+  })
+
+  it('projects an explicit GET form from its query input', () => {
+    const form = useEndpointForm('/api/search', {
+      method: 'get',
+      query: { q: 'nuxt', limit: '10' },
+    })
+
+    expectTypeOf(form.attrs.method).toEqualTypeOf<'get'>()
+    expectTypeOf(form.fields.q.name).toEqualTypeOf<string>()
+    expectTypeOf(form.fields.limit.name).toEqualTypeOf<string>()
+    expectTypeOf(form.result.value?.status).toEqualTypeOf<200 | 400 | undefined>()
+    // @ts-expect-error fields come from validate.query, not an arbitrary name.
+    void form.fields.page
+  })
+
   it('requires a path, method, and contract inputs', () => {
     $endpoint('/api/users/:id', { method: 'get', params: { id: '1' } })
     $endpoint('/api/users', { method: 'post', body: { name: 'Tom' } })

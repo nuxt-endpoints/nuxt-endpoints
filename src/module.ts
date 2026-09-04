@@ -27,8 +27,12 @@ import { isMediaResponseContract } from './runtime/response'
 import { findFormBodyMember } from './runtime/body-media-type'
 import { formFieldAttributes } from './runtime/form-schema'
 import type { EndpointFormRouteMetadata } from './codegen/types'
-import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
-import { inspectValidatorInputObject } from './runtime/validator'
+import type {
+  EndpointDefinition,
+  EndpointIdempotencyMetadata,
+  ResponseContract,
+} from './runtime/contract'
+import { inspectValidatorInputObject, inspectValidatorOutputObject } from './runtime/validator'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -362,6 +366,11 @@ export async function composeHandlers(
         `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form\`, but a native <form> submission cannot fill in a path parameter. Project a route with no parameters, or carry the value in the body.`,
       )
     }
+    if (form && method.toLowerCase() !== form.method) {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form.method: '${form.method}'\`, but the endpoint method is ${method.toUpperCase()}. The native form method and endpoint method must match; PUT, PATCH, and DELETE are not emulated over POST.`,
+      )
+    }
 
     endpointHandlers.push({
       ...handler,
@@ -435,12 +444,11 @@ export function indexRouteContracts(
  * Refuses a `validate.headers` or `validate.query` declaration that requires
  * something a native submission cannot carry.
  *
- * `NativeFormProjectionConstraint` (src/runtime/form-projection.ts) states the
- * same rules at the type level, and that is where an author normally meets
- * them. This is not a duplicate for its own sake: a cast erases the type, and
- * a rule that only holds when nobody casts is not a rule. A declaration that
- * requires nothing is still fine — a browser that sends none of it produces a
- * valid request.
+ * This is the enforcement boundary. `NativeFormProjectionConstraint`
+ * (src/runtime/form-projection.ts) mirrors the rules as early editor feedback,
+ * but Nuxt builds do not require a full TypeScript check, JavaScript has none,
+ * and a cast erases it. A declaration that requires nothing is still fine — a
+ * browser that sends none of it produces a valid request.
  */
 function assertNativeFormCanSatisfy(
   schema: unknown,
@@ -501,10 +509,10 @@ function resolveFormMetadata(
       `[nuxt-endpoints] form.from must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.from)}.`,
     )
   }
-  const member = findFormBodyMember(definition.body)
-  if (!member) {
+  const method = form.method ?? 'post'
+  if (method !== 'get' && method !== 'post') {
     throw new Error(
-      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`validate.body\` - \`formOf()\` derives one from the JSON member.`,
+      `[nuxt-endpoints] form.method must be 'get' or 'post'. Received ${JSON.stringify(method)}.`,
     )
   }
   if (definition.idempotency) {
@@ -517,16 +525,101 @@ function resolveFormMetadata(
     'headers',
     'A native <form> cannot send request headers',
   )
+
+  if (method === 'get') {
+    if (definition.body !== undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `validate.body`.',
+      )
+    }
+    if (definition.query === undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form needs `validate.query` to declare the fields the browser places in the URL.',
+      )
+    }
+    if ('redirect' in form && form.redirect !== undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form submission is already a navigation, so it cannot declare `form.redirect`.',
+      )
+    }
+    return {
+      from: form.from,
+      method,
+      enctype: 'application/x-www-form-urlencoded',
+      fields: formFieldAttributes(definition.query),
+    }
+  }
+
+  const member = findFormBodyMember(definition.body)
+  if (!member) {
+    throw new Error(
+      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`validate.body\` - \`formOf()\` derives one from the JSON member.`,
+    )
+  }
   assertNativeFormCanSatisfy(
     definition.query,
     'query',
     'A native <form> submission reaches the endpoint with no query string',
   )
+  if (form.redirect !== undefined) {
+    if (typeof form.redirect !== 'string' || !form.redirect.startsWith('/')) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect must be an absolute application path, e.g. '/todos/{id}'. Received ${JSON.stringify(form.redirect)}.`,
+      )
+    }
+    assertFormRedirectCanBeResolved(form.redirect, definition.responses)
+  }
   return {
     from: form.from,
+    method,
     ...(form.redirect ? { redirect: form.redirect } : {}),
     enctype: member.mediaType,
     fields: formFieldAttributes(member.schema),
+  }
+}
+
+/** Every successful response must be able to fill every redirect placeholder. */
+function assertFormRedirectCanBeResolved(
+  redirect: string,
+  responses: EndpointDefinition['responses'],
+): void {
+  const placeholders = [...redirect.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]!)
+  if (placeholders.length === 0) {
+    return
+  }
+
+  const successful = Object.entries(responses ?? {}).filter(([status]) => {
+    const parsed = Number(status)
+    return Number.isInteger(parsed) && parsed >= 200 && parsed < 300
+  }) as [string, ResponseContract][]
+  if (successful.length === 0) {
+    throw new Error(
+      `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but the route declares no successful response body.`,
+    )
+  }
+
+  for (const [status, response] of successful) {
+    if (isMediaResponseContract(response)) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but successful response ${status} is media and has no JSON body to resolve them from.`,
+      )
+    }
+    const schema =
+      typeof response === 'object' && response !== null && 'body' in response
+        ? response.body
+        : response
+    const { inspectable, properties } = inspectValidatorOutputObject(schema)
+    if (!inspectable) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but successful response ${status} could not be inspected as an object.`,
+      )
+    }
+    const missing = placeholders.filter((name) => !(name in properties))
+    if (missing.length > 0) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect cannot resolve ${missing.join(', ')} from successful response ${status}; declare those response body properties or use a literal redirect.`,
+      )
+    }
   }
 }
 

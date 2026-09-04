@@ -79,7 +79,7 @@ type RouteHandlerInput<
    * refuses a contract a browser could not produce a request for - see
    * form-projection.ts.
    */
-  form?: FORM & NativeFormProjectionConstraint<QUERY, HEADERS, BODY, IDEMPOTENCY>
+  form?: FORM & NativeFormProjectionConstraint<FORM, QUERY, HEADERS, BODY, IDEMPOTENCY>
   handler: CapturedRouteHandler<DEFINITION, ACTUAL_RETURN>
 }
 

@@ -45,6 +45,38 @@ describe('form projection compatibility', () => {
     })
   })
 
+  it('accepts an explicitly selected GET form and types its query', () => {
+    defineRouteHandler({
+      form: { from: '/search', method: 'get' },
+      validate: {
+        query: z.object({ q: z.string(), page: z.coerce.number().optional() }),
+        response: { 200: z.object({ items: z.array(z.string()) }) },
+      },
+      handler: (event) => {
+        expectTypeOf(event.validated.query).toEqualTypeOf<{
+          q: string
+          page?: number
+        }>()
+        return { items: [event.validated.query.q] }
+      },
+    })
+  })
+
+  it('refuses body and redirect declarations on a GET form', () => {
+    const definition = {
+      form: { from: '/search', method: 'get' as const, redirect: '/done' },
+      validate: {
+        query: z.object({ q: z.string() }),
+        body: { 'application/x-www-form-urlencoded': TodoForm },
+        response: { 200: z.object({ items: z.array(z.string()) }) },
+      },
+      handler: () => ({ items: [] }),
+    }
+
+    // @ts-expect-error GET carries fields in the URL and does not redirect after an action.
+    defineRouteHandler(definition)
+  })
+
   // Each refusal hoists its argument into a variable so the call has a single
   // expression to fail on. Passed inline, the failure is reported once per
   // property of the object literal, and a directive can only cover one line.
@@ -140,13 +172,20 @@ describe('which rule refused', () => {
     HEADERS = undefined,
     BODY = FormBody,
     IDEM = undefined,
-  > = NativeFormProjectionConstraint<QUERY, HEADERS, BODY, IDEM>
+  > = NativeFormProjectionConstraint<{ from: '/todos/new' }, QUERY, HEADERS, BODY, IDEM>
+  type GetConstraint<
+    QUERY = typeof Todo,
+    HEADERS = undefined,
+    BODY = undefined,
+    IDEM = undefined,
+  > = NativeFormProjectionConstraint<{ from: '/search'; method: 'get' }, QUERY, HEADERS, BODY, IDEM>
 
   it('accepts a browser-submittable contract', () => {
     expectTypeOf<Constraint>().toEqualTypeOf<unknown>()
     expectTypeOf<
       Constraint<undefined, undefined, { 'multipart/form-data': typeof Todo }>
     >().toEqualTypeOf<unknown>()
+    expectTypeOf<GetConstraint>().toEqualTypeOf<unknown>()
   })
 
   it('names the encoding rule for a body no browser can send', () => {
@@ -166,9 +205,18 @@ describe('which rule refused', () => {
 
   it('names the query rule, and only for a required parameter', () => {
     expectTypeOf<Constraint<typeof Todo>>().toEqualTypeOf<
-      NativeFormRefusal<'A native <form> submission reaches the endpoint with no query string, so validate.query cannot require any.'>
+      NativeFormRefusal<'A POST form reaches the endpoint with no query string, so validate.query cannot require any.'>
     >()
     expectTypeOf<Constraint<typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
+  })
+
+  it('requires a query contract and no body for GET', () => {
+    expectTypeOf<GetConstraint<undefined>>().toEqualTypeOf<
+      NativeFormRefusal<'A GET form needs validate.query to declare its fields.'>
+    >()
+    expectTypeOf<GetConstraint<typeof Todo, undefined, FormBody>>().toEqualTypeOf<
+      NativeFormRefusal<'A GET form sends fields in the query string, so validate.body must be omitted.'>
+    >()
   })
 
   it('names the idempotency rule', () => {

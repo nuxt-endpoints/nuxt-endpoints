@@ -10,9 +10,24 @@
 // the browser posts to this page's own URL, the bridge middleware forwards the
 // submission to `/api/users`, and either sends a 303 or renders this page again
 // with the endpoint's issues in it - one request, no redirect, no cookie.
-const form = useEndpointForm('/api/users', { method: 'post', body: { name: '' } })
-
 const route = useRoute()
+const successCalls = ref(0)
+const form = useEndpointForm('/api/users', {
+  method: 'post',
+  body: { name: '' },
+  validation: 'server',
+  resolveMessage: (issue) => {
+    const field = issue.path?.join('.') || 'form'
+    const minimum = typeof issue.minimum === 'number' ? ` minimum=${issue.minimum}` : ''
+    return `[${issue.code || 'validation'}] ${field}${minimum}: ${issue.message}`
+  },
+  onSuccess:
+    route.query.callback === '1'
+      ? () => {
+          successCalls.value += 1
+        }
+      : undefined,
+})
 </script>
 
 <template>
@@ -26,6 +41,8 @@ const route = useRoute()
     <p v-if="form.allIssues.value.length" class="text -error" data-testid="failed">
       Rejected with {{ form.status.value }}
     </p>
+
+    <output data-testid="success-count">{{ successCalls }}</output>
 
     <form v-bind="form.attrs" class="form" @submit="form.enhance">
       <label class="label">
@@ -41,10 +58,10 @@ const route = useRoute()
       <ul v-if="form.allIssues.value.length" class="list" data-testid="issues">
         <li
           v-for="issue in form.allIssues.value"
-          :key="`${issue.path}:${issue.message}`"
+          :key="`${issue.path?.join('.')}:${issue.message}`"
           class="item"
         >
-          {{ issue.path }}: {{ issue.message }}
+          {{ issue.path?.join('.') }}: {{ issue.message }}
         </li>
       </ul>
 

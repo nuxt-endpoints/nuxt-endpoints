@@ -74,6 +74,17 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(html).toContain('action="/form-pe"')
       expect(html).toContain('method="post"')
       expect(html).toContain('enctype="application/x-www-form-urlencoded"')
+      expect(html).toContain('novalidate')
+    })
+
+    it('renders a GET form and its endpoint result from the URL query', async () => {
+      const html = await fetch('/form-pe/search?q=Ada').then((response) => response.text())
+
+      expect(html).toContain('action="/form-pe/search"')
+      expect(html).toContain('method="get"')
+      expect(html).toContain('name="q"')
+      expect(html).toContain('value="Ada"')
+      expect(html).toContain('Ada Lovelace')
     })
 
     it('derives file input attributes from the schema that validates the file', async () => {
@@ -96,7 +107,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
 
       expect(response.status).toBe(303)
-      expect(response.headers.get('location')).toBe('/form-pe?created=101')
+      expect(response.headers.get('location')).toBe('/form-pe?created=Ada%20Lovelace%2F42')
     })
 
     it('lets the endpoint coerce its own declared form encoding', async () => {
@@ -136,7 +147,11 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
 
       expect(response.status).toBe(201)
-      await expect(response.json()).resolves.toEqual({ id: 101, name: 'Ada', age: 36 })
+      await expect(response.json()).resolves.toEqual({
+        id: 'Ada Lovelace/42',
+        name: 'Ada',
+        age: 36,
+      })
     })
 
     it('documents both request encodings in the OpenAPI document', async () => {
@@ -166,6 +181,9 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(html).toContain('Native form, no JavaScript')
       expect(html).toContain('data-testid="issues"')
       expect(html).toContain('Rejected with 400')
+      // The page mapped the original Zod issue, including fields beyond
+      // path/message/code. This is the SSR/native half of resolveMessage.
+      expect(html).toContain('[too_small] name minimum=1')
       // The value the user typed is redisplayed.
       expect(html).toContain('value="36"')
     })
@@ -178,7 +196,11 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
 
       expect(response.status).toBe(201)
-      await expect(response.json()).resolves.toEqual({ id: 101, name: 'Ada', age: 36 })
+      await expect(response.json()).resolves.toEqual({
+        id: 'Ada Lovelace/42',
+        name: 'Ada',
+        age: 36,
+      })
     })
 
     it('does not intercept a POST to the page URL that asks for JSON', async () => {
@@ -245,23 +267,31 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       it(
         'submits without navigating and renders the endpoint issues in place',
         async () => {
-          const page = await createPage('/form-pe')
+          const page = await createPage('/form-pe?callback=1')
           await page.waitForFunction(() => window.useNuxtApp?.().isHydrating === false)
 
-          // A single space passes `minlength="1"`, so the browser submits it
-          // and only the endpoint's own refinement can reject it - the third
-          // validation layer, reached without the page knowing about it.
-          await page.locator('input[name="name"]').fill(' ')
+          // The input is empty and carries `required`, but `validation:
+          // 'server'` put `novalidate` on the form, so the request still
+          // reaches the contract and its message mapper.
           await page.locator('button[type="submit"]').click()
 
           await page.locator('[data-testid="issues"]').waitFor()
           await expect(page.locator('[data-testid="failed"]').textContent()).resolves.toContain(
             'Rejected with 400',
           )
+          await expect(page.locator('[data-testid="issues"]').textContent()).resolves.toContain(
+            '[too_small] name minimum=1',
+          )
+          // A status-aware failure must not enter the success callback.
+          await expect(page.locator('[data-testid="success-count"]').textContent()).resolves.toBe(
+            '0',
+          )
           // No navigation happened: still the same URL, and no 303 was followed.
-          expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe('/form-pe')
+          expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe(
+            '/form-pe?callback=1',
+          )
           // What was typed is still in the field, because nothing re-rendered.
-          await expect(page.locator('input[name="name"]').inputValue()).resolves.toBe(' ')
+          await expect(page.locator('input[name="name"]').inputValue()).resolves.toBe('')
 
           await page.close()
         },
@@ -281,7 +311,30 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
           await page.locator('[data-testid="created"]').waitFor()
           // The same target the native path is sent to by the `303`, resolved
           // from the same declaration.
-          expect(new URL(page.url()).search).toBe('?created=101')
+          expect(new URL(page.url()).search).toBe('?created=Ada%20Lovelace%2F42')
+
+          await page.close()
+        },
+        browserFlowTimeout,
+      )
+
+      it(
+        'enhances a GET form as URL navigation and refreshes its typed query result',
+        async () => {
+          const page = await createPage('/form-pe/search')
+          await page.waitForFunction(() => window.useNuxtApp?.().isHydrating === false)
+
+          await page.locator('input[name="q"]').fill('Grace')
+          await page.locator('button[type="submit"]').click()
+
+          await page.waitForURL('**/form-pe/search?q=Grace')
+          await page
+            .locator('[data-testid="search-results"]', { hasText: 'Grace Hopper' })
+            .waitFor()
+          expect(new URL(page.url()).search).toBe('?q=Grace')
+          await expect(page.locator('[data-testid="search-status"]').textContent()).resolves.toBe(
+            '200',
+          )
 
           await page.close()
         },

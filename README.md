@@ -131,7 +131,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Importable path, method, request, and result helper types from `#endpoints`
 - ✅ Pinia Colada integration through standard `.queryOptions()` / `.mutationOptions()`, with its official Nuxt SSR module
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
-- ✅ Progressive enhancement: `useEndpointForm` projects a request into a native `<form>` that works before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md)) — Nuxt 5 line only
+- ✅ Progressive enhancement: `useEndpointForm` projects GET query forms and POST mutation forms that work before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md)) — Nuxt 5 line only
 
 ## Published Nuxt 4 line
 

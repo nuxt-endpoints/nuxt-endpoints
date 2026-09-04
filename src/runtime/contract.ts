@@ -181,20 +181,28 @@ export type EndpointIdempotencyMetadata<
  *
  * See docs/progressive-enhancement.md.
  */
-export type EndpointFormContract = {
+type EndpointFormContractBase = {
   /**
-   * The page URL the form posts to. A browser navigation to this path is
-   * translated into a call to this endpoint, and its response is translated
-   * back into what a browser can act on.
+   * The page URL the form submits to. A GET remains ordinary navigation; a
+   * POST is translated into a call to this endpoint and its response is
+   * translated back into what a browser can act on.
    */
   from: string
-  /**
-   * Where the browser goes after a successful submission, as a template over
-   * the response body: `'/todos/{id}'`. A `303` is sent to it, so the history
-   * entry the user lands on is a `GET`.
-   */
-  redirect?: string
 }
+
+export type EndpointFormContract =
+  | (EndpointFormContractBase & {
+      /** POST is the mutation form default. */
+      method?: 'post'
+      /** Success target template over the response body. */
+      redirect?: string
+    })
+  | (EndpointFormContractBase & {
+      /** GET projects `validate.query` into a URL-backed search/filter form. */
+      method: 'get'
+      /** A GET submission already navigates to its destination. */
+      redirect?: never
+    })
 
 export type EndpointDefinition = EndpointRequestContract & {
   responses?: EndpointResponsesContract

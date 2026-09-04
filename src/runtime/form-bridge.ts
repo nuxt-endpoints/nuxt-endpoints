@@ -12,7 +12,7 @@
 // what makes the failure path work - see pi0's closing comment on
 // nitrojs/nitro#1286.
 import { endpointNativeSubmissionKey } from './client'
-import type { EndpointNativeSubmission } from './client'
+import type { EndpointFormIssue, EndpointNativeSubmission } from './client'
 import { getFormRoute } from './form-routes-state'
 import {
   defineRuntimeMiddleware,
@@ -77,21 +77,21 @@ function submittedValues(form: FormData): Record<string, string> {
   return values
 }
 
-function extractIssues(payload: Record<string, unknown>): { path: string; message: string }[] {
+function extractIssues(payload: Record<string, unknown>): EndpointFormIssue[] {
   const data = payload.data
   if (!data || typeof data !== 'object') {
     return []
   }
-  const issues: { path: string; message: string }[] = []
+  const issues: EndpointFormIssue[] = []
   for (const group of Object.values(data as Record<string, unknown>)) {
     if (!Array.isArray(group)) {
       continue
     }
-    for (const issue of group as { path?: (string | number)[]; message?: string }[]) {
+    for (const issue of group as Record<string, unknown>[]) {
       issues.push({
-        path: (issue.path ?? []).join('.'),
-        message: issue.message ?? 'Invalid value',
-      })
+        ...issue,
+        message: typeof issue.message === 'string' ? issue.message : 'Invalid value',
+      } as EndpointFormIssue)
     }
   }
   return issues
@@ -138,7 +138,7 @@ export default defineRuntimeMiddleware(async (event, next) => {
   const isMultipart = route.enctype.includes('multipart/form-data')
 
   const response = await runtimeServerFetch(route.target, {
-    method: route.method,
+    method: 'POST',
     body: isMultipart ? form : new URLSearchParams(values).toString(),
     headers: forwardedHeaders(incoming, isMultipart ? undefined : route.enctype),
   })
@@ -161,7 +161,7 @@ export default defineRuntimeMiddleware(async (event, next) => {
   // control - and unlike rendering through a second internal request, the
   // middleware stack still runs exactly once for the browser's one request.
   const submission: EndpointNativeSubmission = {
-    route: { method: route.method.toLowerCase(), path: route.target },
+    route: { method: 'post', path: route.target },
     status: response.status,
     issues: extractIssues(payload),
     values,

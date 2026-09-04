@@ -29,6 +29,7 @@ export type {
   EndpointFormFields,
   EndpointFormIssue,
   EndpointFormRoute,
+  EndpointFormValidationMode,
   EndpointNativeSubmission,
   EndpointFetcherRawResponse,
   EndpointFetcherRuntime,

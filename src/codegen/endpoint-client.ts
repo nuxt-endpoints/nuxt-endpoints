@@ -23,7 +23,7 @@ import { navigateTo, useRequestEvent, useRequestFetch, useState } from 'nuxt/app
 import { computed, ref } from 'vue'
 import { createEndpointClient, createUseEndpoint, createUseEndpointForm } from '${clientRuntimeImportPath}'
 
-import type { EndpointFetcherRuntime } from '${clientRuntimeImportPath}'
+import type { EndpointFetcherRuntime, UseEndpointClientRuntimeValue } from '${clientRuntimeImportPath}'
 import type { $EndpointClient, $UseEndpoint, $UseEndpointForm } from '#endpoints'
 
 const routes = ${JSON.stringify(routes, null, 2)} as const
@@ -47,6 +47,6 @@ const formBindings = { ref, computed, useState, useRequestEvent, navigateTo }
 
 export const $endpoint = createEndpointClient(routes${clientOptions}) as unknown as $EndpointClient
 export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint
-export const useEndpointForm = createUseEndpointForm(routes, formBindings, { captureFetcher }) as unknown as $UseEndpointForm
+export const useEndpointForm = createUseEndpointForm(routes, { ...formBindings, useEndpoint: useEndpoint as unknown as UseEndpointClientRuntimeValue }, { captureFetcher }) as unknown as $UseEndpointForm
 `.trimStart()
 }

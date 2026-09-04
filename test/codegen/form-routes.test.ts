@@ -19,6 +19,7 @@ describe('generateEndpointFormRoutes', () => {
       handler({
         form: {
           from: '/form-pe',
+          method: 'post',
           redirect: '/form-pe?created={id}',
           enctype: 'application/x-www-form-urlencoded',
           fields: { name: { name: 'name', required: true } },
@@ -29,23 +30,25 @@ describe('generateEndpointFormRoutes', () => {
     expect(JSON.parse(content.replace('export const formRoutes = ', ''))).toEqual({
       '/form-pe': {
         target: '/api/users',
-        method: 'POST',
         enctype: 'application/x-www-form-urlencoded',
         redirect: '/form-pe?created={id}',
       },
     })
   })
 
-  it('carries the declared method, so a form can reach a route a browser cannot', () => {
+  it('does not generate a method override for the POST-only bridge', () => {
     const content = generateEndpointFormRoutes([
       handler({
-        route: '/api/users/:id',
-        method: 'put',
-        form: { from: '/users/edit', enctype: 'application/x-www-form-urlencoded', fields: {} },
+        form: {
+          from: '/users/new',
+          method: 'post',
+          enctype: 'application/x-www-form-urlencoded',
+          fields: {},
+        },
       }),
     ])
 
-    expect(content).toContain('"method": "PUT"')
+    expect(content).not.toContain('method')
     // Nothing to redirect to was declared, so nothing is emitted for it.
     expect(content).not.toContain('redirect')
   })
@@ -55,6 +58,7 @@ describe('generateEndpointFormRoutes', () => {
       handler({
         form: {
           from: '/form-pe',
+          method: 'post',
           enctype: 'application/x-www-form-urlencoded',
           fields: { name: { name: 'name', required: true, minlength: 1 } },
         },
@@ -69,19 +73,46 @@ describe('generateEndpointFormRoutes', () => {
       () =>
         generateEndpointFormRoutes([
           handler({
-            form: { from: '/form-pe', enctype: 'application/x-www-form-urlencoded', fields: {} },
+            form: {
+              from: '/form-pe',
+              method: 'post',
+              enctype: 'application/x-www-form-urlencoded',
+              fields: {},
+            },
           }),
           handler({
             route: '/api/comments',
-            form: { from: '/form-pe', enctype: 'application/x-www-form-urlencoded', fields: {} },
+            form: {
+              from: '/form-pe',
+              method: 'post',
+              enctype: 'application/x-www-form-urlencoded',
+              fields: {},
+            },
           }),
         ]),
       // A native submission carries nothing that would say which one it meant,
       // so silently picking one would send the browser to the wrong endpoint.
-    ).toThrow(/POST \/api\/users and POST \/api\/comments/)
+    ).toThrow(/\/api\/users and \/api\/comments/)
   })
 
   it('emits an empty map when no route declares a form', () => {
     expect(generateEndpointFormRoutes([handler({})])).toBe('export const formRoutes = {}\n')
+  })
+
+  it('omits GET forms because normal page navigation owns them', () => {
+    const content = generateEndpointFormRoutes([
+      handler({
+        route: '/api/search',
+        method: 'get',
+        form: {
+          from: '/search',
+          method: 'get',
+          enctype: 'application/x-www-form-urlencoded',
+          fields: { q: { name: 'q' } },
+        },
+      }),
+    ])
+
+    expect(content).toBe('export const formRoutes = {}\n')
   })
 })

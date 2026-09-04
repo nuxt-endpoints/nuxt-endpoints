@@ -123,6 +123,12 @@ export function inspectValidatorInputObject(schema: unknown) {
   return inspectJsonSchemaObject(converted, getJsonSchemaComponents(context))
 }
 
+export function inspectValidatorOutputObject(schema: unknown) {
+  const context = createJsonSchemaContext()
+  const converted = toJsonSchema(schema, context, { mode: 'output' })
+  return inspectJsonSchemaObject(converted, getJsonSchemaComponents(context))
+}
+
 function collectJsonSchemaObjectProperties(
   schema: JsonSchema,
   components: Record<string, JsonSchema>,

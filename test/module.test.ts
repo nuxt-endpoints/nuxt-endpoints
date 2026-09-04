@@ -55,7 +55,7 @@ describe('Nitro route contract provider', () => {
             'application/json': Todo,
             'application/x-www-form-urlencoded': formOf(Todo),
           },
-          responses: {},
+          responses: { 201: z.object({ id: z.number() }) },
         },
       },
     ])
@@ -66,6 +66,7 @@ describe('Nitro route contract provider', () => {
         method: 'post',
         form: {
           from: '/todos/new',
+          method: 'post',
           redirect: '/todos/{id}',
           enctype: 'application/x-www-form-urlencoded',
           fields: {
@@ -101,6 +102,108 @@ describe('Nitro route contract provider', () => {
     await expect(composeHandlers([handler], contracts)).rejects.toThrow(
       /cannot fill in a path parameter/,
     )
+  })
+
+  it('projects a GET route from its query contract', async () => {
+    const handler = {
+      handler: '/project/server/api/search.get.ts',
+      route: '/api/search',
+      method: 'get',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          form: { from: '/search', method: 'get' },
+          query: z.object({ term: z.string().min(1), page: z.coerce.number().optional() }),
+          responses: { 200: z.object({ items: z.array(z.string()) }) },
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+      {
+        route: '/api/search',
+        method: 'get',
+        form: {
+          from: '/search',
+          method: 'get',
+          enctype: 'application/x-www-form-urlencoded',
+          fields: {
+            term: { name: 'term', required: true, minlength: 1 },
+            page: { name: 'page' },
+          },
+        },
+      },
+    ])
+  })
+
+  it('rejects an implicit PUT/PATCH/DELETE method override', async () => {
+    const handler = {
+      handler: '/project/server/api/profile.put.ts',
+      route: '/api/profile',
+      method: 'put',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          form: { from: '/profile/edit' },
+          body: {
+            'application/x-www-form-urlencoded': formOf(z.object({ name: z.string() })),
+          },
+          responses: { 200: z.object({ name: z.string() }) },
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).rejects.toThrow(
+      /form.method: 'post'.*endpoint method is PUT.*not emulated over POST/s,
+    )
+  })
+
+  it('rejects a GET form with no query contract', () => {
+    const handler = {
+      handler: '/project/server/api/search.get.ts',
+      route: '/api/search',
+      method: 'get',
+      middleware: false,
+    }
+
+    expect(() =>
+      indexRouteContracts([
+        {
+          ...handler,
+          contract: { form: { from: '/search', method: 'get' }, responses: {} },
+        },
+      ]),
+    ).toThrow(/GET form needs `validate.query`/)
+  })
+
+  it('rejects a redirect placeholder absent from a successful response', () => {
+    const handler = {
+      handler: '/project/server/api/todos.post.ts',
+      route: '/api/todos',
+      method: 'post',
+      middleware: false,
+    }
+
+    expect(() =>
+      indexRouteContracts([
+        {
+          ...handler,
+          contract: {
+            form: { from: '/todos/new', redirect: '/todos/{id}' },
+            body: {
+              'application/x-www-form-urlencoded': formOf(z.object({ title: z.string() })),
+            },
+            responses: { 201: z.object({ slug: z.string() }) },
+          },
+        },
+      ]),
+    ).toThrow(/cannot resolve id from successful response 201/)
   })
 
   it('rejects a form declaration a browser could never satisfy', () => {

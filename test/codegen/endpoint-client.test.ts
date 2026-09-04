@@ -102,7 +102,7 @@ describe('generateEndpointClient', () => {
     )
     expect(content).toContain("import { computed, ref } from 'vue'")
     expect(content).toContain(
-      'export const useEndpointForm = createUseEndpointForm(routes, formBindings, { captureFetcher })',
+      'export const useEndpointForm = createUseEndpointForm(routes, { ...formBindings, useEndpoint: useEndpoint as unknown as UseEndpointClientRuntimeValue }, { captureFetcher })',
     )
   })
 

@@ -1383,11 +1383,19 @@ function toRequestValidationIssue(issue: ValidationIssue): RequestValidationIssu
     .filter((segment): segment is string | number => segment !== undefined)
   const code = issue.code ?? (typeof runtimeIssue.type === 'string' ? runtimeIssue.type : undefined)
 
-  return {
-    ...(path?.length ? { path } : {}),
+  const result = {
+    ...runtimeIssue,
     message: issue.message,
     ...(code ? { code } : {}),
+  } as RequestValidationIssue
+  // Standard Schema also permits `{ key }` path segments. Keep the complete
+  // vendor issue, but make this one field portable and JSON-safe for clients.
+  if (path?.length) {
+    result.path = path
+  } else {
+    delete result.path
   }
+  return result
 }
 
 function createIdempotencyRuntimeMarker(

@@ -115,7 +115,11 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
 
       expect(created.status).toBe(201)
-      await expect(created.json()).resolves.toEqual({ id: 101, name: 'Ada', age: 36 })
+      await expect(created.json()).resolves.toEqual({
+        id: 'Ada Lovelace/42',
+        name: 'Ada',
+        age: 36,
+      })
       expect(invalidCreate.status).toBe(400)
       const invalidCreateBody = await invalidCreate.json()
       expect(invalidCreateBody).toMatchObject({
@@ -132,9 +136,19 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const invalidSearchBody = await invalidSearch.json()
       expect(invalidSearchBody).toMatchObject({
         statusMessage: 'Validation Error',
+        data: {
+          query: [
+            {
+              type: 'max_value',
+              input: 11,
+              requirement: 10,
+              path: ['limit'],
+              code: 'max_value',
+            },
+          ],
+        },
       })
       expect(invalidSearchBody).not.toHaveProperty('stack')
-      expect(JSON.stringify(invalidSearchBody)).not.toContain('"input"')
 
       expect(legacy.status).toBe(200)
       await expect(legacy.json()).resolves.toMatchObject({ totalUsers: 4 })

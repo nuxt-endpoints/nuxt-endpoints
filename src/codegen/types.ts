@@ -35,8 +35,10 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
 // type back, which would create a cycle; `resolvedOptions` in module.ts is a
 // structural superset and is passed in as-is.
 export type EndpointFormRouteMetadata = {
-  /** The page URL a native form posts to. */
+  /** The page URL a native form submits to. */
   from: string
+  /** GET projects query fields; POST projects a form-encoded body. */
+  method: 'get' | 'post'
   /** Success target template over the response body, e.g. `/todos/{id}`. */
   redirect?: string
   /** The encoding the declared form member accepts. */

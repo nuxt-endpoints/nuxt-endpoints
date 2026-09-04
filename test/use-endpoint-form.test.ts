@@ -29,6 +29,7 @@ const route = {
   method: 'post' as const,
   form: {
     from: '/todos/new',
+    method: 'post' as const,
     redirect: '/todos/{id}',
     enctype: 'application/x-www-form-urlencoded',
     fields: {
@@ -94,6 +95,42 @@ describe('useEndpointForm', () => {
     expect(form.values.value).toEqual({ title: 'Draft' })
   })
 
+  it('can disable browser validation so every displayed issue comes from the server', () => {
+    const form = client(bindings())('/api/todos', {
+      method: 'post',
+      body: { title: '', done: false },
+      validation: 'server',
+    })
+
+    expect(form.attrs).toEqual({
+      action: '/todos/new',
+      method: 'post',
+      enctype: 'application/x-www-form-urlencoded',
+      novalidate: true,
+    })
+    // Keep the constraints as semantic input metadata; `novalidate` controls
+    // whether the browser blocks submission with its own message.
+    expect(form.fields.title.required).toBe(true)
+  })
+
+  it('rejects invalid presentation options for JavaScript callers', () => {
+    expect(() =>
+      client(bindings())('/api/todos', {
+        method: 'post',
+        body: { title: '', done: false },
+        validation: 'client',
+      }),
+    ).toThrow(/validation must be "browser" or "server"/)
+
+    expect(() =>
+      client(bindings())('/api/todos', {
+        method: 'post',
+        body: { title: '', done: false },
+        resolveMessage: 'not a function',
+      }),
+    ).toThrow(/resolveMessage must be a function/)
+  })
+
   it('binds each field in both directions, so a re-render cannot wipe it', () => {
     const form = client(bindings())('/api/todos', {
       method: 'post',
@@ -116,6 +153,7 @@ describe('useEndpointForm', () => {
           method: 'post',
           form: {
             from: '/uploads',
+            method: 'post',
             enctype: 'multipart/form-data',
             fields: { attachment: { name: 'attachment', type: 'file', required: true } },
           },
@@ -174,6 +212,19 @@ describe('useEndpointForm', () => {
     expect(binding.navigated).toEqual(['/todos/7'])
   })
 
+  it('URL-encodes redirect placeholders the same way as the native bridge', async () => {
+    fetchMock.mockResolvedValue({ id: 'Ada Lovelace/42' })
+    const binding = bindings()
+    const form = client(binding)('/api/todos', {
+      method: 'post',
+      body: { title: '', done: false },
+    })
+
+    await form.enhance({ preventDefault: () => {}, target: {} as HTMLFormElement })
+
+    expect(binding.navigated).toEqual(['/todos/Ada%20Lovelace%2F42'])
+  })
+
   it('hands the result to onSuccess instead, when one is given', async () => {
     fetchMock.mockResolvedValue({ id: 7 })
     const binding = bindings()
@@ -190,6 +241,115 @@ describe('useEndpointForm', () => {
     expect(binding.navigated).toEqual([])
   })
 
+  it('does not call onSuccess for a failed response', async () => {
+    fetchRawMock.mockResolvedValue({
+      status: 400,
+      ok: false,
+      headers: new Headers(),
+      _data: { statusCode: 400, statusMessage: 'Validation Error', data: {} },
+    })
+    const seen: unknown[] = []
+    const form = client(bindings())('/api/todos', {
+      method: 'post',
+      body: { title: '', done: false },
+      onSuccess: (result: unknown) => seen.push(result),
+    })
+
+    await form.enhance({ preventDefault: () => {}, target: {} as HTMLFormElement })
+
+    expect(seen).toEqual([])
+    expect(form.result.value?.ok).toBe(false)
+  })
+
+  it('rejects stale metadata that would hide an endpoint method override', () => {
+    const usePutForm = createUseEndpointForm(
+      [{ ...route, method: 'put' as const }],
+      bindings(),
+    ) as unknown as (path: string, options: Record<string, unknown>) => any
+
+    expect(() =>
+      usePutForm('/api/todos', {
+        method: 'put',
+        body: { title: '', done: false },
+      }),
+    ).toThrow(/POST form cannot invoke PUT/)
+  })
+
+  it('projects GET fields from query input and loads the endpoint for this page', () => {
+    const useEndpoint = vi.fn(() => ({
+      data: { value: { status: 200, ok: true, body: { items: ['Ada'] } } },
+      pending: { value: false },
+    }))
+    const useSearchForm = createUseEndpointForm(
+      [
+        {
+          path: '/api/search',
+          method: 'get',
+          form: {
+            from: '/search',
+            method: 'get',
+            enctype: 'application/x-www-form-urlencoded',
+            fields: { q: { name: 'q', required: true } },
+          },
+        },
+      ],
+      bindings({ useEndpoint }),
+    ) as unknown as (path: string, options: Record<string, unknown>) => any
+
+    const form = useSearchForm('/api/search', { method: 'get', query: { q: 'Ada' } })
+
+    expect(form.attrs).toEqual({
+      action: '/search',
+      method: 'get',
+      enctype: 'application/x-www-form-urlencoded',
+    })
+    expect(form.fields.q.value).toBe('Ada')
+    expect(form.result.value).toEqual({ status: 200, ok: true, body: { items: ['Ada'] } })
+    expect(useEndpoint).toHaveBeenCalledWith('/api/search', {
+      method: 'get',
+      query: { q: 'Ada' },
+    })
+  })
+
+  it('enhances GET as URL navigation and sends the same query to the endpoint', async () => {
+    vi.stubGlobal(
+      'FormData',
+      class {
+        entries() {
+          return [['q', 'Ada Lovelace']][Symbol.iterator]()
+        }
+      },
+    )
+    const binding = bindings({
+      useEndpoint: () => ({ data: { value: undefined }, pending: { value: false } }) as never,
+    })
+    const useSearchForm = createUseEndpointForm(
+      [
+        {
+          path: '/api/search',
+          method: 'get',
+          form: {
+            from: '/search?old=value',
+            method: 'get',
+            enctype: 'application/x-www-form-urlencoded',
+            fields: { q: { name: 'q' } },
+          },
+        },
+      ],
+      binding,
+    ) as unknown as (path: string, options: Record<string, unknown>) => any
+    fetchMock.mockResolvedValue({ items: ['Ada Lovelace'] })
+    const form = useSearchForm('/api/search', { method: 'get', query: { q: '' } })
+
+    await form.enhance({ preventDefault: () => {}, target: {} as HTMLFormElement })
+
+    expect(binding.navigated).toEqual(['/search?q=Ada+Lovelace'])
+    expect(fetchRawMock.mock.calls[0]![1]).toMatchObject({
+      method: 'get',
+      query: { q: 'Ada Lovelace' },
+    })
+  })
+
   it('keys the module’s own validation issues by field', async () => {
     fetchRawMock.mockResolvedValue({
       status: 400,
@@ -198,7 +358,17 @@ describe('useEndpointForm', () => {
       _data: {
         statusCode: 400,
         statusMessage: 'Validation Error',
-        data: { body: [{ path: ['title'], message: 'Title is required' }] },
+        data: {
+          body: [
+            {
+              path: ['title'],
+              message: 'Title is required',
+              code: 'too_small',
+              minimum: 1,
+              origin: 'string',
+            },
+          ],
+        },
       },
     })
     const form = client(bindings())('/api/todos', {
@@ -208,16 +378,53 @@ describe('useEndpointForm', () => {
 
     await form.submit(new URLSearchParams({ title: '' }))
 
-    expect(form.issues.value).toEqual({ title: [{ path: 'title', message: 'Title is required' }] })
+    expect(form.issues.value).toEqual({
+      title: [
+        {
+          path: ['title'],
+          message: 'Title is required',
+          code: 'too_small',
+          minimum: 1,
+          origin: 'string',
+        },
+      ],
+    })
     expect(form.allIssues.value).toHaveLength(1)
     expect(form.status.value).toBe(400)
+  })
+
+  it('resolves enhanced-path issue messages without changing the status result', async () => {
+    const body = {
+      statusCode: 400,
+      statusMessage: 'Validation Error',
+      data: { body: [{ path: ['title'], message: 'required' }] },
+    }
+    fetchRawMock.mockResolvedValue({
+      status: 400,
+      ok: false,
+      headers: new Headers(),
+      _data: body,
+    })
+    const form = client(bindings())('/api/todos', {
+      method: 'post',
+      body: { title: '', done: false },
+      resolveMessage: (issue: { path?: (string | number)[]; message: string }) =>
+        issue.message === 'required' ? `${issue.path?.join('.')}を入力してください` : issue.message,
+    })
+
+    await form.submit(new URLSearchParams({ title: '' }))
+
+    expect(form.issues.value.title).toEqual([
+      { path: ['title'], message: 'titleを入力してください' },
+    ])
+    expect(form.result.value?.body).toEqual(body)
   })
 
   it('restores what a native submission sent, when one produced this render', () => {
     const submission = {
       route: { method: 'post', path: '/api/todos' },
       status: 400,
-      issues: [{ path: 'title', message: 'Title is required' }],
+      issues: [{ path: ['title'], message: 'Title is required' }],
       values: { title: 'typed but rejected' },
     }
     const form = client(
@@ -228,9 +435,32 @@ describe('useEndpointForm', () => {
 
     expect(form.fields.title.value).toBe('typed but rejected')
     expect(form.values.value.title).toBe('typed but rejected')
-    expect(form.issues.value).toEqual({ title: [{ path: 'title', message: 'Title is required' }] })
+    expect(form.issues.value).toEqual({
+      title: [{ path: ['title'], message: 'Title is required' }],
+    })
     // No result exists on this path: the submission never went through `$fetch`.
     expect(form.status.value).toBe(400)
+  })
+
+  it('resolves native-path issue messages during page rendering', () => {
+    const submission = {
+      route: { method: 'post', path: '/api/todos' },
+      status: 400,
+      issues: [{ path: ['title'], message: 'required' }],
+      values: { title: '' },
+    }
+    const form = client(
+      bindings({
+        useRequestEvent: () => ({ context: { __nuxtEndpointsForm: submission } }),
+      }),
+    )('/api/todos', {
+      method: 'post',
+      body: { title: '', done: false },
+      resolveMessage: (issue: { message: string }) =>
+        issue.message === 'required' ? 'タイトルは必須です' : issue.message,
+    })
+
+    expect(form.issues.value.title).toEqual([{ path: ['title'], message: 'タイトルは必須です' }])
   })
 
   it('ignores a submission that was posted to a different endpoint', () => {
@@ -241,7 +471,7 @@ describe('useEndpointForm', () => {
             __nuxtEndpointsForm: {
               route: { method: 'post', path: '/api/comments' },
               status: 400,
-              issues: [{ path: 'title', message: 'Title is required' }],
+              issues: [{ path: ['title'], message: 'Title is required' }],
               values: { title: 'for the other form' },
             },
           },

@@ -3,7 +3,7 @@ import { defineRouteHandler } from '../../../../src/runtime'
 import { UserFormInput, UserInput } from '../../../contracts/user'
 
 const User = z.object({
-  id: z.number(),
+  id: z.string(),
   name: z.string(),
   age: z.number().optional(),
 })
@@ -26,5 +26,9 @@ export default defineRouteHandler({
     },
   },
   handler: (event) =>
-    event.respond(201, { id: 101, name: event.validated.body.name, age: event.validated.body.age }),
+    event.respond(201, {
+      id: 'Ada Lovelace/42',
+      name: event.validated.body.name,
+      age: event.validated.body.age,
+    }),
 })

@@ -63,7 +63,7 @@ function checkForm() {
   form.values.value.title.toUpperCase()
   form.status.value?.toFixed()
   form.allIssues.value.map((issue) => issue.message.toUpperCase())
-  form.issues.value.title?.map((issue) => issue.path.toUpperCase())
+  form.issues.value.title?.map((issue) => issue.path?.join('.').toUpperCase())
 
   // @ts-expect-error `/api/users` declares no form projection
   useForm('/api/users', { method: 'post', body: { name: '' } })

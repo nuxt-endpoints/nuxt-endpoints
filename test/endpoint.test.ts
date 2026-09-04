@@ -39,7 +39,17 @@ const numberParams: StandardSchemaLike<{ id: string }, { id: number }> = {
       const value = input as { id: string }
       const id = Number(value.id)
       if (Number.isNaN(id)) {
-        return { issues: [{ path: ['id'], message: 'Expected numeric string' }] }
+        return {
+          issues: [
+            {
+              path: ['id'],
+              message: 'Expected numeric string',
+              code: 'invalid_number',
+              input: value.id,
+              expected: 'numeric string',
+            },
+          ],
+        }
       }
       return { value: { id } }
     },
@@ -220,7 +230,15 @@ describe('DefinedEndpoint', () => {
       statusCode: 400,
       statusMessage: 'Validation Error',
       data: {
-        params: [{ path: ['id'], message: 'Expected numeric string' }],
+        params: [
+          {
+            path: ['id'],
+            message: 'Expected numeric string',
+            code: 'invalid_number',
+            input: 'abc',
+            expected: 'numeric string',
+          },
+        ],
       },
     })
     expect(event.res.status).toBe(400)
