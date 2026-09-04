@@ -11,6 +11,16 @@ import type {
 } from './contract'
 import type { IdempotencyRouteContractForbiddenOptionKey } from './idempotency'
 import {
+  applyCursorPaginationContract,
+  type ApplyPaginationQuery,
+  type ApplyPaginationResponses,
+  type CursorPaginationPage,
+  type EndpointCursorPaginationContract,
+  type EndpointPaginationContract,
+  type PaginationContractConstraint,
+} from './pagination'
+import type { StatusResponse } from './response'
+import {
   defineEndpoint,
   defineEndpointHandler,
   type AssembledEndpointContract,
@@ -61,6 +71,7 @@ type RouteHandlerInput<
   DESCRIPTION,
   TAGS,
   IDEMPOTENCY,
+  PAGINATION,
   DEFINITION extends EndpointDefinition,
   ACTUAL_RETURN,
 > = {
@@ -70,6 +81,7 @@ type RouteHandlerInput<
   description?: DESCRIPTION
   tags?: TAGS
   idempotency?: IDEMPOTENCY & RouteContractIdempotency
+  pagination?: PAGINATION & PaginationContractConstraint<PAGINATION, QUERY, RESPONSES>
   handler: CapturedRouteHandler<DEFINITION, ACTUAL_RETURN>
 }
 
@@ -88,6 +100,7 @@ type RuntimeMethodValidation = RouteValidation<
 >
 
 type RuntimeMethodDefinition = RuntimeMethodMetadata & {
+  pagination?: EndpointPaginationContract
   validate?: RuntimeMethodValidation
   handler: (event: EndpointRouteEvent<any>) => unknown
 }
@@ -115,16 +128,26 @@ type ValidationPropertyOf<Value, Key extends PropertyKey> = PropertyOf<
   Key
 >
 
+type PaginationOf<Value> = Value extends {
+  pagination: infer PAGINATION extends EndpointPaginationContract
+}
+  ? PAGINATION
+  : undefined
+
 type EndpointDefinitionOf<Method, Params> = {
   params: Params
-  query: ValidationPropertyOf<Method, 'query'>
+  query: ApplyPaginationQuery<ValidationPropertyOf<Method, 'query'>, PaginationOf<Method>>
   headers: ValidationPropertyOf<Method, 'headers'>
   body: ValidationPropertyOf<Method, 'body'>
-  responses: ValidationPropertyOf<Method, 'response'>
+  responses: ApplyPaginationResponses<
+    ValidationPropertyOf<Method, 'response'>,
+    PaginationOf<Method>
+  >
   summary: PropertyOf<Method, 'summary'>
   description: PropertyOf<Method, 'description'>
   tags: PropertyOf<Method, 'tags'>
   idempotency: PropertyOf<Method, 'idempotency'>
+  pagination: PaginationOf<Method>
 }
 
 type RouteMethodKeys<Definition> = Extract<keyof Definition, RouteMethodKey>
@@ -141,16 +164,18 @@ type ResolvedRuntimeMethodDefinition<
   Params extends ValidatorSchema | undefined,
   Metadata extends RuntimeMethodMetadata,
   Validation extends RuntimeMethodValidation,
+  Pagination extends EndpointPaginationContract | undefined = undefined,
 > = {
   params: Params
-  query: PropertyOf<Validation, 'query'>
+  query: ApplyPaginationQuery<PropertyOf<Validation, 'query'>, Pagination>
   headers: PropertyOf<Validation, 'headers'>
   body: PropertyOf<Validation, 'body'>
-  responses: PropertyOf<Validation, 'response'>
+  responses: ApplyPaginationResponses<PropertyOf<Validation, 'response'>, Pagination>
   summary: PropertyOf<Metadata, 'summary'>
   description: PropertyOf<Metadata, 'description'>
   tags: PropertyOf<Metadata, 'tags'>
   idempotency: PropertyOf<Metadata, 'idempotency'>
+  pagination: Pagination
 }
 
 type InferredRuntimeMethod<
@@ -158,10 +183,17 @@ type InferredRuntimeMethod<
   Metadata extends RuntimeMethodMetadata,
   Validation extends RuntimeMethodValidation,
   ActualReturn,
+  Pagination extends EndpointPaginationContract | undefined = undefined,
 > = Metadata & {
   validate?: Validation
+  pagination?: Pagination &
+    PaginationContractConstraint<
+      Pagination,
+      PropertyOf<Validation, 'query'>,
+      PropertyOf<Validation, 'response'>
+    >
   handler: CapturedRouteHandler<
-    ResolvedRuntimeMethodDefinition<Params, Metadata, Validation>,
+    ResolvedRuntimeMethodDefinition<Params, Metadata, Validation, Pagination>,
     ActualReturn
   >
 }
@@ -219,6 +251,53 @@ export type EndpointRouteMethodsEventHandler<
   readonly '~routeDef': Definition
 }
 
+type AssembledRouteDefinition<
+  PARAMS extends ValidatorSchema | undefined,
+  QUERY extends ValidatorSchema | undefined,
+  HEADERS extends ValidatorSchema | undefined,
+  BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined,
+  RESPONSES extends EndpointResponsesContract | undefined,
+  SUMMARY extends string | undefined,
+  DESCRIPTION extends string | undefined,
+  TAGS extends string[] | undefined,
+  IDEMPOTENCY,
+  PAGINATION,
+> = AssembledEndpointContract<
+  PARAMS,
+  ApplyPaginationQuery<QUERY, PAGINATION>,
+  HEADERS,
+  BODY,
+  ApplyPaginationResponses<RESPONSES, PAGINATION>,
+  SUMMARY,
+  DESCRIPTION,
+  TAGS
+> & { idempotency: IDEMPOTENCY; pagination: PAGINATION }
+
+type CursorPaginatedRouteHandlerInput<
+  PARAMS,
+  QUERY,
+  HEADERS,
+  BODY,
+  RESPONSES,
+  SUMMARY,
+  DESCRIPTION,
+  TAGS,
+  IDEMPOTENCY,
+  ITEM extends ValidatorSchema,
+  DEFINITION extends EndpointDefinition,
+  ACTUAL_RETURN,
+> = {
+  params?: PARAMS
+  validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
+  summary?: SUMMARY
+  description?: DESCRIPTION
+  tags?: TAGS
+  idempotency?: IDEMPOTENCY & RouteContractIdempotency
+  pagination: EndpointCursorPaginationContract<ITEM> &
+    PaginationContractConstraint<EndpointCursorPaginationContract<ITEM>, QUERY, RESPONSES>
+  handler: CapturedRouteHandler<NoInfer<DEFINITION>, ACTUAL_RETURN>
+}
+
 /**
  * Nuxt Endpoints adapter for H3's unified route-handler authoring shape.
  * Nitro treats the direct call as a compiler macro; at runtime this adapter
@@ -235,7 +314,11 @@ export function defineRouteHandler<
   TAGS extends string[] | undefined = undefined,
   const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
     undefined,
-  DEFINITION extends EndpointDefinition = AssembledEndpointContract<
+  const ITEM extends ValidatorSchema = ValidatorSchema,
+  const ACTUAL_RETURN extends DeepReadonly<
+    CursorPaginationPage<ITEM> | StatusResponse<number, unknown>
+  > = DeepReadonly<CursorPaginationPage<ITEM> | StatusResponse<number, unknown>>,
+  DEFINITION extends EndpointDefinition = AssembledRouteDefinition<
     PARAMS,
     QUERY,
     HEADERS,
@@ -243,10 +326,96 @@ export function defineRouteHandler<
     RESPONSES,
     SUMMARY,
     DESCRIPTION,
-    TAGS
-  > & { idempotency: IDEMPOTENCY },
-  const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
-    HandlerReturn<DEFINITION>
+    TAGS,
+    IDEMPOTENCY,
+    EndpointCursorPaginationContract<ITEM>
+  >,
+>(
+  definition: CursorPaginatedRouteHandlerInput<
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS,
+    IDEMPOTENCY,
+    ITEM,
+    DEFINITION,
+    ACTUAL_RETURN
+  >,
+): EndpointRouteEventHandler<
+  CursorPaginatedRouteHandlerInput<
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS,
+    IDEMPOTENCY,
+    ITEM,
+    DEFINITION,
+    ACTUAL_RETURN
+  >,
+  CursorPaginationPage<ITEM>
+>
+export function defineRouteHandler<
+  const PARAMS extends ValidatorSchema | undefined = undefined,
+  const QUERY extends ValidatorSchema | undefined = undefined,
+  const HEADERS extends ValidatorSchema | undefined = undefined,
+  const BODY extends ValidatorSchema | EndpointBodyMediaTypeMap | undefined = undefined,
+  const RESPONSES extends EndpointResponsesContract | undefined = undefined,
+  const SUMMARY extends string | undefined = undefined,
+  const DESCRIPTION extends string | undefined = undefined,
+  TAGS extends string[] | undefined = undefined,
+  const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
+    undefined,
+  const PAGINATION extends EndpointPaginationContract | undefined = undefined,
+  DEFINITION extends EndpointDefinition = AssembledRouteDefinition<
+    PARAMS,
+    QUERY,
+    HEADERS,
+    BODY,
+    RESPONSES,
+    SUMMARY,
+    DESCRIPTION,
+    TAGS,
+    IDEMPOTENCY,
+    PAGINATION
+  >,
+  const ACTUAL_RETURN extends DeepReadonly<
+    HandlerReturn<
+      AssembledRouteDefinition<
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS,
+        IDEMPOTENCY,
+        PAGINATION
+      >
+    >
+  > = DeepReadonly<
+    HandlerReturn<
+      AssembledRouteDefinition<
+        PARAMS,
+        QUERY,
+        HEADERS,
+        BODY,
+        RESPONSES,
+        SUMMARY,
+        DESCRIPTION,
+        TAGS,
+        IDEMPOTENCY,
+        PAGINATION
+      >
+    >
   >,
   const ROUTE_DEFINITION extends Record<string, unknown> = Record<never, never>,
 >(
@@ -261,9 +430,10 @@ export function defineRouteHandler<
       DESCRIPTION,
       TAGS,
       IDEMPOTENCY,
+      PAGINATION,
       DEFINITION,
       ACTUAL_RETURN
-    >,
+    > & { pagination?: never },
 ): EndpointRouteEventHandler<
   ROUTE_DEFINITION &
     RouteHandlerInput<
@@ -276,9 +446,10 @@ export function defineRouteHandler<
       DESCRIPTION,
       TAGS,
       IDEMPOTENCY,
+      PAGINATION,
       DEFINITION,
       ACTUAL_RETURN
-    >,
+    > & { idempotency: IDEMPOTENCY; pagination: PAGINATION },
   EndpointHandlerSuccessBody<
     DEFINITION,
     HasEndpointResponses<DEFINITION> extends true
@@ -290,10 +461,15 @@ export function defineRouteHandler<
   const Params extends ValidatorSchema | undefined = undefined,
   const GetMetadata extends RuntimeMethodMetadata = Record<never, never>,
   const GetValidation extends RuntimeMethodValidation = Record<never, never>,
+  const GetPagination extends EndpointPaginationContract | undefined = undefined,
   const GetReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation, GetPagination>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation, GetPagination>
+    >
   >,
   const PostMetadata extends RuntimeMethodMetadata = Record<never, never>,
   const PostValidation extends RuntimeMethodValidation = Record<never, never>,
@@ -328,9 +504,11 @@ export function defineRouteHandler<
   definition: Definition & {
     params?: Params
     idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
+    /** A method group has no root pagination contract. */
+    pagination?: never
     /** Request validation is per method: declare it inside each method entry. */
     validate?: never
-    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn>
+    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn, GetPagination>
     post?: InferredRuntimeMethod<Params, PostMetadata, PostValidation, PostReturn>
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
@@ -347,7 +525,7 @@ export function defineRouteHandler<
 ): EndpointRouteMethodsEventHandler<
   Definition & {
     params?: Params
-    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn>
+    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn, GetPagination>
     post?: InferredRuntimeMethod<Params, PostMetadata, PostValidation, PostReturn>
     put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
     patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
@@ -430,14 +608,22 @@ function toEndpointDefinition(
   ).params,
 ): EndpointDefinition {
   const { handler: _handler, validate, ...metadata } = definition
-  return {
+  const query = validate?.query
+  const responses = normalizeResponses(validate?.response)
+  const contract: EndpointDefinition = {
     ...metadata,
     params,
-    query: validate?.query,
+    query,
     headers: validate?.headers,
     body: validate?.body,
-    responses: normalizeResponses(validate?.response),
+    responses,
   }
+  if (metadata.pagination?.kind === 'cursor') {
+    const paginated = applyCursorPaginationContract(query, responses, metadata.pagination)
+    contract.query = paginated.query
+    contract.responses = paginated.responses as EndpointResponsesContract
+  }
+  return contract
 }
 
 function normalizeResponses(

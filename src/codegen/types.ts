@@ -1,5 +1,6 @@
 import type { NitroRouteHandlerDescriptor } from '../nitro-route-handlers'
 import type { EndpointIdempotencyMetadata } from '../runtime/contract'
+import type { EndpointPaginationRouteMetadata } from '../runtime/pagination'
 
 // Mirrors `resolver.resolve` (from `@nuxt/kit`'s `createResolver`), which every
 // codegen builder receives so generated import specifiers stay relative to
@@ -18,6 +19,7 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.
   mediaResponse?: true
+  pagination?: EndpointPaginationRouteMetadata
   // Set when this entry was expanded from the multi-method form. Codegen uses
   // the method key to project the corresponding member of H3's `~routeDef`.
   methodGroup?: true

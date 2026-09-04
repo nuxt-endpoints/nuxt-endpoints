@@ -93,6 +93,7 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import { computed, ref } from 'vue'
+import { queryOptions } from '#endpoints/colada'
 
 const queryCache = useQueryCache()
 const sqliteUserName = ref('Margaret Hamilton')
@@ -103,7 +104,7 @@ const lastSqliteRequest = ref<{
   replayId?: number
 }>()
 const sqliteUsersRequest = $endpoint('/api/sqlite/users', { method: 'get' })
-const sqliteUsersQuery = useQuery(sqliteUsersRequest.queryOptions())
+const sqliteUsersQuery = useQuery(queryOptions(sqliteUsersRequest))
 const sqliteUsers = computed(() => sqliteUsersQuery.data.value?.body)
 const sqliteUsersStatus = sqliteUsersQuery.status
 const sqliteUsersFetching = sqliteUsersQuery.isLoading
@@ -131,7 +132,7 @@ const sqliteUserMutation = useMutation({
       }
     }
     await queryCache.invalidateQueries({
-      key: sqliteUsersRequest.queryOptions().key,
+      key: queryOptions(sqliteUsersRequest).key,
     })
   },
 })

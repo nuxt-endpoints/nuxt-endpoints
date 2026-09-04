@@ -14,7 +14,8 @@ The public product boundary is:
 - `defineRouteHandler({...})` for route authoring;
 - `$endpoint(path, { method, ...input })` for lazy status-aware requests;
 - `useEndpoint(path, { method, ...input })` for Nuxt async data;
-- request-object `.queryOptions()` and `.mutationOptions()` for Pinia Colada;
+- typed `queryOptions()`, `mutationOptions()`, and `infiniteQueryOptions()`
+  adapters for Pinia Colada;
 - OpenAPI generated from the same contracts.
 
 `$endpoint` and `useEndpoint` are not temporary copies of upstream APIs.
@@ -34,8 +35,10 @@ instead of silently changing semantics.
 | `main`  | Published Nuxt 4.5+ line using Nitro 2 and H3 1 compatibility adapters  |
 | `nuxt5` | Integration prototype against the H3/Nitro/fetchdts route-contract work |
 
-The two branches should keep the same application-facing API. Differences
-belong behind the platform adapter and build-time metadata boundary.
+The two branches keep the same mainstream application-facing API. Progressive
+enhancement and explicit `HEAD` / `OPTIONS` / `CONNECT` / `TRACE` authoring are
+Nuxt 5 platform capabilities; other differences belong behind the platform
+adapter and build-time metadata boundary.
 
 ## Implemented
 
@@ -48,7 +51,10 @@ belong behind the platform adapter and build-time metadata boundary.
   case-insensitive matching and native `Response` headers.
 - Generated path-and-method clients and helper types from `#endpoints`.
 - `useEndpoint` with Nuxt async-data behavior and SSR request forwarding.
-- Request-object Pinia Colada options, verified with the official Nuxt module.
+- Typed Pinia Colada query, mutation, and cursor-infinite-query adapters,
+  verified with the official Nuxt module.
+- Cursor pagination contracts that own their query/page envelope, runtime
+  validation, OpenAPI projection, and typed Pinia Colada invocation.
 - Required idempotency keys generated when the request object is created and
   reused by retries of that object.
 - Application-owned idempotency storage and central runtime policy.
@@ -99,7 +105,7 @@ projection. Nuxt Endpoints still owns:
 
 - schema input types for params, query, headers, and body;
 - per-status result unions, including declared non-2xx bodies;
-- `$endpoint`, `useEndpoint`, and request-object integrations;
+- `$endpoint`, `useEndpoint`, and Pinia Colada integrations;
 - runtime validation, OpenAPI, and idempotency.
 
 The adapter should contribute only metadata Nuxt's schema does not already

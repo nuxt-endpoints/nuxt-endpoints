@@ -80,6 +80,7 @@ await writeFile(
         paths: {
           '#app/composables/asyncData': [join(nuxtRoot, 'dist/app/composables/asyncData.d.ts')],
           '#endpoints': ['./types/endpoints.d.ts'],
+          '#endpoints/colada': [join(repositoryRoot, 'src/runtime/colada.ts')],
         },
       },
       files,

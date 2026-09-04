@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEndpointClient, createUseEndpoint } from '../src/runtime'
+import type { EndpointCallInfiniteQueryOptionsRuntime } from '../src/runtime/client'
+import {
+  EndpointPaginationError,
+  infiniteQueryOptions,
+  mutationOptions,
+  queryOptions,
+} from '../src/runtime/colada'
 
 const fetchMock = vi.fn()
 const fetchRawMock = vi.fn()
@@ -183,7 +190,7 @@ describe('createEndpointClient', () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
     const client = createEndpointClient([{ path: '/api/users/:id', method: 'get' }])
     const request = client('/api/users/:id', { method: 'get', params: { id: 123 } })
-    const options = request.queryOptions()
+    const options = queryOptions(request)
 
     expect(options.key).toEqual([
       'nuxt-endpoints',
@@ -199,20 +206,137 @@ describe('createEndpointClient', () => {
     })
   })
 
+  it('maps a cursor-pagination request to Pinia Colada infinite-query options', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ items: [{ id: 1 }], nextCursor: 'page-2' })
+      .mockResolvedValueOnce({ items: [{ id: 2 }] })
+    const client = createEndpointClient([
+      {
+        path: '/api/articles',
+        method: 'get',
+        pagination: {
+          kind: 'cursor',
+          status: 200,
+          cursor: 'cursor',
+          limit: 'limit',
+          items: 'items',
+          next: 'nextCursor',
+        },
+      },
+    ])
+    const request = client('/api/articles', {
+      method: 'get',
+      query: { limit: 20, category: 'news' },
+    })
+    const options = infiniteQueryOptions(
+      request as never,
+    ) as EndpointCallInfiniteQueryOptionsRuntime
+
+    expect(options.initialPageParam).toBeUndefined()
+    expect(options.key.at(-1)).toBe('{"query":{"category":"news","limit":20}}')
+    const first = await options.query({
+      signal: new AbortController().signal,
+      pageParam: undefined,
+    })
+    expect(options.getNextPageParam(first)).toBe('page-2')
+    const second = await options.query({
+      signal: new AbortController().signal,
+      pageParam: 'page-2',
+    })
+    expect(options.getNextPageParam(second)).toBeUndefined()
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/articles',
+      expect.objectContaining({
+        query: { limit: 20, category: 'news' },
+        method: 'get',
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/articles',
+      expect.objectContaining({
+        query: { limit: 20, category: 'news', cursor: 'page-2' },
+        method: 'get',
+      }),
+    )
+  })
+
+  it('retains a non-success page result in a pagination error', async () => {
+    fetchRawMock.mockResolvedValue({
+      status: 429,
+      ok: false,
+      headers: new Headers({ 'retry-after': '10' }),
+      _data: { message: 'Slow down' },
+    })
+    const client = createEndpointClient([
+      {
+        path: '/api/articles',
+        method: 'get',
+        pagination: {
+          kind: 'cursor',
+          status: 200,
+          cursor: 'cursor',
+          limit: 'limit',
+          items: 'items',
+          next: 'nextCursor',
+        },
+      },
+    ])
+    const options = infiniteQueryOptions(
+      client('/api/articles', { method: 'get' }) as never,
+    ) as EndpointCallInfiniteQueryOptionsRuntime
+
+    await expect(
+      options.query({ signal: new AbortController().signal, pageParam: undefined }),
+    ).rejects.toMatchObject({
+      name: 'EndpointPaginationError',
+      result: {
+        status: 429,
+        ok: false,
+        body: { message: 'Slow down' },
+      },
+    })
+
+    try {
+      await options.query({ signal: new AbortController().signal, pageParam: undefined })
+    } catch (error) {
+      expect(error).toBeInstanceOf(EndpointPaginationError)
+    }
+  })
+
+  it('rejects the wrong method and non-endpoint values at runtime', () => {
+    const client = createEndpointClient([
+      { path: '/api/users', method: 'get' },
+      { path: '/api/users', method: 'post' },
+    ])
+    const get = client('/api/users', { method: 'get' })
+    const post = client('/api/users', { method: 'post' })
+
+    expect(() => mutationOptions(get as never)).toThrow(
+      /only accepts a POST, PUT, PATCH, or DELETE/,
+    )
+    expect(() => queryOptions(post as never)).toThrow(/only accepts a GET or HEAD/)
+    expect(() => queryOptions(Promise.resolve({}) as never)).toThrow(
+      /request object returned by \$endpoint/,
+    )
+    expect(() => infiniteQueryOptions(get as never)).toThrow(/declaring cursor pagination/)
+  })
+
   it('derives the same query key regardless of request key order', async () => {
     fetchMock.mockResolvedValue({ items: [] })
     const client = createEndpointClient([{ path: '/api/users/search', method: 'get' }])
     const declaredOrder = client('/api/users/search', {
       method: 'get',
       query: { limit: 10, q: 'ada', filter: { role: 'admin', active: true } },
-    }).queryOptions()
+    })
     const reversedOrder = client('/api/users/search', {
       method: 'get',
       query: { filter: { active: true, role: 'admin' }, q: 'ada', limit: 10 },
-    }).queryOptions()
+    })
 
-    expect(reversedOrder.key).toEqual(declaredOrder.key)
-    expect(declaredOrder.key.at(-1)).toBe(
+    expect(queryOptions(reversedOrder).key).toEqual(queryOptions(declaredOrder).key)
+    expect(queryOptions(declaredOrder).key.at(-1)).toBe(
       '{"query":{"filter":{"active":true,"role":"admin"},"limit":10,"q":"ada"}}',
     )
   })
@@ -223,14 +347,14 @@ describe('createEndpointClient', () => {
     const ascending = client('/api/users/search', {
       method: 'get',
       query: { tags: ['a', 'b'] },
-    }).queryOptions()
+    })
     const descending = client('/api/users/search', {
       method: 'get',
       query: { tags: ['b', 'a'] },
-    }).queryOptions()
+    })
 
-    expect(descending.key).not.toEqual(ascending.key)
-    expect(ascending.key.at(-1)).toBe('{"query":{"tags":["a","b"]}}')
+    expect(queryOptions(descending).key).not.toEqual(queryOptions(ascending).key)
+    expect(queryOptions(ascending).key.at(-1)).toBe('{"query":{"tags":["a","b"]}}')
   })
 
   it('reuses an automatically generated key across repeated Colada mutation execution', async () => {
@@ -243,7 +367,7 @@ describe('createEndpointClient', () => {
       },
     ])
     const request = client('/api/items', { method: 'post', body: { amount: 100 } })
-    const options = request.mutationOptions()
+    const options = mutationOptions(request)
 
     await options.mutation()
     await options.mutation()
@@ -824,7 +948,7 @@ describe('createEndpointClient', () => {
       })
       expect(captured).not.toHaveBeenCalled()
 
-      await direct.queryOptions().query({ signal: new AbortController().signal })
+      await queryOptions(direct).query({ signal: new AbortController().signal })
       expect(captured).toHaveBeenCalledWith('/api/users/9', {
         method: 'get',
         signal: expect.any(AbortSignal),

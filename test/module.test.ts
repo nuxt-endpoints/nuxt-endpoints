@@ -188,6 +188,38 @@ describe('media response detection', () => {
   })
 })
 
+describe('pagination detection', () => {
+  it('projects only serializable cursor-pagination metadata', () => {
+    const detection = getEndpointFromCarrier({
+      definition: {
+        pagination: {
+          kind: 'cursor',
+          item: { '~standard': { version: 1, vendor: 'test', validate: () => ({ value: {} }) } },
+        },
+      },
+    })
+
+    expect(detection).toEqual({
+      pagination: {
+        kind: 'cursor',
+        status: 200,
+        cursor: 'cursor',
+        limit: 'limit',
+        items: 'items',
+        next: 'nextCursor',
+      },
+    })
+  })
+
+  it('rejects malformed pagination metadata during discovery', () => {
+    expect(() =>
+      getEndpointFromCarrier({
+        definition: { pagination: { kind: 'cursor' } as never },
+      }),
+    ).toThrow(/pagination must be/)
+  })
+})
+
 describe('findUnsupportedRouteTemplateSyntax', () => {
   it('reports a named catch-all segment', () => {
     expect(findUnsupportedRouteTemplateSyntax('/api/files/**:path')).toBe('catch-all')

@@ -29,8 +29,8 @@
             <span class="text -eyebrow">Integration</span>
             <strong class="strong">SQLite + Pinia Colada</strong>
             <span class="text">
-              Exercise SSR hydration, request-object query options, invalidation, and idempotent
-              replay against a real SQLite database.
+              Exercise SSR hydration, typed query options, invalidation, and idempotent replay
+              against a real SQLite database.
             </span>
           </span>
           <span class="value">Open demo →</span>

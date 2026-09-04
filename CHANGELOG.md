@@ -2,8 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- Cursor pagination contracts now generate their `cursor` / `limit` input,
+  typed page envelope, runtime validation, OpenAPI schema, and Pinia Colada
+  infinite-query options from one declaration.
+
 ### Changed
 
+- **Breaking:** Pinia Colada projections are now explicit functions imported
+  from `#endpoints/colada`: `queryOptions(request)`,
+  `mutationOptions(request)`, and `infiniteQueryOptions(request)`. Endpoint
+  request objects no longer expose adapter-specific methods.
+- Generated clients index routes by path and method before selecting their
+  contract, avoiding repeated whole-route-union analysis at each call site.
 - Response body and declared-header schema validation now defaults to
   development builds instead of traversing every production response. Set
   `validation.response` in `server/endpoints/runtime.ts` to `always`,

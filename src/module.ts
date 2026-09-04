@@ -32,6 +32,8 @@ import { isMediaResponseContract } from './runtime/response'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
 import { inspectValidatorInputObject } from './runtime/validator'
+import { cursorPaginationRouteMetadata } from './runtime/pagination'
+import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -92,7 +94,10 @@ type ResolvedEndpointsModuleOptions = {
 // The definition fields a discovery-evaluated module's carrier exposes.
 // Derived (rather than hand-declared) so a shape change to `EndpointDefinition`
 // surfaces here as a compile error instead of silently going unread.
-type EndpointCarrierDefinition = Pick<EndpointDefinition, 'idempotency' | 'headers' | 'responses'>
+type EndpointCarrierDefinition = Pick<
+  EndpointDefinition,
+  'idempotency' | 'headers' | 'responses' | 'pagination'
+>
 
 // `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
 // (rejected by `parseIdempotencyRuntimeMarker` below) may omit it entirely.
@@ -121,6 +126,7 @@ type EndpointMethodDetection = {
   idempotencyRuntimeGaps?: readonly string[]
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
+  pagination?: EndpointPaginationRouteMetadata
 }
 
 // A single-endpoint route's detection stays exactly the shape it always was
@@ -328,6 +334,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     nuxt.options.alias = {
       ...nuxt.options.alias,
+      '#endpoints/colada': resolve('./runtime/colada'),
       '#endpoints': typeFile,
     }
   },
@@ -363,10 +370,15 @@ async function composeHandlers(
       )
     }
 
-    const { idempotency, idempotencyRuntimeGaps, mediaResponse } = detection
+    const { idempotency, idempotencyRuntimeGaps, mediaResponse, pagination } = detection
     if (idempotencyRuntimeGaps?.length && !policyFileExists) {
       throw new Error(
         `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} needs ${idempotencyRuntimeGaps.join(', ')}, but no endpoint runtime file was found. Declare an application policy or route override in server/endpoints/runtime.ts.`,
+      )
+    }
+    if (pagination && method.toLowerCase() !== 'get') {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares cursor pagination, but its method is ${method.toUpperCase()}. Cursor pagination is only supported on GET routes.`,
       )
     }
     endpointHandlers.push({
@@ -375,6 +387,7 @@ async function composeHandlers(
       method,
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
+      ...(pagination ? { pagination } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
     })
   }
@@ -521,6 +534,9 @@ export function getEndpointFromCarrier(
 
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
+  const pagination = definition.pagination
+    ? cursorPaginationRouteMetadata(definition.pagination)
+    : undefined
   let idempotencyRuntimeGaps: readonly string[] | undefined
   if (idempotency) {
     const marker = parseIdempotencyRuntimeMarker(carrier.__idempotency_runtime_marker__)
@@ -535,6 +551,7 @@ export function getEndpointFromCarrier(
   return {
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
+    ...(pagination ? { pagination } : {}),
     ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
   }
 }
@@ -708,7 +725,7 @@ export function resolveModuleOptions(
 
   if (options.client && 'query' in options.client) {
     throw new TypeError(
-      'endpoints.client.query was removed with the TanStack Query adapter. Install @pinia/colada-nuxt and @pinia/nuxt; endpoint request objects now expose Pinia Colada options directly.',
+      'endpoints.client.query was removed with the TanStack Query adapter. Install @pinia/colada-nuxt and @pinia/nuxt; import the Pinia Colada queryOptions and mutationOptions adapters from #endpoints/colada.',
     )
   }
 

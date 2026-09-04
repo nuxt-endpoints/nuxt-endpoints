@@ -29,6 +29,39 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
     })
 
+    it('serves the generated cursor-pagination contract', async () => {
+      await expect($fetch('/api/articles?limit=2')).resolves.toEqual({
+        items: [
+          { id: 1, title: 'One' },
+          { id: 2, title: 'Two' },
+        ],
+        nextCursor: '2',
+      })
+      await expect($fetch('/api/articles?limit=2&cursor=2')).resolves.toEqual({
+        items: [{ id: 3, title: 'Three' }],
+      })
+    })
+
+    it('documents pagination-generated query and response fields', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const operation = schema.paths['/api/articles'].get
+
+      expect(operation.parameters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'cursor', in: 'query' }),
+          expect.objectContaining({ name: 'limit', in: 'query' }),
+        ]),
+      )
+      expect(operation.responses['200'].content['application/json'].schema).toMatchObject({
+        type: 'object',
+        required: ['items'],
+        properties: {
+          items: { type: 'array' },
+          nextCursor: { type: 'string' },
+        },
+      })
+    })
+
     it('renders generated useEndpoint calls through Nuxt async data', async () => {
       await expect($fetch<string>('/')).resolves.toContain('nuxt-endpoints fixture: Tom')
     })
@@ -539,13 +572,15 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointClient).toContain('export const useEndpoint')
       expect(endpointClient).not.toContain('useEndpointResult')
       expect(endpointTypes).not.toContain('plain')
-      expect(endpointTypes).toContain('EndpointClient<EndpointRouteEntry, EndpointClientFeatures>')
+      expect(endpointTypes).toContain(
+        'EndpointMappedClient<EndpointRouteMap, EndpointClientFeatures>',
+      )
       expect(endpointTypes).toContain('raw: true')
       expect(nitroRoutes).toContain('interface InternalApi')
       expect(nitroRoutes).toContain("'/api/users/:id'")
     })
 
-    it('uses endpoint request Query options without generated Query factories', async () => {
+    it('uses endpoint request Query adapters without generated Query factories', async () => {
       const buildDir = getBuildDir(useTestContext)
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
 
@@ -672,14 +707,14 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
 }
 
 function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
-  // Each union member is one line. A method argument after `~routeDef` marks
+  // Each indexed method entry is one line. A method argument after `~routeDef` marks
   // the multi-method form. Nitro 2 types a method-suffix-free route file under
   // `InternalApi[path]['default']`, so those paths are compared as the union
   // of their declared methods instead of method by method.
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
-      const match = line.match(/\| \{ path: '([^']+)', method: '([^']+)'/)
+      const match = line.match(/\{ path: '([^']+)', method: '([^']+)'/)
       if (!match) return []
       const [, path, method] = match
       return [{ path, method, group: line.includes("['~routeDef'],") }]

@@ -12,6 +12,7 @@ export type {
   EndpointAsyncDataState,
   EndpointAsyncDataStatus,
   EndpointCall,
+  EndpointCallInfiniteQueryOptions,
   EndpointCacheKey,
   EndpointCallMutationOptions,
   EndpointCallQueryOptions,
@@ -26,6 +27,9 @@ export type {
   EndpointFetcherRuntime,
   EndpointIdempotencyProblem,
   EndpointMediaTypeProblem,
+  EndpointMappedClient,
+  EndpointMappedPathCall,
+  EndpointMappedUseClient,
   EndpointPath,
   EndpointPathCall,
   EndpointPathCaller,
@@ -45,6 +49,9 @@ export type {
   EndpointResultRuntime,
   EndpointResultValue,
   EndpointRouteEntry,
+  EndpointRouteMap,
+  EndpointRouteMapEntry,
+  EndpointRouteMapValue,
   EndpointRouteMethod,
   RouteResponseBody,
   TypedRawResponse,
@@ -56,6 +63,11 @@ export type {
   UseEndpointOptions,
   UseEndpointPathCaller,
 } from './client'
+export type {
+  CursorPaginationPage,
+  EndpointCursorPaginationContract,
+  EndpointPaginationContract,
+} from './pagination'
 export type {
   EndpointBodyMediaTypeMap,
   EndpointClientOptions,
@@ -72,6 +84,7 @@ export type {
   EndpointMediaResponseStream,
   EndpointSuccessBody,
   HasMediaResponseContract,
+  HttpMethod,
   IsEndpointBodyMediaTypeMap,
   NormalizeResponses,
   ResponseBody,

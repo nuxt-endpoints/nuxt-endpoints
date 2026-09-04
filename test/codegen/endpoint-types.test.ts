@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildEndpointRouteEntryUnion, generateEndpointTypes } from '../../src/codegen'
+import {
+  buildEndpointRouteEntryUnion,
+  buildEndpointRouteMap,
+  generateEndpointTypes,
+} from '../../src/codegen'
 import type {
   EndpointClientCodegenOptions,
   EndpointRouteHandler,
@@ -92,19 +96,34 @@ describe('buildEndpointRouteEntryUnion', () => {
   })
 })
 
+describe('buildEndpointRouteMap', () => {
+  it('renders an empty map body when there are no handlers', () => {
+    expect(buildEndpointRouteMap([])).toBe('')
+  })
+
+  it('indexes methods below their path instead of leaving lookup to a route union', () => {
+    const map = buildEndpointRouteMap([multiGetHandler, multiPutHandler, healthHandler])
+
+    expect(map.match(/'\/api\/multi':/gu)).toHaveLength(1)
+    expect(map).toContain("'get': { path: '/api/multi', method: 'get'")
+    expect(map).toContain("'put': { path: '/api/multi', method: 'put'")
+    expect(map).toContain("'/api/health':")
+  })
+})
+
 describe('generateEndpointTypes', () => {
-  it('renders a never route entry union for an empty handler list', () => {
+  it('renders an empty route map for an empty handler list', () => {
     const content = generateEndpointTypes(resolve, [], defaultClientOptions)
 
-    expect(content).toContain('type EndpointRouteEntry =\n  | never')
+    expect(content).toContain('type EndpointRouteMap = {\n\n}')
   })
 
   it('imports the runtime client types via the resolver', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
-    expect(content).toContain(
-      "import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
-    )
+    expect(content).toContain('EndpointMappedClient')
+    expect(content).toContain('EndpointRouteMapEntry')
+    expect(content).toContain("from './runtime'")
   })
 
   it('produces awaited path and raw response types', () => {
@@ -126,12 +145,14 @@ describe('generateEndpointTypes', () => {
     )
   })
 
-  it('uses the plain EndpointClient type', () => {
+  it('uses the indexed client type', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
       client: { raw: true },
     })
 
-    expect(content).toContain('export type $EndpointClient = EndpointClient<')
+    expect(content).toContain(
+      'export type $EndpointClient = EndpointMappedClient<EndpointRouteMap, EndpointClientFeatures>',
+    )
   })
 
   it('adds path-aware server responses from the central route config', () => {

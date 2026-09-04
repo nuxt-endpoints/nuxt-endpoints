@@ -19,6 +19,7 @@ import { hasHttpControlCharacter } from './idempotency'
 import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
 import type { EndpointWireValue } from './platform'
+import type { CursorPaginationPage, EndpointCursorPaginationContract } from './pagination'
 
 export type EndpointRouteEntry = {
   path: string
@@ -41,10 +42,83 @@ export type EndpointClient<
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
 > = EndpointPathCaller<ROUTES, FEATURES>
 
+/**
+ * Path/method index emitted by codegen. Keeping lookup indexed avoids
+ * repeatedly distributing `Extract` over the complete route union at every
+ * client call site.
+ */
+export type EndpointRouteMap = Record<string, Partial<Record<HttpMethod, EndpointRouteEntry>>>
+
+export type EndpointRouteMapEntry<
+  ROUTES,
+  PATH extends keyof ROUTES,
+  METHOD extends keyof ROUTES[PATH],
+> = ROUTES[PATH][METHOD] extends EndpointRouteEntry ? ROUTES[PATH][METHOD] : never
+
+export type EndpointRouteMapValue<ROUTES> = {
+  [PATH in keyof ROUTES]: ROUTES[PATH][keyof ROUTES[PATH]]
+}[keyof ROUTES] extends infer ROUTE
+  ? Extract<ROUTE, EndpointRouteEntry>
+  : never
+
+type EndpointMappedClientOptions<
+  ROUTE,
+  METHOD extends HttpMethod,
+> = ROUTE extends EndpointRouteEntry
+  ? EndpointClientOptions<ROUTE['definition']> extends void
+    ? { method: METHOD }
+    : EndpointClientOptions<ROUTE['definition']> & { method: METHOD }
+  : never
+
+export type EndpointMappedClient<
+  ROUTES,
+  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
+> = <
+  const PATH extends keyof ROUTES & string,
+  const METHOD extends keyof ROUTES[PATH] & HttpMethod,
+>(
+  path: PATH,
+  options: EndpointMappedClientOptions<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, METHOD>,
+) => EndpointCall<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, FEATURES>
+
+export type EndpointMappedPathCall<
+  ROUTES,
+  PATH extends keyof ROUTES & string,
+  METHOD extends keyof ROUTES[PATH] & HttpMethod,
+  FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
+> = EndpointCall<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, FEATURES>
+
 export type UseEndpointClient<
   ROUTES extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
 > = UseEndpointCaller<ROUTES, FEATURES>
+
+type EndpointMappedUseClientOptions<
+  ROUTE,
+  METHOD extends HttpMethod,
+  DATA,
+  DEFAULT,
+> = ROUTE extends EndpointRouteEntry
+  ? EndpointClientOptions<ROUTE['definition']> extends void
+    ? UseEndpointOptions<EndpointResultData<ROUTE>, DATA, DEFAULT> & { method: METHOD }
+    : EndpointClientOptions<ROUTE['definition']> &
+        UseEndpointOptions<EndpointResultData<ROUTE>, DATA, DEFAULT> & { method: METHOD }
+  : never
+
+export type EndpointMappedUseClient<ROUTES> = <
+  const PATH extends keyof ROUTES & string,
+  const METHOD extends keyof ROUTES[PATH] & HttpMethod,
+  DATA = EndpointResultData<EndpointRouteMapEntry<ROUTES, PATH, METHOD>>,
+  DEFAULT = undefined,
+>(
+  path: PATH,
+  options: EndpointMappedUseClientOptions<
+    EndpointRouteMapEntry<ROUTES, PATH, METHOD>,
+    METHOD,
+    DATA,
+    DEFAULT
+  >,
+) => EndpointAsyncData<DATA | DEFAULT>
 
 export type EndpointPathCaller<
   ROUTES extends EndpointRouteEntry,
@@ -127,8 +201,41 @@ export type EndpointCall<
 > = PromiseLike<EndpointResult<ROUTE>> &
   Pick<Promise<EndpointResult<ROUTE>>, 'catch' | 'finally'> &
   EndpointRawCallFeature<ROUTE, FEATURES> &
-  EndpointQueryCallFeature<ROUTE> &
-  EndpointMutationCallFeature<ROUTE>
+  EndpointCallIdentity<ROUTE>
+
+declare const endpointCallRouteType: unique symbol
+declare const endpointCallCapabilitiesType: unique symbol
+
+export type EndpointCursorPaginationCapability<PAGE, FAILURE> = {
+  readonly kind: 'cursor'
+  readonly page: PAGE
+  readonly failure: FAILURE
+}
+
+export type EndpointCallCapabilityIdentity<CAPABILITIES> = {
+  readonly [endpointCallCapabilitiesType]: CAPABILITIES
+}
+
+export type EndpointCursorPaginatedRequest<PAGE, FAILURE> = EndpointCallCapabilityIdentity<{
+  pagination: EndpointCursorPaginationCapability<PAGE, FAILURE>
+}>
+
+type EndpointCallCapabilities<ROUTE extends EndpointRouteEntry> = ROUTE extends {
+  method: 'get'
+  definition: { pagination: EndpointCursorPaginationContract }
+}
+  ? {
+      pagination: EndpointCursorPaginationCapability<
+        EndpointPaginationPage<ROUTE>,
+        EndpointPaginationFailure<ROUTE>
+      >
+    }
+  : Record<never, never>
+
+/** Preserves the originating route for adapters without adding runtime data. */
+type EndpointCallIdentity<ROUTE extends EndpointRouteEntry> = {
+  readonly [endpointCallRouteType]: ROUTE
+} & EndpointCallCapabilityIdentity<EndpointCallCapabilities<ROUTE>>
 
 export type EndpointCallQueryOptions<ROUTE extends EndpointRouteEntry> = {
   key: EndpointCacheKey<ROUTE['method']>
@@ -140,6 +247,34 @@ export type EndpointCallMutationOptions<ROUTE extends EndpointRouteEntry> = {
   mutation: () => Promise<EndpointResultData<ROUTE>>
 }
 
+export type EndpointPaginationPage<ROUTE extends EndpointRouteEntry> =
+  ROUTE['definition']['pagination'] extends EndpointCursorPaginationContract<infer ITEM>
+    ? CursorPaginationPage<ITEM>
+    : never
+
+export type EndpointPaginationFailure<ROUTE extends EndpointRouteEntry> = Exclude<
+  EndpointResultData<ROUTE>,
+  { status: 200 }
+>
+
+/** A failed page invocation, retaining a typed non-success HTTP result when one exists. */
+export class EndpointPaginationError<RESULT = EndpointResultDataRuntime> extends Error {
+  readonly result: RESULT | undefined
+
+  constructor(message: string, options: { result?: RESULT; cause?: unknown } = {}) {
+    super(message, { cause: options.cause })
+    this.name = 'EndpointPaginationError'
+    this.result = options.result
+  }
+}
+
+export type EndpointCallInfiniteQueryOptions<PAGE> = {
+  key: EndpointCacheKey<'get'>
+  initialPageParam: undefined
+  query: (context: { signal: AbortSignal; pageParam: string | undefined }) => Promise<PAGE>
+  getNextPageParam: (lastPage: PAGE) => string | undefined
+}
+
 export type EndpointCacheKey<METHOD extends HttpMethod = HttpMethod> = readonly [
   'nuxt-endpoints',
   'v2',
@@ -147,20 +282,6 @@ export type EndpointCacheKey<METHOD extends HttpMethod = HttpMethod> = readonly 
   string,
   string,
 ]
-
-type EndpointQueryCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['method'] extends
-  | 'get'
-  | 'head'
-  ? { queryOptions: () => EndpointCallQueryOptions<ROUTE> }
-  : {}
-
-type EndpointMutationCallFeature<ROUTE extends EndpointRouteEntry> = ROUTE['method'] extends
-  | 'delete'
-  | 'patch'
-  | 'post'
-  | 'put'
-  ? { mutationOptions: () => EndpointCallMutationOptions<ROUTE> }
-  : {}
 
 type EndpointRawCallFeature<
   ROUTE extends EndpointRouteEntry,
@@ -632,8 +753,8 @@ export type EndpointClientRuntimeOptions = {
    * once at module scope, because the fetcher belongs to the request.
    *
    * `useEndpoint` uses it for its request. `$endpoint` keeps direct awaits on
-   * plain `$fetch`, but request `.queryOptions()` / `.mutationOptions()` use
-   * the captured fetcher so Pinia Colada SSR forwards the incoming request.
+   * plain `$fetch`, but the Pinia Colada adapters use the captured fetcher so
+   * SSR forwards the incoming request.
    */
   captureFetcher?: () => EndpointFetcherRuntime | undefined
 }
@@ -642,6 +763,29 @@ export type EndpointCallRuntime = {
   result: () => Promise<EndpointResultRuntime>
   raw: () => Promise<Response>
   request: EndpointRequestFunctions
+  queryOptions?: () => EndpointCallQueryOptionsRuntime
+  mutationOptions?: () => EndpointCallMutationOptionsRuntime
+  infiniteQueryOptions?: () => EndpointCallInfiniteQueryOptionsRuntime
+}
+
+type EndpointCallQueryOptionsRuntime = {
+  key: EndpointCacheKey
+  query: (context: { signal: AbortSignal }) => Promise<EndpointResultDataRuntime>
+}
+
+type EndpointCallMutationOptionsRuntime = {
+  key: EndpointCacheKey
+  mutation: () => Promise<EndpointResultDataRuntime>
+}
+
+export type EndpointCallInfiniteQueryOptionsRuntime = {
+  key: EndpointCacheKey
+  initialPageParam: undefined
+  query: (context: {
+    signal: AbortSignal
+    pageParam: string | undefined
+  }) => Promise<Record<string, unknown>>
+  getNextPageParam: (lastPage: Record<string, unknown>) => string | undefined
 }
 
 export type EndpointRequestRuntime<VALUE> = (signal?: AbortSignal) => Promise<VALUE>
@@ -678,6 +822,14 @@ export type EndpointClientRouteConfig = {
    * tells the fetcher to hand back the body unread.
    */
   mediaResponse?: true
+  pagination?: {
+    kind: 'cursor'
+    status: 200
+    cursor: 'cursor'
+    limit: 'limit'
+    items: 'items'
+    next: 'nextCursor'
+  }
 }
 
 export type EndpointClientRouteConfigInput = readonly EndpointClientRouteConfig[]
@@ -732,20 +884,77 @@ export function createUseEndpoint(
   return client
 }
 
-type EndpointCallRuntimeValue = PromiseLike<unknown> &
+export type EndpointCallRuntimeValue = PromiseLike<unknown> &
   Pick<Promise<unknown>, 'catch' | 'finally'> & {
     raw: () => Promise<Response>
-    queryOptions: () => {
-      key: EndpointCacheKey
-      query: (context: { signal: AbortSignal }) => Promise<EndpointResultDataRuntime>
-    }
-    mutationOptions: () => {
-      key: EndpointCacheKey
-      mutation: () => Promise<EndpointResultDataRuntime>
-    }
     [endpointCallRuntimeSymbol]: EndpointCallRuntime
     [key: string]: unknown
   }
+
+type QueryEndpointRoute = EndpointRouteEntry & { method: 'get' | 'head' }
+type MutationEndpointRoute = EndpointRouteEntry & {
+  method: 'delete' | 'patch' | 'post' | 'put'
+}
+
+/** Converts a GET/HEAD endpoint request into standard Pinia Colada query options. */
+export function queryOptions<
+  const ROUTE extends QueryEndpointRoute,
+  FEATURES extends EndpointClientFeatureOptions,
+>(request: EndpointCall<ROUTE, FEATURES>): EndpointCallQueryOptions<ROUTE>
+export function queryOptions(request: EndpointCallRuntimeValue): EndpointCallQueryOptionsRuntime
+export function queryOptions(request: unknown): EndpointCallQueryOptionsRuntime {
+  const options = endpointCallRuntime(request).queryOptions
+  if (!options) {
+    throw new TypeError(
+      '[nuxt-endpoints] queryOptions() only accepts a GET or HEAD endpoint request.',
+    )
+  }
+  return options()
+}
+
+/** Converts an unsafe-method endpoint request into standard Pinia Colada mutation options. */
+export function mutationOptions<
+  const ROUTE extends MutationEndpointRoute,
+  FEATURES extends EndpointClientFeatureOptions,
+>(request: EndpointCall<ROUTE, FEATURES>): EndpointCallMutationOptions<ROUTE>
+export function mutationOptions(
+  request: EndpointCallRuntimeValue,
+): EndpointCallMutationOptionsRuntime
+export function mutationOptions(request: unknown): EndpointCallMutationOptionsRuntime {
+  const options = endpointCallRuntime(request).mutationOptions
+  if (!options) {
+    throw new TypeError(
+      '[nuxt-endpoints] mutationOptions() only accepts a POST, PUT, PATCH, or DELETE endpoint request.',
+    )
+  }
+  return options()
+}
+
+/** Runtime projection used by the capability-typed Colada adapter. */
+export function createEndpointInfiniteQueryOptions(
+  request: unknown,
+): EndpointCallInfiniteQueryOptionsRuntime {
+  const options = endpointCallRuntime(request).infiniteQueryOptions
+  if (!options) {
+    throw new TypeError(
+      '[nuxt-endpoints] infiniteQueryOptions() only accepts a GET endpoint declaring cursor pagination.',
+    )
+  }
+  return options()
+}
+
+function endpointCallRuntime(request: unknown): EndpointCallRuntime {
+  if (
+    (typeof request !== 'object' && typeof request !== 'function') ||
+    request === null ||
+    !(endpointCallRuntimeSymbol in request)
+  ) {
+    throw new TypeError(
+      '[nuxt-endpoints] Colada options require the request object returned by $endpoint().',
+    )
+  }
+  return (request as EndpointCallRuntimeValue)[endpointCallRuntimeSymbol]
+}
 
 export function normalizeRoutes(
   routesInput: EndpointClientRouteConfigInput,
@@ -1078,6 +1287,29 @@ function createEndpointCall(
     result,
     raw,
     request,
+    ...(route.method === 'get' || route.method === 'head'
+      ? {
+          queryOptions: () => ({
+            key: createRequestQueryKey(route, request.options),
+            query: ({ signal }: { signal: AbortSignal }) =>
+              queryRequest.result(signal).then(toEndpointResultData),
+          }),
+        }
+      : {}),
+    ...(['delete', 'patch', 'post', 'put'].includes(route.method)
+      ? {
+          mutationOptions: () => ({
+            key: createRequestQueryKey(route, request.options),
+            mutation: () => queryRequest.result().then(toEndpointResultData),
+          }),
+        }
+      : {}),
+    ...(route.method === 'get' && route.pagination
+      ? {
+          infiniteQueryOptions: () =>
+            createInfiniteQueryOptions(route, request.options, features, queryFetcher),
+        }
+      : {}),
   }
 
   const call = {
@@ -1100,21 +1332,76 @@ function createEndpointCall(
   if (features.raw) {
     call.raw = raw
   }
-  if (route.method === 'get' || route.method === 'head') {
-    call.queryOptions = () => ({
-      key: createRequestQueryKey(route, request.options),
-      query: ({ signal }: { signal: AbortSignal }) =>
-        queryRequest.result(signal).then(toEndpointResultData),
-    })
-  }
-  if (['delete', 'patch', 'post', 'put'].includes(route.method)) {
-    call.mutationOptions = () => ({
-      key: createRequestQueryKey(route, request.options),
-      mutation: () => queryRequest.result().then(toEndpointResultData),
-    })
-  }
-
   return call
+}
+
+function createInfiniteQueryOptions(
+  route: EndpointClientRouteConfig,
+  baseOptions: Record<string, unknown>,
+  features: EndpointClientFeatureOptions,
+  fetcher: EndpointFetcherRuntime | undefined,
+): EndpointCallInfiniteQueryOptionsRuntime {
+  const pagination = route.pagination!
+  const optionsWithoutCursor = withPaginationCursor(baseOptions, pagination.cursor, undefined)
+  return {
+    key: createRequestQueryKey(route, optionsWithoutCursor),
+    initialPageParam: undefined,
+    query: async ({ signal, pageParam }) => {
+      const options = withPaginationCursor(baseOptions, pagination.cursor, pageParam)
+      const call = createEndpointCall(route, options, features, fetcher, fetcher)
+      let result: EndpointResultRuntime
+      try {
+        result = await call[endpointCallRuntimeSymbol].request.result(signal)
+      } catch (cause) {
+        // Colada recognizes cancellation by the original aborted rejection.
+        if (signal.aborted) throw cause
+        throw new EndpointPaginationError(
+          '[nuxt-endpoints] Paginated request failed before receiving an HTTP result.',
+          { cause },
+        )
+      }
+      if (result.status !== pagination.status || !result.ok) {
+        throw new EndpointPaginationError(
+          `[nuxt-endpoints] Paginated request expected status ${pagination.status}, received ${result.status}.`,
+          { result: toEndpointResultData(result) },
+        )
+      }
+      if (typeof result.body !== 'object' || result.body === null || Array.isArray(result.body)) {
+        throw new EndpointPaginationError(
+          '[nuxt-endpoints] Paginated response body must be an object.',
+        )
+      }
+      return result.body as Record<string, unknown>
+    },
+    getNextPageParam: (lastPage) => {
+      const next = lastPage[pagination.next]
+      if (next === undefined) return undefined
+      if (typeof next !== 'string') {
+        throw new EndpointPaginationError(
+          '[nuxt-endpoints] Paginated response nextCursor must be a string.',
+        )
+      }
+      return next
+    },
+  }
+}
+
+function withPaginationCursor(
+  options: Record<string, unknown>,
+  cursorName: string,
+  cursor: string | undefined,
+): Record<string, unknown> {
+  const current = options.query
+  if (
+    current !== undefined &&
+    (typeof current !== 'object' || current === null || Array.isArray(current))
+  ) {
+    throw new TypeError('[nuxt-endpoints] Paginated endpoint query must be an object.')
+  }
+  const query = { ...((current ?? {}) as Record<string, unknown>) }
+  if (cursor === undefined) delete query[cursorName]
+  else query[cursorName] = cursor
+  return { ...options, query }
 }
 
 function createRequestQueryKey(

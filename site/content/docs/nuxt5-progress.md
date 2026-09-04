@@ -8,7 +8,7 @@ is being developed in public against matching H3, Nitro, and fetchdts
 prototypes. These branches are experimental working branches, not the supported
 Nuxt 4 release line.
 
-Last updated: **2026-09-02**
+Last updated: **2026-09-04**
 
 ## Working branches
 
@@ -34,5 +34,10 @@ machinery.
 Upstream APIs are still evolving, so changes cannot be ruled out. Keeping
 application code stable wherever practical is nevertheless a design constraint,
 and unavoidable changes will be documented as migrations.
+
+The mainstream endpoint surface is shared by both lines, including
+`defineRouteHandler`, `$endpoint`, `useEndpoint`, idempotency, and the typed
+Pinia Colada adapters. Progressive enhancement and explicit authoring for
+`HEAD`, `OPTIONS`, `CONNECT`, and `TRACE` depend on the Nuxt 5 platform line.
 
 For the supported release line, start with [Getting Started](/docs/getting-started).

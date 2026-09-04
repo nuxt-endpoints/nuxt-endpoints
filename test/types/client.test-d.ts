@@ -1,5 +1,12 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import { useInfiniteQuery } from '@pinia/colada'
 import type { UseMutationOptions, UseQueryOptions } from '@pinia/colada'
+import {
+  EndpointPaginationError,
+  infiniteQueryOptions,
+  mutationOptions,
+  queryOptions,
+} from '../../src/runtime/colada'
 import type {
   EndpointClient,
   EndpointRequestValidationProblem,
@@ -52,6 +59,18 @@ type Routes =
       definition: {
         responses: {
           200: { media: readonly ['text/csv', 'application/pdf'] }
+        }
+      }
+    }
+  | {
+      path: '/api/articles'
+      method: 'get'
+      definition: {
+        pagination: { kind: 'cursor'; item: Schema<{ id: number; title: string }> }
+        query: Schema<{ cursor?: string; limit?: number }, { cursor?: string; limit: number }>
+        responses: {
+          200: Schema<{ items: { id: number; title: string }[]; nextCursor?: string }>
+          404: Schema<{ message: string }>
         }
       }
     }
@@ -133,9 +152,9 @@ describe('path-based endpoint client types', () => {
     expectTypeOf(exported.body).toEqualTypeOf<ReadableStream<Uint8Array>>()
   })
 
-  it('exposes Pinia Colada options on the same request object', () => {
+  it('converts typed requests into method-safe Pinia Colada options', () => {
     const getCall = $endpoint('/api/users/:id', { method: 'get', params: { id: '1' } })
-    const query = getCall.queryOptions()
+    const query = queryOptions(getCall)
     expectTypeOf(query).toExtend<UseQueryOptions>()
     expectTypeOf(query.key).toEqualTypeOf<
       readonly ['nuxt-endpoints', 'v2', 'get', string, string]
@@ -149,14 +168,54 @@ describe('path-based endpoint client types', () => {
           body: EndpointRequestValidationProblem
         }
     >()
-    // @ts-expect-error GET calls do not expose mutation options.
-    getCall.mutationOptions()
+    // @ts-expect-error GET requests are not mutation inputs.
+    mutationOptions(getCall)
 
     const postCall = $endpoint('/api/users', { method: 'post', body: { name: 'Tom' } })
-    const mutation = postCall.mutationOptions()
+    const mutation = mutationOptions(postCall)
     expectTypeOf(mutation).toExtend<UseMutationOptions>()
-    // @ts-expect-error POST calls do not expose query options.
-    postCall.queryOptions()
+    // @ts-expect-error POST requests are not query inputs.
+    queryOptions(postCall)
+
+    // Adapters require an actual endpoint request, not an arbitrary promise.
+    // @ts-expect-error plain promises carry no endpoint route identity.
+    queryOptions(Promise.resolve({ status: 200 }))
+  })
+
+  it('only creates infinite options for a cursor-pagination contract', () => {
+    const request = $endpoint('/api/articles', {
+      method: 'get',
+      query: { limit: 20 },
+    })
+    const infinite = infiniteQueryOptions(request)
+    expectTypeOf(infinite.query).returns.resolves.toEqualTypeOf<{
+      items: { id: number; title: string }[]
+      nextCursor?: string
+    }>()
+    expectTypeOf(infinite.getNextPageParam).returns.toEqualTypeOf<string | undefined>()
+
+    const state = useInfiniteQuery(infinite)
+    expectTypeOf(state.error.value).toEqualTypeOf<EndpointPaginationError<
+      | {
+          status: 400
+          ok: false
+          body: EndpointRequestValidationProblem
+        }
+      | { status: 404; ok: false; body: { message: string } }
+    > | null>()
+    if (state.error.value?.result) {
+      expectTypeOf(state.error.value.result.status).toEqualTypeOf<400 | 404>()
+      if (state.error.value.result.status === 404) {
+        expectTypeOf(state.error.value.result.body).toEqualTypeOf<{ message: string }>()
+      }
+    }
+
+    const ordinary = $endpoint('/api/users/:id', {
+      method: 'get',
+      params: { id: '1' },
+    })
+    // @ts-expect-error an ordinary GET has no pagination capability
+    infiniteQueryOptions(ordinary)
   })
 
   it('uses useEndpoint for serializable status data', () => {

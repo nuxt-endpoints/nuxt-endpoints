@@ -59,13 +59,14 @@ const queryPitch = {
       title: 'pages/users/[id].vue',
       lang: 'ts',
       code: `import { useQuery } from '@pinia/colada'
+import { queryOptions } from '#endpoints/colada'
 
 const route = useRoute()
 const request = $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: String(route.params.id) },
 })
-const user = useQuery(request.queryOptions())
+const user = useQuery(queryOptions(request))
 
 if (user.data.value?.status === 200) {
   user.data.value.body.name // User

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useMutation } from '@pinia/colada'
+import { mutationOptions } from '#endpoints/colada'
 
 const request = $endpoint('/api/idempotent', { method: 'post', body: { amount: 25 } })
-const options = request.mutationOptions()
+const options = mutationOptions(request)
 const mutation = useMutation(options)
 
 const first = await mutation.mutateAsync()

@@ -24,6 +24,15 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(payload).toContain('Tom')
     })
 
+    it('runs generated cursor pagination through Pinia Colada infinite queries', async () => {
+      const html = await $fetch<string>('/infinite-articles')
+      const payload = extractNuxtPayload(html)
+
+      expect(html).toContain('infinite-articles: One,Two')
+      expect(payload).toContain('\\u002Fapi\\u002Farticles')
+      expect(payload).toContain('nextCursor')
+    })
+
     it('executes mutation options through Pinia Colada and pins the idempotency key', async () => {
       const html = await $fetch<string>('/mutation-idempotent')
 

@@ -75,12 +75,13 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Schema-agnostic: Zod v4, Valibot, and Effect Schema (Standard Schema based)
 - ✅ Request validation for `params`, `query`, `headers`, and `body`
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
-- ✅ Lazy `$endpoint` request objects: status unions, `.raw()`, `.queryOptions()`, `.mutationOptions()`
+- ✅ Lazy `$endpoint` request objects: status unions and `.raw()`
 - ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
-- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and request-object Query options forward the incoming request
+- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and Colada query options forward the incoming request
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Importable path, method, request, and result helper types from `#endpoints`
-- ✅ Pinia Colada integration through standard `.queryOptions()` / `.mutationOptions()`, with its official Nuxt SSR module
+- ✅ Typed Pinia Colada adapters for queries, mutations, and cursor pagination, with its official Nuxt SSR module
+- ✅ Cursor pagination from one item contract through validation, OpenAPI, and `useInfiniteQuery`
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 
 ## Quick Start
@@ -133,7 +134,7 @@ Guides:
 - [Define Endpoints](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/endpoints) — request parts, multiple responses, non-JSON responses, response validation
 - [Generated Client](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client) — `$endpoint`, `useEndpoint`, and helper types from `#endpoints`
 - [Responses](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/responses) — status-aware and raw response shapes
-- [Pinia Colada](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/pinia-colada) — standard request-object query/mutation options and official Nuxt SSR setup
+- [Pinia Colada](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/pinia-colada) — typed query, mutation, and cursor-pagination adapters with official Nuxt SSR setup
 - [OpenAPI](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/openapi) — schema route, document metadata, `document` / `extend`
 - [Schema Libraries](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/schema-libraries) — Zod v4, Valibot, and Effect Schema specifics
 - [Idempotency](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/idempotency) — optional `Idempotency-Key` replay protection
