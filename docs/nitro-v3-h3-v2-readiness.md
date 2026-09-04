@@ -156,19 +156,20 @@ request from the event shape.
 
 ## Nitro 2 to 3 map
 
-Measured against `nitro@3.0.260610-beta`. Nitro 3 ships under a new package
-name: `nitropack` is renamed to `nitro`, and `nitropack` itself has no 3.x
-releases. Every integration point survives; the changes are import paths plus
-one renamed export.
+Measured against `nitro@3.0.260903-beta` and the pinned route-contract
+prototype. Nitro 3 ships under the `nitro` package name; `nitropack` has no 3.x
+release. The release removed Nitro-owned route type generation in
+[nitro#4577](https://github.com/nitrojs/nitro/pull/4577), so the migration is
+now an ownership change rather than only an import-path change.
 
-| Integration point                              | Nitro 3 status                                                                                       | Change required      |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------- |
-| `Serialize` / `Simplify` in `platform/wire.ts` | Present in `nitro/types`. Nitro's own build still composes `InternalApi` as `Simplify<Serialize<…>>` | Import path only     |
-| `InternalApi`                                  | Still declared in `nitro/types` and module-augmented during build                                    | Import path only     |
-| `defineNitroPlugin`                            | The `nitropack/runtime/plugin` subpath is gone; the root export is `definePlugin`                    | Import path and name |
-| `scannedHandlers`, `options.handlers`          | Present, same fields (`handler`, `route`, `method`, `middleware`)                                    | None                 |
-| `options.scanDirs`, `options.ignore`           | Present, same meaning                                                                                | None                 |
-| `types:extend`, `nitro:init`, `nitro:config`   | Present with identical signatures                                                                    | None                 |
+| Integration point                              | Current status                                                                                                            | Change required                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `Serialize` / `Simplify` in `platform/wire.ts` | Present in `nitro/types`                                                                                                  | Import path only                      |
+| `InternalApi`                                  | Removed from Nitro's generated route-type pipeline                                                                        | Use Nuxt `ServerRoutes` metadata      |
+| `defineNitroPlugin`                            | The `nitropack/runtime/plugin` subpath is gone; the root export is `definePlugin`                                         | Import path and name                  |
+| `scannedHandlers`, `options.handlers`          | Present, same fields (`handler`, `route`, `method`, `middleware`)                                                         | None                                  |
+| `options.scanDirs`, `options.ignore`           | Present, same meaning                                                                                                     | None                                  |
+| `writeTypes`, `types:extend`                   | Retained only as a minimal prototype compatibility surface while the current Nuxt adapter still calls and hooks into them | Remove after Nuxt completes migration |
 
 The runtime plugin already consumes a module-owned generated manifest rather
 than Nitro's private `#nitro-internal-virtual/server-handlers`, so no private
@@ -176,7 +177,8 @@ surface is involved in the migration.
 
 ## Remaining work before a compatibility claim
 
-Nothing here is blocked on this package. The blocking dependency is upstream
+The full pinned-fork matrix is green: unit, type, server integration, browser
+E2E, and build. A stable compatibility claim remains blocked on upstream
 availability: Nuxt 5 exists only on the nightly channel, Nitro 3 is beta, and
 H3 v2 is still in release candidates. Nuxt 5 also moves Nitro integration into
 a separate `@nuxt/nitro-server` package, which is not yet stable.
@@ -184,10 +186,8 @@ a separate `@nuxt/nitro-server` package, which is not yet stable.
 - Decide the error-body policy described above and implement `createRuntimeError`
   accordingly; verify it against Nitro 3's error rendering, which the h3-only
   measurements could not cover.
-- Run the full compatibility matrix — unit, type, build, and Nuxt end-to-end —
-  on the new majors; nothing so far has exercised a running server on them.
 - Update dependency and peer ranges, and `meta.compatibility.nuxt`, only after
-  that matrix passes.
+  the upstream releases stabilize.
 - Ensure only one compatible H3 runtime resolves into the server build. Nuxt
   has already seen this failure mode in [`nuxt/nuxt#35132`](https://github.com/nuxt/nuxt/issues/35132),
   where a hoisted H3 v2 conflicted with a Nitro handler on H3 v1.

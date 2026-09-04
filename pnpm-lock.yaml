@@ -36,7 +36,7 @@ importers:
         version: link:.upstream/nitro
       nuxt:
         specifier: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz
-        version: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1)
+        version: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e)
       scule:
         specifier: ^1.3.0
         version: 1.3.0
@@ -1188,7 +1188,7 @@ packages:
       typescript: ^5.9.3
 
   '@nuxt/nitro-server@file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz':
-    resolution: {integrity: sha512-nD/Mxtjx8d42D2wNKvaItMHNl2MpzS94ligKPnsENX/eawnLmGKI9yfoWTa6abROnMcOylWpy8Oh6PNV4PXw0Q==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
+    resolution: {integrity: sha512-xMuFOgL99yLiBdrg32rcU/NX6m09O02pIvoescUIbNXvzd8SsgvCuNUOgy5MAT/U4yyx3Q8JN/r5oJLjJ0bfNQ==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.19.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
@@ -1295,7 +1295,7 @@ packages:
         optional: true
 
   '@nuxt/vite-builder@file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz':
-    resolution: {integrity: sha512-xVlhMcoQuLOGmdPdehuArRLL8b/0Bg8UvHTV6/IfsZQmXOCN3noTTIEt256gCTSsnzWHvLzfYQu26sLMk2PSjA==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz}
+    resolution: {integrity: sha512-TgFp44n1PKyL81DRn59uxhqSH51UuY4rU8BGPfwal0s2GMF3JlnuAG3whcGdq3/H7bJh5EV5GvAPEdQOFCRAtQ==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
@@ -4335,7 +4335,7 @@ packages:
     hasBin: true
 
   nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz:
-    resolution: {integrity: sha512-hzabN45xd9nUyRrW9NofrlKJjDMcW4NE78vr9UhwSNPhyv/f0r7p0pyds40asnngdFjzEvZ+JD739yRnq9DVfw==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz}
+    resolution: {integrity: sha512-Xrg8k3x+z2YEgBotu1ZyQAYXJsFWr+1XjAlSFaV3n+IulFpYJ4yRYauHIsf19Wwdv1R596lk7uVQ/7a0L248IQ==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz}
     version: 5.0.0-20260903.d070492f
     engines: {node: ^22.19.0 || ^24.11.0 || >=26.0.0}
     hasBin: true
@@ -6837,19 +6837,21 @@ snapshots:
       - rolldown
       - unplugin
 
-  '@nuxt/devtools-kit@4.0.0-alpha.16(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(vite@8.2.2)':
+  '@nuxt/devtools-kit@4.0.0-alpha.16(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(nitro@upstream+nitro)(vite@8.2.2)':
     dependencies:
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
       nostics: 1.2.0
       tinyexec: 1.3.0
       vite: 8.2.2(@types/node@22.19.21)(@vitejs/devtools@0.5.2)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
+    optionalDependencies:
+      nitro: link:.upstream/nitro
 
-  '@nuxt/devtools@4.0.0-alpha.16(@devframes/hub-ui@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(cac@7.0.0)(db0@0.4.0)(srvx@0.11.22)(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))':
+  '@nuxt/devtools@4.0.0-alpha.16(@devframes/hub-ui@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(cac@7.0.0)(db0@0.4.0)(nitro@upstream+nitro)(srvx@0.11.22)(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))':
     dependencies:
       '@devframes/hub': 0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22))
       '@devframes/plugin-code-server': 0.9.8(@devframes/hub-ui@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22))(vite@8.2.2)
       '@devframes/plugin-data-inspector': 0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22))(vite@8.2.2)
-      '@nuxt/devtools-kit': 4.0.0-alpha.16(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(vite@8.2.2)
+      '@nuxt/devtools-kit': 4.0.0-alpha.16(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(nitro@upstream+nitro)(vite@8.2.2)
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
       '@vitejs/devtools': 0.6.3(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(srvx@0.11.22)(vite@8.2.2)
       '@vitejs/devtools-kit': 0.6.3(cac@7.0.0)(srvx@0.11.22)(vite@8.2.2)
@@ -6870,6 +6872,8 @@ snapshots:
       verkit: 0.4.0
       vite: 8.2.2(@types/node@22.19.21)(@vitejs/devtools@0.5.2)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
       vite-plugin-vue-tracer: 1.5.0(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))
+    optionalDependencies:
+      nitro: link:.upstream/nitro
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -7113,7 +7117,7 @@ snapshots:
       - vue-tsc
       - webpack
 
-  '@nuxt/nitro-server@file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@oxc-project/types@0.147.0)(@typescript/typescript6@6.0.2)(chokidar@5.0.0)(confbox@0.2.4)(db0@0.4.0)(dotenv@17.4.2)(esbuild@0.28.1)(jiti@2.7.0)(lightningcss@1.33.0)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(ofetch@2.0.0-alpha.3)(rolldown@1.2.6)(rollup@4.62.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)':
+  '@nuxt/nitro-server@file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@oxc-project/types@0.147.0)(@typescript/typescript6@6.0.2)(chokidar@5.0.0)(confbox@0.2.4)(db0@0.4.0)(dotenv@17.4.2)(esbuild@0.28.1)(jiti@2.7.0)(lightningcss@1.33.0)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(ofetch@2.0.0-alpha.3)(rolldown@1.2.6)(rollup@4.62.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
@@ -7133,7 +7137,7 @@ snapshots:
       mocked-exports: 0.1.1
       nitro: link:.upstream/nitro
       nostics: 1.2.0
-      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1)
+      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e)
       ohash: 2.0.12
       pathe: 2.0.3
       rou3: 0.9.2
@@ -7318,7 +7322,7 @@ snapshots:
       - vite
       - webpack
 
-  '@nuxt/vite-builder@file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@types/node@22.19.21)(@typescript/typescript6@6.0.2)(@vitejs/devtools@0.5.2)(autoprefixer@10.5.4(postcss@8.5.19))(confbox@0.2.4)(cssnano@7.1.9(postcss@8.5.19))(dotenv@17.4.2)(esbuild@0.28.1)(eslint@10.9.1(jiti@2.7.0))(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(optionator@0.9.4)(oxlint@1.70.0(oxlint-tsgolint@7.0.2001))(rolldown@1.2.6)(terser@5.48.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vue@3.5.42(@typescript/typescript6@6.0.2))(yaml@2.9.0)':
+  '@nuxt/vite-builder@file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@types/node@22.19.21)(@typescript/typescript6@6.0.2)(@vitejs/devtools@0.5.2)(autoprefixer@10.5.4(postcss@8.5.19))(confbox@0.2.4)(cssnano@7.1.9(postcss@8.5.19))(dotenv@17.4.2)(esbuild@0.28.1)(eslint@10.9.1(jiti@2.7.0))(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(optionator@0.9.4)(oxlint@1.70.0(oxlint-tsgolint@7.0.2001))(rolldown@1.2.6)(terser@5.48.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vue@3.5.42(@typescript/typescript6@6.0.2))(yaml@2.9.0)':
     dependencies:
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
       '@vitejs/plugin-vue': 6.0.8(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))
@@ -7332,7 +7336,7 @@ snapshots:
       js-tokens: 10.0.0
       knitwork: 1.3.0
       mocked-exports: 0.1.1
-      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1)
+      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e)
       pathe: 2.0.3
       pkg-types: 2.3.1
       rolldown-string: 0.3.1(rolldown@1.2.6)
@@ -7379,14 +7383,14 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxt/vite-server@file:.upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)':
+  '@nuxt/vite-server@file:.upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)':
     dependencies:
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
       clickable-path: 0.1.0
       defu: 6.1.7
       exsolve: 1.1.1
       mocked-exports: 0.1.1
-      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1)
+      nuxt: file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e)
       pathe: 2.0.3
       srvx: 0.11.22
       ufo: 1.6.4
@@ -8663,8 +8667,8 @@ snapshots:
 
   autoprefixer@10.5.4(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
-      caniuse-lite: 1.0.30001806
+      browserslist: 4.28.8
+      caniuse-lite: 1.0.30001810
       fraction.js: 5.3.4
       picocolors: 1.1.1
       postcss: 8.5.19
@@ -8786,8 +8790,8 @@ snapshots:
 
   caniuse-api@3.0.0:
     dependencies:
-      browserslist: 4.28.6
-      caniuse-lite: 1.0.30001806
+      browserslist: 4.28.8
+      caniuse-lite: 1.0.30001810
       lodash.memoize: 4.1.2
       lodash.uniq: 4.5.0
 
@@ -8922,7 +8926,7 @@ snapshots:
 
   cssnano-preset-default@7.0.17(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       css-declaration-sorter: 7.4.0(postcss@8.5.19)
       cssnano-utils: 5.0.3(postcss@8.5.19)
       postcss: 8.5.19
@@ -10558,17 +10562,17 @@ snapshots:
       - rolldown
       - unplugin
 
-  nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1):
+  nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e):
     dependencies:
       '@dxup/nuxt': 0.5.10(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(esbuild@0.28.1)(jiti@2.7.0)(mlly@1.8.2)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)
       '@nuxt/cli': '@nuxt/cli-nightly@4.0.0-20260901-155958-8bcf1bc(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(jiti@2.7.0)(rolldown@1.2.6)'
-      '@nuxt/devtools': 4.0.0-alpha.16(@devframes/hub-ui@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(cac@7.0.0)(db0@0.4.0)(srvx@0.11.22)(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))
+      '@nuxt/devtools': 4.0.0-alpha.16(@devframes/hub-ui@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@devframes/json-render@0.9.8(@devframes/hub@0.9.8(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(devframe@0.9.8(cac@7.0.0)(srvx@0.11.22)))(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))(cac@7.0.0)(db0@0.4.0)(nitro@upstream+nitro)(srvx@0.11.22)(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))
       '@nuxt/kit': file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))
-      '@nuxt/nitro-server': file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@oxc-project/types@0.147.0)(@typescript/typescript6@6.0.2)(chokidar@5.0.0)(confbox@0.2.4)(db0@0.4.0)(dotenv@17.4.2)(esbuild@0.28.1)(jiti@2.7.0)(lightningcss@1.33.0)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(ofetch@2.0.0-alpha.3)(rolldown@1.2.6)(rollup@4.62.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)
+      '@nuxt/nitro-server': file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@oxc-project/types@0.147.0)(@typescript/typescript6@6.0.2)(chokidar@5.0.0)(confbox@0.2.4)(db0@0.4.0)(dotenv@17.4.2)(esbuild@0.28.1)(jiti@2.7.0)(lightningcss@1.33.0)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(ofetch@2.0.0-alpha.3)(rolldown@1.2.6)(rollup@4.62.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)
       '@nuxt/schema': file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz
       '@nuxt/telemetry': 2.9.1(@nuxt/kit@file:.upstream/nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)))
-      '@nuxt/vite-builder': file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@types/node@22.19.21)(@typescript/typescript6@6.0.2)(@vitejs/devtools@0.5.2)(autoprefixer@10.5.4(postcss@8.5.19))(confbox@0.2.4)(cssnano@7.1.9(postcss@8.5.19))(dotenv@17.4.2)(esbuild@0.28.1)(eslint@10.9.1(jiti@2.7.0))(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(optionator@0.9.4)(oxlint@1.70.0(oxlint-tsgolint@7.0.2001))(rolldown@1.2.6)(terser@5.48.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vue@3.5.42(@typescript/typescript6@6.0.2))(yaml@2.9.0)
-      '@nuxt/vite-server': file:.upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(ed16f68c3b8264bad7d73ba7a9e96fb1))(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)
+      '@nuxt/vite-builder': file:.upstream/nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(@types/node@22.19.21)(@typescript/typescript6@6.0.2)(@vitejs/devtools@0.5.2)(autoprefixer@10.5.4(postcss@8.5.19))(confbox@0.2.4)(cssnano@7.1.9(postcss@8.5.19))(dotenv@17.4.2)(esbuild@0.28.1)(eslint@10.9.1(jiti@2.7.0))(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(optionator@0.9.4)(oxlint@1.70.0(oxlint-tsgolint@7.0.2001))(rolldown@1.2.6)(terser@5.48.0)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vue@3.5.42(@typescript/typescript6@6.0.2))(yaml@2.9.0)
+      '@nuxt/vite-server': file:.upstream/nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz(@nuxt/schema@file:.upstream/nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz)(confbox@0.2.4)(dotenv@17.4.2)(jiti@2.7.0)(magic-string@1.2.3)(mlly@1.8.2)(nuxt@file:.upstream/nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz(d2172d5e27ded6e0fedcf77b9e05849e))(rolldown@1.2.6)(unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2))(vite@8.2.2)
       '@unhead/vue': 3.4.0(@oxc-project/types@0.147.0)(esbuild@0.28.1)(lightningcss@1.33.0)(rolldown@1.2.6)(rollup@4.62.0)(vite@8.2.2)(vue@3.5.42(@typescript/typescript6@6.0.2))
       '@vue/shared': 3.5.42
       chokidar: 5.0.0
@@ -10685,6 +10689,7 @@ snapshots:
       - meow
       - mlly
       - mongodb
+      - nitro
       - nitropack
       - optionator
       - oxc-parser
@@ -10943,14 +10948,14 @@ snapshots:
   postcss-colormin@7.0.10(postcss@8.5.19):
     dependencies:
       '@colordx/core': 5.4.3
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       caniuse-api: 3.0.0
       postcss: 8.5.19
       postcss-value-parser: 4.2.0
 
   postcss-convert-values@7.0.12(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       postcss: 8.5.19
       postcss-value-parser: 4.2.0
 
@@ -10979,7 +10984,7 @@ snapshots:
 
   postcss-merge-rules@7.0.11(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       caniuse-api: 3.0.0
       cssnano-utils: 5.0.3(postcss@8.5.19)
       postcss: 8.5.19
@@ -10999,14 +11004,14 @@ snapshots:
 
   postcss-minify-params@7.0.9(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       cssnano-utils: 5.0.3(postcss@8.5.19)
       postcss: 8.5.19
       postcss-value-parser: 4.2.0
 
   postcss-minify-selectors@7.1.2(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       caniuse-api: 3.0.0
       cssesc: 3.0.0
       postcss: 8.5.19
@@ -11048,7 +11053,7 @@ snapshots:
 
   postcss-normalize-unicode@7.0.9(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       postcss: 8.5.19
       postcss-value-parser: 4.2.0
 
@@ -11070,7 +11075,7 @@ snapshots:
 
   postcss-reduce-initial@7.0.9(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       caniuse-api: 3.0.0
       postcss: 8.5.19
 
@@ -11580,7 +11585,7 @@ snapshots:
 
   stylehacks@7.0.11(postcss@8.5.19):
     dependencies:
-      browserslist: 4.28.6
+      browserslist: 4.28.8
       postcss: 8.5.19
       postcss-selector-parser: 7.1.4
 

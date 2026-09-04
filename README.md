@@ -31,17 +31,17 @@ git clone --depth 1 --branch prototype/route-contracts https://github.com/nuxt-e
 git clone --depth 1 --branch prototype/route-metadata https://github.com/nuxt-endpoints/nuxt.git .upstream/nuxt
 
 git -C .upstream/fetchdts fetch --depth 1 origin de56ae24aea700c0ec2b26f8b56811fdd8940a63
-git -C .upstream/h3 fetch --depth 1 origin efdaeb06d71a5f470256f71d600324fcab75a9a2
-git -C .upstream/nitro fetch --depth 1 origin 83f2000389a533edb3859f6e1c2244ee55032c48
-git -C .upstream/nuxt fetch --depth 1 origin 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+git -C .upstream/h3 fetch --depth 1 origin 7f4c1c901a15e2a6ac5c217a20fb638a740240f4
+git -C .upstream/nitro fetch --depth 1 origin cc9f56fcf2cc1bc8b19d1c81408853df8b1c7b07
+git -C .upstream/nuxt fetch --depth 1 origin d9dab5edf132eb2ba7882966ff21e6ca1c427a32
 
 git -C .upstream/fetchdts checkout --detach de56ae24aea700c0ec2b26f8b56811fdd8940a63
-git -C .upstream/h3 checkout --detach efdaeb06d71a5f470256f71d600324fcab75a9a2
-git -C .upstream/nitro checkout --detach 83f2000389a533edb3859f6e1c2244ee55032c48
-git -C .upstream/nuxt checkout --detach 8aba1274d8fbc3d1b0c603dd5b9cb23d555f395c
+git -C .upstream/h3 checkout --detach 7f4c1c901a15e2a6ac5c217a20fb638a740240f4
+git -C .upstream/nitro checkout --detach cc9f56fcf2cc1bc8b19d1c81408853df8b1c7b07
+git -C .upstream/nuxt checkout --detach d9dab5edf132eb2ba7882966ff21e6ca1c427a32
 
 (cd .upstream/fetchdts && vp install --frozen-lockfile && vp run build)
-(cd .upstream/h3 && vp install --frozen-lockfile && vp run build)
+(cd .upstream/h3 && COREPACK_ENABLE_PROJECT_SPEC=0 vp install --frozen-lockfile && vp run build)
 (cd .upstream/nitro && vp add -D typescript@npm:@typescript/typescript6@6.0.2 && vp run build)
 (cd .upstream/nuxt && vp install --frozen-lockfile)
 

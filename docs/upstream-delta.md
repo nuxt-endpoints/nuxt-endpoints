@@ -133,32 +133,19 @@ Those are downstream policy and consumer behavior, not another route scanner.
 
 ## Pinned baseline
 
-Nuxt 5 is not on npm's `latest` channel; `nuxt@latest` is still 4.5.2 and the
-`alpha` / `rc` dist-tags point at the finished 4.0.0 cycle. Nuxt 5 ships on the
-nightly channel, and its own workspace pins the stack below. This branch adopts
-those pins rather than newer prereleases, so that a failure here is a failure
-Nuxt itself would see.
+Nuxt 5 is not on npm's `latest` channel. This branch therefore builds from
+public, commit-pinned forks rather than relying on unpublished local paths.
 
-| Package        | Version pinned here                                | Source of the pin                                                |
-| -------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
-| `nuxt`         | `npm:nuxt-nightly@5.0.0-29800730.fb02c57e`         | `nuxt-nightly` dist-tag `5x`                                     |
-| `@nuxt/kit`    | `npm:@nuxt/kit-nightly@5.0.0-29800730.fb02c57e`    | same nightly build                                               |
-| `@nuxt/schema` | `npm:@nuxt/schema-nightly@5.0.0-29800730.fb02c57e` | same nightly build                                               |
-| `nitro`        | `^3.0.260610-beta`                                 | `nuxt/nuxt` `pnpm-workspace.yaml`, catalog `nitro-runtime`       |
-| `h3`           | `2.0.1-rc.22`                                      | same catalog, "intentionally pinned to match nitro's dependency" |
+| Package  | Version used here            | Pinned source                     |
+| -------- | ---------------------------- | --------------------------------- |
+| `nuxt`   | `5.0.0-20260903.d070492f`    | `nuxt-endpoints/nuxt@d9dab5edf`   |
+| `nitro`  | `3.0.260903-beta`            | `nuxt-endpoints/nitro@cc9f56fc`   |
+| `h3`     | `2.0.1-rc.31`                | `nuxt-endpoints/h3@7f4c1c9`       |
+| fetchdts | fork package version `0.2.0` | `nuxt-endpoints/fetchdts@de56ae2` |
 
-Recorded on 2026-08-30. `nuxt/nuxt@main` declares version `5.0.0-0`; the nightly
-above is built from commit `fb02c57e`.
-
-Two facts about the pins are worth keeping in view:
-
-- **h3 `2.0.1-rc.29` exists.** Nuxt pins `rc.22` to match Nitro's own
-  dependency, so this branch does too. Testing against `rc.29` is a separate
-  experiment, not the baseline.
-- **Nuxt patches Nitro.** `nuxt/nuxt` carries
-  `patches/nitro@3.0.260610-beta.patch`. Anything this branch observes about
-  Nitro 3 inside a Nuxt app is observed through that patch, and anything
-  observed against bare `nitro` is not.
+Recorded on 2026-09-04. Nuxt's own workspace still pins
+`nitro@3.0.260610-beta` with a patch and `h3@2.0.1-rc.22`; the integration
+matrix deliberately overrides them with the public prototypes above.
 
 `nitropack` has no 3.x release; Nitro 3 ships under the name `nitro`. Nuxt 5
 also moves Nitro integration into a separate `@nuxt/nitro-server` package.
@@ -378,17 +365,14 @@ Moving the helper to Nitro 3's focused `nitro/runtime-config` export fixes the
 build. This was our playground assuming a Nitro 2 package path, not an upstream
 defect.
 
-Nitro does not currently make evaluated route handler exports available during
-type generation. In `nitro@3.0.260610-beta`, `scanServerRoutes` stores
-`NitroEventHandler.handler` as a file path string, `nitro.scannedHandlers` and
-`nitro.routing.routes` retain those descriptors, and `writeTypes` builds
-response-type strings from `typeof import(path).default` before calling
-`types:extend`. Its routing metadata virtual module also statically parses only
-a literal `defineRouteMeta(...)` call through a `?meta` transform; it does not
-load the route's default export. Therefore blessing h3's runtime
-`handler.validate` property would remove an unsafe introspection assumption but
-would not remove this module's need to evaluate route modules. An evaluated
-handler export or a richer build-time metadata channel is a separate Nitro gap.
+Official Nitro removed its route type generator in `3.0.260903-beta`. The
+prototype keeps only the minimal `writeTypes` / `types:extend` compatibility
+surface still called by the current Nuxt adapter; it does not restore
+`InternalApi`, typed fetch, or a Nitro-owned route schema. Nitro exposes the
+evaluated contract registry, and the Nuxt prototype joins it with discovered
+routes in `server:routes`, emitting `contractType` and `responseType` metadata
+into `ServerRoutes`. NE consumes that metadata without evaluating route modules
+itself.
 
 The repeated-query defect was also reproduced directly on h3 `main` at
 `1892ee9cae06533c7db72a5213bceda61cc1d58d` (`2.0.1-rc.29`): an upstream-style
