@@ -11,8 +11,12 @@
 // Nitro registers its renderer at `/**` with no method restriction, which is
 // what makes the failure path work - see pi0's closing comment on
 // nitrojs/nitro#1286.
-import { endpointNativeSubmissionKey } from './client'
-import type { EndpointFormIssue, EndpointNativeSubmission } from './client'
+import type { EndpointNativeSubmission } from './client'
+import {
+  endpointNativeSubmissionKey,
+  extractFormIssues,
+  resolveFormRedirectTemplate,
+} from './form-shared'
 import { getFormRoute } from './form-routes-state'
 import {
   defineRuntimeMiddleware,
@@ -77,43 +81,12 @@ function submittedValues(form: FormData): Record<string, string> {
   return values
 }
 
-function extractIssues(payload: Record<string, unknown>): EndpointFormIssue[] {
-  const data = payload.data
-  if (!data || typeof data !== 'object') {
-    return []
-  }
-  const issues: EndpointFormIssue[] = []
-  for (const group of Object.values(data as Record<string, unknown>)) {
-    if (!Array.isArray(group)) {
-      continue
-    }
-    for (const issue of group as Record<string, unknown>[]) {
-      issues.push({
-        ...issue,
-        message: typeof issue.message === 'string' ? issue.message : 'Invalid value',
-      } as EndpointFormIssue)
-    }
-  }
-  return issues
-}
-
 async function readPayload(response: Response): Promise<Record<string, unknown>> {
   try {
     return (await response.json()) as Record<string, unknown>
   } catch {
     return {}
   }
-}
-
-function resolveRedirect(template: string, body: Record<string, unknown>): string {
-  return template.replace(/\{([^}]+)\}/g, (whole, key: string) => {
-    const value = body[key]
-    // Only a scalar can stand in for a path segment; anything else would
-    // stringify into `[object Object]` and produce a broken URL.
-    return typeof value === 'string' || typeof value === 'number'
-      ? encodeURIComponent(String(value))
-      : whole
-  })
 }
 
 export default defineRuntimeMiddleware(async (event, next) => {
@@ -147,7 +120,7 @@ export default defineRuntimeMiddleware(async (event, next) => {
 
   if (response.status < 300) {
     return runtimeRedirect(
-      route.redirect ? resolveRedirect(route.redirect, payload) : pathname,
+      route.redirect ? resolveFormRedirectTemplate(route.redirect, payload) : pathname,
       303,
     )
   }
@@ -163,7 +136,7 @@ export default defineRuntimeMiddleware(async (event, next) => {
   const submission: EndpointNativeSubmission = {
     route: { method: 'post', path: route.target },
     status: response.status,
-    issues: extractIssues(payload),
+    issues: extractFormIssues(payload),
     values,
   }
   ;(event.context as Record<string, unknown>)[endpointNativeSubmissionKey] = submission

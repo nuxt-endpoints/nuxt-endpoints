@@ -26,6 +26,7 @@ import {
   toJsonSchema,
 } from './validator'
 import type { JsonSchema } from './validator'
+import { collectRepeatedEntries } from './form-shared'
 import type {
   InferInput,
   InferOutput,
@@ -233,31 +234,15 @@ function coerceFormField(kind: FormFieldKind | undefined, value: unknown): unkno
 
 function toFieldRecord(input: unknown): Record<string, unknown> | undefined {
   if (typeof URLSearchParams !== 'undefined' && input instanceof URLSearchParams) {
-    return collectEntries(input.entries())
+    return collectRepeatedEntries(input.entries())
   }
   if (typeof FormData !== 'undefined' && input instanceof FormData) {
-    return collectEntries(input.entries())
+    return collectRepeatedEntries(input.entries())
   }
   if (typeof input === 'object' && input !== null && !Array.isArray(input)) {
     return { ...(input as Record<string, unknown>) }
   }
   return undefined
-}
-
-/** Repeated names become arrays, matching how the runtime reads a form body. */
-function collectEntries(entries: IterableIterator<[string, unknown]>): Record<string, unknown> {
-  const collected: Record<string, unknown> = {}
-  for (const [name, value] of entries) {
-    const existing = collected[name]
-    if (existing === undefined) {
-      collected[name] = value
-    } else if (Array.isArray(existing)) {
-      existing.push(value)
-    } else {
-      collected[name] = [existing, value]
-    }
-  }
-  return collected
 }
 
 function isJsonSchemaObject(schema: unknown): schema is Record<string, unknown> {

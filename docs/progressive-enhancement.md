@@ -204,7 +204,10 @@ Validation rejects loudly, in keeping with the existing rule that a declared
 contract is never silently dropped. These are build-time errors, raised
 while the handler manifest is composed:
 
-- a `form.from` that is not an absolute page path
+- a `form.from` that is not an absolute page pathname, or contains a query or
+  fragment. GET fields own the destination query and fragments never reach the
+  POST bridge, so embedding either would create different native and enhanced
+  behavior
 - a form projection on a route whose body cannot be form-encoded — the message
   names `formOf()` as the way to derive one from the JSON member
 - two POST endpoints claiming the same page URL. A native POST carries nothing

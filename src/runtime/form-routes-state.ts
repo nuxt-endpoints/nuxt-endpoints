@@ -1,3 +1,5 @@
+import type { EndpointFormRouteEntry } from '../codegen/form-routes'
+
 /**
  * The page-URL-to-endpoint map the bridge middleware reads, shared the same
  * way the OpenAPI document is - see openapi-state.ts.
@@ -8,20 +10,12 @@
  * pass. The startup plugin is not part of that build, so it reads the map and
  * hands it over here.
  */
-export type FormRoute = {
-  /** The endpoint a native submission to this page URL is forwarded to. */
-  target: string
-  method: string
-  enctype: string
-  redirect?: string
-}
+let formRoutes: Readonly<Record<string, EndpointFormRouteEntry>> = {}
 
-let formRoutes: Readonly<Record<string, FormRoute>> = {}
-
-export function setFormRoutes(routes: Readonly<Record<string, FormRoute>>): void {
+export function setFormRoutes(routes: Readonly<Record<string, EndpointFormRouteEntry>>): void {
   formRoutes = routes
 }
 
-export function getFormRoute(pathname: string): FormRoute | undefined {
+export function getFormRoute(pathname: string): EndpointFormRouteEntry | undefined {
   return formRoutes[pathname]
 }

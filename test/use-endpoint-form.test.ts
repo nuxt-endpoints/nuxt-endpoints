@@ -329,7 +329,7 @@ describe('useEndpointForm', () => {
           path: '/api/search',
           method: 'get',
           form: {
-            from: '/search?old=value',
+            from: '/search',
             method: 'get',
             enctype: 'application/x-www-form-urlencoded',
             fields: { q: { name: 'q' } },

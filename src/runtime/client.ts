@@ -17,6 +17,13 @@ import type {
   UnknownIfNever,
 } from './contract'
 import type { FormFieldAttributes, FormInputOf } from './form-schema'
+import {
+  collectRepeatedEntries,
+  endpointNativeSubmissionKey,
+  extractFormIssues,
+  resolveFormRedirectTemplate,
+} from './form-shared'
+import type { FormValidationIssue } from './form-shared'
 import { hasHttpControlCharacter } from './idempotency'
 import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
@@ -757,7 +764,7 @@ export type EndpointNativeSubmission = {
   values: Record<string, string>
 }
 
-export const endpointNativeSubmissionKey = '__nuxtEndpointsForm'
+export { endpointNativeSubmissionKey }
 
 export type EndpointCallRuntime = {
   result: () => Promise<EndpointResultRuntime>
@@ -1598,9 +1605,7 @@ export type EndpointFormCallOptions<ROUTE extends EndpointRouteEntry = EndpointR
 export type EndpointFormValidationMode = 'browser' | 'server'
 
 /** The complete server validation issue returned by the validator. */
-export type EndpointFormIssue = EndpointRequestValidationIssue & {
-  [key: string]: unknown
-}
+export type EndpointFormIssue = FormValidationIssue
 
 /**
  * What `EndpointFormCallOptions` looks like once the contract is erased. The
@@ -1762,17 +1767,7 @@ function queryFromFormEncoding(input: unknown): Record<string, unknown> {
     throw new TypeError('[nuxt-endpoints] A GET form submission must be URLSearchParams.')
   }
 
-  const query: Record<string, string | string[]> = {}
-  for (const [name, value] of input) {
-    const current = query[name]
-    query[name] =
-      current === undefined
-        ? value
-        : Array.isArray(current)
-          ? [...current, value]
-          : [current, value]
-  }
-  return query
+  return collectRepeatedEntries(input)
 }
 
 /** Native GET form semantics: its controls replace the action URL's query. */
@@ -1780,12 +1775,8 @@ function getFormNavigationTarget(from: string, query: URLSearchParams | FormData
   if (!(query instanceof URLSearchParams)) {
     throw new TypeError('[nuxt-endpoints] A GET form cannot navigate with multipart data.')
   }
-  const hashIndex = from.indexOf('#')
-  const hash = hashIndex >= 0 ? from.slice(hashIndex) : ''
-  const withoutHash = hashIndex >= 0 ? from.slice(0, hashIndex) : from
-  const path = withoutHash.split('?')[0]!
   const encoded = query.toString()
-  return `${path}${encoded ? `?${encoded}` : ''}${hash}`
+  return `${from}${encoded ? `?${encoded}` : ''}`
 }
 
 /** `'/todos/{id}'` against the response body. */
@@ -1797,14 +1788,7 @@ function resolveFormRedirect(
     return undefined
   }
   const body = (result.body ?? {}) as Record<string, unknown>
-  return template.replace(/\{([^}]+)\}/g, (whole, key: string) => {
-    const value = body[key]
-    // Only a scalar can stand in for a path segment; anything else would
-    // stringify into `[object Object]` and produce a broken URL.
-    return typeof value === 'string' || typeof value === 'number'
-      ? encodeURIComponent(String(value))
-      : whole
-  })
+  return resolveFormRedirectTemplate(template, body)
 }
 
 /**
@@ -1845,26 +1829,7 @@ function readNativeSubmission(
  * here and reads `result` directly instead.
  */
 function collectResultIssues(result: EndpointResultDataRuntime): EndpointFormIssue[] {
-  if (result.ok) {
-    return []
-  }
-  const data = (result.body as { data?: unknown } | undefined)?.data
-  if (!data || typeof data !== 'object') {
-    return []
-  }
-  const issues: EndpointFormIssue[] = []
-  for (const group of Object.values(data as Record<string, unknown>)) {
-    if (!Array.isArray(group)) {
-      continue
-    }
-    for (const issue of group as Record<string, unknown>[]) {
-      issues.push({
-        ...issue,
-        message: typeof issue.message === 'string' ? issue.message : 'Invalid value',
-      } as EndpointFormIssue)
-    }
-  }
-  return issues
+  return result.ok ? [] : extractFormIssues(result.body)
 }
 
 /**

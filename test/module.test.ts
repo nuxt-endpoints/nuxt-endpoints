@@ -253,6 +253,31 @@ describe('Nitro route contract provider', () => {
     ).toThrow(/must be an absolute page path/)
   })
 
+  it.each(['/search?scope=all', '/search#results'])(
+    'rejects query strings and fragments in form.from: %s',
+    (from) => {
+      const handler = {
+        handler: '/project/server/api/search.get.ts',
+        route: '/api/search',
+        method: 'get',
+        middleware: false,
+      }
+
+      expect(() =>
+        indexRouteContracts([
+          {
+            ...handler,
+            contract: {
+              form: { from, method: 'get' },
+              query: z.object({ q: z.string().optional() }),
+              responses: { 200: z.object({ items: z.array(z.string()) }) },
+            },
+          },
+        ]),
+      ).toThrow(/page pathname without a query string or fragment/)
+    },
+  )
+
   // These rules are stated at the type level too
   // (src/runtime/form-projection.ts, test/types/form-projection.test-d.ts).
   // They are re-checked here because a cast erases the type, and a rule that

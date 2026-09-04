@@ -509,6 +509,11 @@ function resolveFormMetadata(
       `[nuxt-endpoints] form.from must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.from)}.`,
     )
   }
+  if (/[?#]/.test(form.from)) {
+    throw new Error(
+      `[nuxt-endpoints] form.from must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.from)}. Declare form fields in validate.query for GET, or in the form-encoded body for POST.`,
+    )
+  }
   const method = form.method ?? 'post'
   if (method !== 'get' && method !== 'post') {
     throw new Error(

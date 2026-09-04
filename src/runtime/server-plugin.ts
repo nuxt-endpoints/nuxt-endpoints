@@ -23,7 +23,7 @@ import type {
   EndpointRuntimeAttachmentOptions,
 } from './endpoint-runtime'
 import { setFormRoutes } from './form-routes-state'
-import type { FormRoute } from './form-routes-state'
+import type { EndpointFormRouteEntry } from '../codegen/form-routes'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 import { resolveServerRouteResponseMaps, validateServerRouteConfig } from './server-route-config'
@@ -65,7 +65,7 @@ export default definePlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   // Handed over rather than imported by the bridge itself - see
   // form-routes-state.ts for why.
-  setFormRoutes(formRoutes as Readonly<Record<string, FormRoute>>)
+  setFormRoutes(formRoutes as Readonly<Record<string, EndpointFormRouteEntry>>)
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
   const serverRouteConfig = assertValidServerRouteConfig(serverRouteConfigModule)
