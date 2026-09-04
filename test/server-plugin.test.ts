@@ -17,6 +17,7 @@ vi.mock('#nuxt-endpoints/options', () => ({
   },
 }))
 vi.mock('#nuxt-endpoints/runtime', () => ({ default: undefined }))
+vi.mock('#nuxt-endpoints/form-routes', () => ({ formRoutes: {} }))
 vi.mock('#nuxt-endpoints/server-route-config', () => ({ default: undefined }))
 
 const { extractEndpoints, initializeEndpointHandlers } =

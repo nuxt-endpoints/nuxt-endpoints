@@ -15,6 +15,7 @@ import type { NitroRouteContract, NitroTypes } from 'nitro/types'
 import { camelCase } from 'scule'
 import {
   generateEndpointClient,
+  generateEndpointFormRoutes,
   generateEndpointHandlerManifest,
   generateEndpointTypes,
   toImportPath,
@@ -23,6 +24,9 @@ import type { EndpointRouteHandler } from './codegen'
 import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
 import { isMediaResponseContract } from './runtime/response'
+import { findFormBodyMember } from './runtime/body-media-type'
+import { formFieldAttributes } from './runtime/form-schema'
+import type { EndpointFormRouteMetadata } from './codegen/types'
 import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
 import { inspectValidatorInputObject } from './runtime/validator'
 
@@ -86,6 +90,8 @@ type EndpointMethodDetection = {
   idempotency?: EndpointIdempotencyMetadata
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
+  /** Set when the route declares `form`, with its field attributes resolved. */
+  form?: EndpointFormRouteMetadata
 }
 
 // A single-endpoint route's detection stays exactly the shape it always was
@@ -182,14 +188,24 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     })
     addServerTemplate({
       filename: `#nuxt-${moduleName}/server-handlers`,
-      getContents: () => {
-        if (!endpointHandlerManifest) {
-          throw new Error(
-            '[nuxt-endpoints] Endpoint handler manifest was requested before Nitro route discovery completed.',
-          )
-        }
-        return generateEndpointHandlerManifest(endpointHandlerManifest)
-      },
+      // Rendered twice: once for Nitro's route-contract extraction build,
+      // which runs *before* discovery and by construction is what produces the
+      // manifest, and again for the server build afterwards. The first render
+      // feeds a bundle whose only purpose is reading contract macros - nothing
+      // in it executes - so an empty manifest there is correct rather than a
+      // failure to guard against. Serving an empty one would not be, and
+      // cannot happen: the server build runs after `nitro:init`.
+      getContents: () =>
+        endpointHandlerManifest
+          ? generateEndpointHandlerManifest(endpointHandlerManifest)
+          : 'export const handlers = []\n',
+    })
+    addServerTemplate({
+      filename: `#nuxt-${moduleName}/form-routes`,
+      getContents: () =>
+        endpointHandlerManifest
+          ? generateEndpointFormRoutes(endpointHandlerManifest)
+          : 'export const formRoutes = {}\n',
     })
 
     addServerTemplate({
@@ -278,6 +294,9 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     nuxt.options.build.transpile.push(resolve('./runtime'))
     addServerPlugin(resolve('./runtime/server-plugin'))
+    // Registered unconditionally: with no route declaring `form` the generated
+    // map is empty and the middleware returns on its first lookup.
+    addServerHandler({ middleware: true, handler: resolve('./runtime/form-bridge') })
     if (resolvedOptions.openApi.enabled) {
       addServerHandler({
         route: resolvedOptions.openApi.path,
@@ -288,10 +307,12 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     addImports([
       { from: runtimeFile, name: '$endpoint' },
       { from: runtimeFile, name: 'useEndpoint' },
+      { from: runtimeFile, name: 'useEndpointForm' },
       { from: typeFile, type: true, name: '$EndpointPathResponse' },
       { from: typeFile, type: true, name: '$EndpointPathCall' },
       { from: typeFile, type: true, name: '$EndpointPathRawResponse' },
       { from: typeFile, type: true, name: '$UseEndpoint' },
+      { from: typeFile, type: true, name: '$UseEndpointForm' },
       { from: typeFile, type: true, name: '$UseEndpointPathCall' },
       { from: typeFile, type: true, name: 'EndpointPath' },
       { from: typeFile, type: true, name: 'EndpointMethod' },
@@ -333,7 +354,14 @@ export async function composeHandlers(
       )
     }
 
-    const { idempotency, mediaResponse } = detection
+    const { idempotency, mediaResponse, form } = detection
+    if (form && /[:*]/.test(route)) {
+      // The bridge forwards a submission to this route template verbatim; a
+      // native form carries nothing that would fill a path parameter in.
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form\`, but a native <form> submission cannot fill in a path parameter. Project a route with no parameters, or carry the value in the body.`,
+      )
+    }
 
     endpointHandlers.push({
       ...handler,
@@ -341,6 +369,7 @@ export async function composeHandlers(
       method,
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
+      ...(form ? { form } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
     })
   }
@@ -402,15 +431,102 @@ export function indexRouteContracts(
   return indexed
 }
 
+/**
+ * Refuses a `validate.headers` or `validate.query` declaration that requires
+ * something a native submission cannot carry.
+ *
+ * `NativeFormProjectionConstraint` (src/runtime/form-projection.ts) states the
+ * same rules at the type level, and that is where an author normally meets
+ * them. This is not a duplicate for its own sake: a cast erases the type, and
+ * a rule that only holds when nobody casts is not a rule. A declaration that
+ * requires nothing is still fine — a browser that sends none of it produces a
+ * valid request.
+ */
+function assertNativeFormCanSatisfy(
+  schema: unknown,
+  slot: 'headers' | 'query',
+  reason: string,
+): void {
+  if (schema === undefined) {
+    return
+  }
+  const { inspectable, required } = inspectValidatorInputObject(schema)
+  // An uninspectable schema cannot be cleared, so it is refused rather than
+  // waved through - the same way an unrepresentable form member is.
+  if (!inspectable) {
+    throw new Error(
+      `[nuxt-endpoints] ${reason}, and validate.${slot} on a route declaring \`form\` could not be inspected to prove it requires none.`,
+    )
+  }
+  if (required.length > 0) {
+    throw new Error(
+      `[nuxt-endpoints] ${reason}, so validate.${slot} on a route declaring \`form\` cannot require any. Required: ${required.join(', ')}.`,
+    )
+  }
+}
+
 function getEndpointFromProviderContract(definition: EndpointDefinition): EndpointMethodDetection {
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
   if (idempotency && definition.headers) {
     assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
   }
+  const form = resolveFormMetadata(definition)
   return {
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
+    ...(form ? { form } : {}),
+  }
+}
+
+/**
+ * Resolves a `form` declaration into what the client and the bridge need.
+ *
+ * The field attributes are derived here rather than in the browser, so the
+ * generated client carries plain HTML attributes and no schema object ever
+ * reaches it - the same boundary the rest of the type model keeps.
+ *
+ * A declaration a form could never satisfy fails the build rather than
+ * producing a page whose fallback silently does not work.
+ */
+function resolveFormMetadata(
+  definition: EndpointDefinition,
+): EndpointFormRouteMetadata | undefined {
+  const form = definition.form
+  if (!form) {
+    return undefined
+  }
+  if (typeof form.from !== 'string' || !form.from.startsWith('/')) {
+    throw new Error(
+      `[nuxt-endpoints] form.from must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.from)}.`,
+    )
+  }
+  const member = findFormBodyMember(definition.body)
+  if (!member) {
+    throw new Error(
+      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`validate.body\` - \`formOf()\` derives one from the JSON member.`,
+    )
+  }
+  if (definition.idempotency) {
+    throw new Error(
+      '[nuxt-endpoints] A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare `form`.',
+    )
+  }
+  assertNativeFormCanSatisfy(
+    definition.headers,
+    'headers',
+    'A native <form> cannot send request headers',
+  )
+  assertNativeFormCanSatisfy(
+    definition.query,
+    'query',
+    'A native <form> submission reaches the endpoint with no query string',
+  )
+  return {
+    from: form.from,
+    ...(form.redirect ? { redirect: form.redirect } : {}),
+    enctype: member.mediaType,
+    fields: formFieldAttributes(member.schema),
   }
 }
 

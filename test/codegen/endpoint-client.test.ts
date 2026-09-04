@@ -78,13 +78,31 @@ describe('generateEndpointClient', () => {
       client: { raw: true },
     })
 
-    expect(content).toContain("import { useRequestFetch } from 'nuxt/app'")
+    expect(content).toContain('useRequestFetch')
+    expect(content).toContain("from 'nuxt/app'")
     expect(content).toContain('const captureFetcher = () => {')
     expect(content).toContain(
       'export const useEndpoint = createUseEndpoint(routes, __useEndpointAsyncData, { features: {"raw":true}, captureFetcher })',
     )
     expect(content).toContain(
       'export const $endpoint = createEndpointClient(routes, { features: {"raw":true}, captureFetcher })',
+    )
+  })
+
+  // `useEndpointForm` needs reactivity and navigation, and the client runtime
+  // imports neither Vue nor Nuxt - they arrive the same way `captureFetcher`
+  // does.
+  it('injects the reactivity and navigation primitives useEndpointForm needs', () => {
+    const content = generateEndpointClient(resolve, [healthHandler], {
+      client: { raw: true },
+    })
+
+    expect(content).toContain(
+      'const formBindings = { ref, computed, useState, useRequestEvent, navigateTo }',
+    )
+    expect(content).toContain("import { computed, ref } from 'vue'")
+    expect(content).toContain(
+      'export const useEndpointForm = createUseEndpointForm(routes, formBindings, { captureFetcher })',
     )
   })
 

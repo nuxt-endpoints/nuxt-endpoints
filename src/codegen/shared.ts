@@ -1,4 +1,4 @@
-import type { EndpointRouteHandler } from './types'
+import type { EndpointFormRouteMetadata, EndpointRouteHandler } from './types'
 
 // The runtime-facing route config shape embedded (as a `JSON.stringify`'d `as
 // const` literal) in the generated client (`endpoints.ts`).
@@ -7,6 +7,7 @@ export type EndpointRouteConfigEntry = {
   method: string
   idempotency?: { headerName: string; required: boolean }
   mediaResponse?: true
+  form?: EndpointFormRouteMetadata
 }
 
 export function toEndpointRouteConfigEntries(
@@ -24,6 +25,7 @@ export function toEndpointRouteConfigEntries(
         }
       : {}),
     ...(handler.mediaResponse ? { mediaResponse: true as const } : {}),
+    ...(handler.form ? { form: handler.form } : {}),
   }))
 }
 

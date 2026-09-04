@@ -25,34 +25,34 @@ source, playground examples, and tests before being used in this ledger.
 
 ## Adoption ledger
 
-| Nuxt Actions capability           | Nuxt Endpoints decision               | Notes                                                                              |
-| --------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
-| Standard Schema input validation  | Already supported                     | Keep schema-library-neutral runtime parsing                                        |
-| End-to-end input/output inference | Already supported                     | Generated path, method, and operation clients are broader than action references   |
-| Output validation                 | Already supported                     | Runtime response validation remains optional                                       |
-| Typed middleware context          | Adopt in the core roadmap             | H3 event exposure is implemented; evaluate an immutable context builder separately |
-| Optimistic updates                | Delegate to Pinia Colada              | Provide generated keys and recipes, not a second rollback engine                   |
-| SSR queries and cache             | Delegate state to Pinia Colada        | Its official Nuxt module owns prefetching, serialization, and hydration            |
-| Cache invalidation and tags       | Delegate to Pinia Colada              | Prefer generated hierarchical keys over a separate tag registry                    |
-| Infinite queries                  | Delegate page state to Pinia Colada   | Provide only a typed pageParam-to-request mapper                                   |
-| Prefetching                       | Delegate to Pinia Colada              | Standard options work with its query cache                                         |
-| Retry and backoff                 | Delegate client policy                | Server-side mutation idempotency is a separate concern                             |
-| Request deduplication             | Delegate to Pinia Colada              | Preserve AbortSignal support in the endpoint request primitive                     |
-| Form state and field dirtiness    | Delegate to form libraries            | Typed mutation inputs are the integration boundary                                 |
-| Progressive form enhancement      | Defer                                 | Revisit only with a concrete native-form/SSR requirement                           |
-| Idempotency-Key replay protection | Adopt as an optional server helper    | Require scoped keys and pluggable durable storage                                  |
-| Global lifecycle hooks            | Adopt as narrow integration points    | Prefer operation-aware tracing and metrics; UI toasts remain application code      |
-| Typed error codes                 | Covered differently                   | Status-specific response schemas are more precise than a global action-error union |
-| OpenAPI generation                | Already supported                     | Preserve plain HTTP status codes and response contracts                            |
-| Custom request headers            | Already supported                     | Fetcher injection is still useful for defaults and SSR forwarding                  |
-| Streaming/SSE                     | Keep low-level for now                | Native `Response` and `.raw()` are the current escape hatches                      |
-| Multipart file uploads            | Candidate for later                   | Design contracts, runtime parsing, client encoding, and OpenAPI together           |
-| Auth preset                       | Delegate                              | Use application/Nitro middleware with typed request context                        |
-| Rate limiting and CSRF presets    | Delegate                              | Do not make Nuxt Endpoints a security-policy framework                             |
-| DevTools endpoint inspector       | Adopt after APIs stabilize            | Show discovered contracts without sensitive payloads                               |
-| HMR type updates                  | Already part of generated-client work | Optional adapter templates must share the regeneration path                        |
-| CLI action scaffold               | Low priority                          | Revisit after endpoint and adapter APIs stabilize                                  |
-| Grouped action namespace          | No immediate need                     | Typed path-and-method endpoint calls provide the main ergonomics                   |
+| Nuxt Actions capability           | Nuxt Endpoints decision               | Notes                                                                                             |
+| --------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Standard Schema input validation  | Already supported                     | Keep schema-library-neutral runtime parsing                                                       |
+| End-to-end input/output inference | Already supported                     | Generated path, method, and operation clients are broader than action references                  |
+| Output validation                 | Already supported                     | Runtime response validation remains optional                                                      |
+| Typed middleware context          | Adopt in the core roadmap             | H3 event exposure is implemented; evaluate an immutable context builder separately                |
+| Optimistic updates                | Delegate to Pinia Colada              | Provide generated keys and recipes, not a second rollback engine                                  |
+| SSR queries and cache             | Delegate state to Pinia Colada        | Its official Nuxt module owns prefetching, serialization, and hydration                           |
+| Cache invalidation and tags       | Delegate to Pinia Colada              | Prefer generated hierarchical keys over a separate tag registry                                   |
+| Infinite queries                  | Delegate page state to Pinia Colada   | Provide only a typed pageParam-to-request mapper                                                  |
+| Prefetching                       | Delegate to Pinia Colada              | Standard options work with its query cache                                                        |
+| Retry and backoff                 | Delegate client policy                | Server-side mutation idempotency is a separate concern                                            |
+| Request deduplication             | Delegate to Pinia Colada              | Preserve AbortSignal support in the endpoint request primitive                                    |
+| Form state and field dirtiness    | Delegate to form libraries            | Typed mutation inputs are the integration boundary                                                |
+| Progressive form enhancement      | Own it; not offered upstream          | Nuxt Actions lists no native-form or no-JS capability. See [design](./progressive-enhancement.md) |
+| Idempotency-Key replay protection | Adopt as an optional server helper    | Require scoped keys and pluggable durable storage                                                 |
+| Global lifecycle hooks            | Adopt as narrow integration points    | Prefer operation-aware tracing and metrics; UI toasts remain application code                     |
+| Typed error codes                 | Covered differently                   | Status-specific response schemas are more precise than a global action-error union                |
+| OpenAPI generation                | Already supported                     | Preserve plain HTTP status codes and response contracts                                           |
+| Custom request headers            | Already supported                     | Fetcher injection is still useful for defaults and SSR forwarding                                 |
+| Streaming/SSE                     | Keep low-level for now                | Native `Response` and `.raw()` are the current escape hatches                                     |
+| Multipart file uploads            | Candidate for later                   | Design contracts, runtime parsing, client encoding, and OpenAPI together                          |
+| Auth preset                       | Delegate                              | Use application/Nitro middleware with typed request context                                       |
+| Rate limiting and CSRF presets    | Delegate                              | Do not make Nuxt Endpoints a security-policy framework                                            |
+| DevTools endpoint inspector       | Adopt after APIs stabilize            | Show discovered contracts without sensitive payloads                                              |
+| HMR type updates                  | Already part of generated-client work | Optional adapter templates must share the regeneration path                                       |
+| CLI action scaffold               | Low priority                          | Revisit after endpoint and adapter APIs stabilize                                                 |
+| Grouped action namespace          | No immediate need                     | Typed path-and-method endpoint calls provide the main ergonomics                                  |
 
 The product-level outcomes are maintained in the
 [Nuxt Endpoints roadmap](./roadmap.md). Pinia Colada usage is documented in the public guide.

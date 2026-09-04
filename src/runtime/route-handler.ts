@@ -9,6 +9,8 @@ import type {
   HasEndpointResponses,
   WidenCapturedReturn,
 } from './contract'
+import type { EndpointFormContract } from './contract'
+import type { NativeFormProjectionConstraint } from './form-projection'
 import type { IdempotencyRouteContractForbiddenOptionKey } from './idempotency'
 import {
   defineEndpointHandler,
@@ -62,6 +64,7 @@ type RouteHandlerInput<
   DESCRIPTION,
   TAGS,
   IDEMPOTENCY,
+  FORM,
   DEFINITION extends EndpointDefinition,
   ACTUAL_RETURN,
 > = {
@@ -71,6 +74,12 @@ type RouteHandlerInput<
   description?: DESCRIPTION
   tags?: TAGS
   idempotency?: IDEMPOTENCY & RouteContractIdempotency
+  /**
+   * Projects this endpoint into a native `<form>` on a page. The constraint
+   * refuses a contract a browser could not produce a request for - see
+   * form-projection.ts.
+   */
+  form?: FORM & NativeFormProjectionConstraint<QUERY, HEADERS, BODY, IDEMPOTENCY>
   handler: CapturedRouteHandler<DEFINITION, ACTUAL_RETURN>
 }
 
@@ -293,6 +302,7 @@ export function defineRouteHandler<
   TAGS extends string[] | undefined = undefined,
   const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
     undefined,
+  const FORM extends EndpointFormContract | undefined = undefined,
   DEFINITION extends EndpointDefinition = AssembledEndpointContract<
     PARAMS,
     QUERY,
@@ -302,7 +312,7 @@ export function defineRouteHandler<
     SUMMARY,
     DESCRIPTION,
     TAGS
-  > & { idempotency: IDEMPOTENCY },
+  > & { idempotency: IDEMPOTENCY; form: FORM },
   const ACTUAL_RETURN extends DeepReadonly<HandlerReturn<DEFINITION>> = DeepReadonly<
     HandlerReturn<DEFINITION>
   >,
@@ -317,6 +327,7 @@ export function defineRouteHandler<
     DESCRIPTION,
     TAGS,
     IDEMPOTENCY,
+    FORM,
     DEFINITION,
     ACTUAL_RETURN
   >,
@@ -331,9 +342,10 @@ export function defineRouteHandler<
     DESCRIPTION,
     TAGS,
     IDEMPOTENCY,
+    FORM,
     DEFINITION,
     ACTUAL_RETURN
-  > & { idempotency: IDEMPOTENCY },
+  > & { idempotency: IDEMPOTENCY; form: FORM },
   EndpointHandlerSuccessBody<
     DEFINITION,
     HasEndpointResponses<DEFINITION> extends true

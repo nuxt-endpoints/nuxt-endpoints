@@ -19,6 +19,7 @@ flowchart TB
         request["request.ts<br/>read the request"]
         response["response.ts<br/>write the response"]
         handler["handler.ts<br/>event & registration"]
+        middleware["middleware.ts<br/>middleware & internal dispatch"]
         wire["wire.ts<br/>JSON projection"]
     end
     h3["h3 — execution"]
@@ -29,15 +30,18 @@ flowchart TB
     request --> h3
     response --> h3
     handler --> h3
+    middleware --> h3
+    middleware --> nitro
     wire --> nuxt
 ```
 
-| File          | Role                                                                    |
-| ------------- | ----------------------------------------------------------------------- |
-| `request.ts`  | Query, headers, and the four body shapes a contract can declare         |
-| `response.ts` | The status and headers a declared contract resolves to; internal errors |
-| `handler.ts`  | The `RuntimeEvent` alias, handler registration, method dispatch input   |
-| `wire.ts`     | What a handler return looks like after JSON serialization               |
+| File            | Role                                                                    |
+| --------------- | ----------------------------------------------------------------------- |
+| `request.ts`    | Query, headers, and the four body shapes a contract can declare         |
+| `response.ts`   | The status and headers a declared contract resolves to; internal errors |
+| `handler.ts`    | The `RuntimeEvent` alias, handler registration, method dispatch input   |
+| `middleware.ts` | Middleware registration, internal dispatch, and redirects — the bridge  |
+| `wire.ts`       | What a handler return looks like after JSON serialization               |
 
 ## Prototype responsibility split
 

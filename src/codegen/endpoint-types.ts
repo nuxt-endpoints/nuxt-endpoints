@@ -35,7 +35,7 @@ export function generateEndpointTypes(
     : ''
 
   return `
-import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from '${toImportPath(resolve('./runtime'))}'
+import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient } from '${toImportPath(resolve('./runtime'))}'
 import type { ServerRoutes } from '@nuxt/schema'
 import type { TypedFetchMetadataField } from 'nuxt/app'
 ${serverRouteConfigImport}
@@ -53,8 +53,9 @@ export type EndpointMethod<PATH extends EndpointPath> = EndpointRouteForPath<PAT
 export type $EndpointPathResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Awaited<$EndpointPathCall<PATH, METHOD>>
 export type $EndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = EndpointPathCall<EndpointRouteEntry, PATH, METHOD, EndpointClientFeatures>
 export type $UseEndpoint = UseEndpointClient<EndpointRouteEntry, EndpointClientFeatures>
+export type $UseEndpointForm = UseEndpointFormClient<EndpointRouteEntry>
 export type $UseEndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>
 ${rawResponseType}
-export type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod }
+export type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient }
 `.trimStart()
 }

@@ -16,6 +16,10 @@ declare module '#nuxt-endpoints/server-handlers' {
   export const handlers: unknown
 }
 
+declare module '#nuxt-endpoints/form-routes' {
+  export const formRoutes: unknown
+}
+
 declare module '#nuxt-endpoints/runtime' {
   const runtime: import('./endpoint-runtime').EndpointRuntime | undefined
   export default runtime

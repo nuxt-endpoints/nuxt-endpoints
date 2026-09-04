@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Nuxt } from '@nuxt/schema'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import {
   assertOpenApiRoutesDoNotOverlap,
   composeHandlers,
@@ -13,6 +14,7 @@ import {
   resolveExplicitConventionPath,
   resolveModuleOptions,
 } from '../src/module'
+import { formOf } from '../src/runtime'
 
 describe('Nitro route contract provider', () => {
   it('composes handlers exclusively from provider contracts', async () => {
@@ -32,6 +34,190 @@ describe('Nitro route contract provider', () => {
     await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
       { route: '/api/users', method: 'get' },
     ])
+  })
+
+  it('resolves a form declaration into field attributes at build time', async () => {
+    // Derived here rather than in the browser, so the generated client carries
+    // plain HTML attributes and no schema object ever reaches it.
+    const handler = {
+      handler: '/project/server/api/todos.post.ts',
+      route: '/api/todos',
+      method: 'post',
+      middleware: false,
+    }
+    const Todo = z.object({ title: z.string().min(1), done: z.boolean() })
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          form: { from: '/todos/new', redirect: '/todos/{id}' },
+          body: {
+            'application/json': Todo,
+            'application/x-www-form-urlencoded': formOf(Todo),
+          },
+          responses: {},
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+      {
+        route: '/api/todos',
+        method: 'post',
+        form: {
+          from: '/todos/new',
+          redirect: '/todos/{id}',
+          enctype: 'application/x-www-form-urlencoded',
+          fields: {
+            title: { name: 'title', required: true, minlength: 1 },
+            done: { name: 'done' },
+          },
+        },
+      },
+    ])
+  })
+
+  it('rejects a form projection on a route with a path parameter', async () => {
+    // The bridge forwards the submission to this route template verbatim, and a
+    // native form carries nothing that would fill `:id` in.
+    const handler = {
+      handler: '/project/server/api/todos/[id].put.ts',
+      route: '/api/todos/:id',
+      method: 'put',
+      middleware: false,
+    }
+    const Todo = z.object({ title: z.string().min(1) })
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          form: { from: '/todos/edit' },
+          body: { 'application/x-www-form-urlencoded': formOf(Todo) },
+          responses: {},
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).rejects.toThrow(
+      /cannot fill in a path parameter/,
+    )
+  })
+
+  it('rejects a form declaration a browser could never satisfy', () => {
+    const handler = {
+      handler: '/project/server/api/todos.post.ts',
+      route: '/api/todos',
+      method: 'post',
+      middleware: false,
+    }
+    // The declaration is rejected while contracts are indexed, which is the
+    // first point that sees it - before any handler entry exists to carry it.
+    expect(() =>
+      indexRouteContracts([
+        {
+          ...handler,
+          // JSON only: a native form cannot send it.
+          contract: {
+            form: { from: '/todos/new' },
+            body: z.object({ title: z.string() }),
+            responses: {},
+          },
+        },
+      ]),
+    ).toThrow(/must accept an encoding a browser can submit/)
+  })
+
+  it('rejects a form page path that is not absolute', () => {
+    const handler = {
+      handler: '/project/server/api/todos.post.ts',
+      route: '/api/todos',
+      method: 'post',
+      middleware: false,
+    }
+    const Todo = z.object({ title: z.string() })
+
+    expect(() =>
+      indexRouteContracts([
+        {
+          ...handler,
+          contract: {
+            form: { from: 'todos/new' },
+            body: { 'application/x-www-form-urlencoded': formOf(Todo) },
+            responses: {},
+          },
+        },
+      ]),
+    ).toThrow(/must be an absolute page path/)
+  })
+
+  // These rules are stated at the type level too
+  // (src/runtime/form-projection.ts, test/types/form-projection.test-d.ts).
+  // They are re-checked here because a cast erases the type, and a rule that
+  // only holds when nobody casts is not a rule.
+  describe('a contract a native form could not produce a request for', () => {
+    const Todo = z.object({ title: z.string() })
+    const handler = {
+      handler: '/project/server/api/todos.post.ts',
+      route: '/api/todos',
+      method: 'post',
+      middleware: false,
+    }
+    const index = (contract: Record<string, unknown>) => () =>
+      indexRouteContracts([
+        {
+          ...handler,
+          contract: {
+            form: { from: '/todos/new' },
+            body: { 'application/x-www-form-urlencoded': formOf(Todo) },
+            responses: {},
+            ...contract,
+          },
+        },
+      ])
+
+    it('rejects an idempotent route, which needs a header a form cannot send', () => {
+      expect(
+        index({ idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true } }),
+      ).toThrow(/cannot send an Idempotency-Key header/)
+    })
+
+    it('rejects a required request header', () => {
+      expect(index({ headers: z.object({ 'x-tenant': z.string() }) })).toThrow(
+        /cannot send request headers.*Required: x-tenant/s,
+      )
+    })
+
+    it('rejects a required query parameter', () => {
+      expect(index({ query: z.object({ list: z.string() }) })).toThrow(
+        /reaches the endpoint with no query string.*Required: list/s,
+      )
+    })
+
+    it('allows a header or query declaration that requires nothing', () => {
+      expect(
+        index({
+          headers: z.object({ 'accept-language': z.string().optional() }),
+          query: z.object({ page: z.string().optional() }),
+        }),
+      ).not.toThrow()
+    })
+
+    it('allows a union whose branches do not agree that a member is required', () => {
+      // One branch requires `a` and the other does not, so a submission that
+      // sends nothing is still valid.
+      expect(index({ headers: z.union([z.object({ a: z.string() }), z.object({})]) })).not.toThrow()
+    })
+
+    it('rejects a schema it cannot prove requires nothing', () => {
+      // Silently waving an uninspectable declaration through would ship a form
+      // whose fallback 400s on every submission, which is the failure this
+      // prevents. Stricter than the type-level rule on purpose: the type reads
+      // the declared input, this reads the derived JSON Schema, and only the
+      // build can tell that it derived nothing to read.
+      expect(index({ headers: z.record(z.string(), z.string()) })).toThrow(
+        /could not be inspected to prove it requires none/,
+      )
+    })
   })
 })
 

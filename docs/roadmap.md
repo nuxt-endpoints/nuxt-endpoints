@@ -19,6 +19,7 @@ without hiding the broader roadmap.
 | [Idempotency storage recipes](./idempotency-storage-recipes.md) | Redis Lua and PostgreSQL row-lock adapters, operational guidance, and production review                                        |
 | [Nitro v3 and H3 v2 readiness](./nitro-v3-h3-v2-readiness.md)   | Stable endpoint contract, completed preparation, adapter boundary, remaining risks, and acceptance checklist                   |
 | [Type generation and Nuxt 5](./type-generation.md)              | Current contract markers, JSON wire types, `InternalApi` agreement, discovery failure policy, and Nuxt 5 typed-fetch migration |
+| [Progressive enhancement](./progressive-enhancement.md)         | Native-form representation of an endpoint contract, the bridge, `useEndpointForm`, ecosystem evidence, and what was measured   |
 
 ## Current implementation status
 
@@ -72,22 +73,22 @@ core endpoint handler context.
 
 ## Roadmap summary
 
-| Capability                                  | Decision                           | Priority                                               |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
-| H3 event in handler context                 | Adopted and implemented            | Complete                                               |
-| Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                      |
-| Shared client extension primitives          | Adopt                              | Foundation work                                        |
-| Pinia Colada integration                    | Adopted and implemented            | Stabilization and compatibility                        |
-| Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API |
-| Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                    |
-| DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                            |
-| Stream response declarations                | Adopted and implemented            | Complete                                               |
-| Typed stream chunks                         | Keep low-level for now             | Last, after a complete design                          |
-| Progressive form enhancement                | Defer                              | Only with a concrete native-form requirement           |
-| Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                 |
-| Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                      |
-| CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize              |
-| Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics             |
+| Capability                                  | Decision                           | Priority                                                                                               |
+| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| H3 event in handler context                 | Adopted and implemented            | Complete                                                                                               |
+| Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                                                                      |
+| Shared client extension primitives          | Adopt                              | Foundation work                                                                                        |
+| Pinia Colada integration                    | Adopted and implemented            | Stabilization and compatibility                                                                        |
+| Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API                                                 |
+| Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                                                                    |
+| DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                                                                            |
+| Stream response declarations                | Adopted and implemented            | Complete                                                                                               |
+| Typed stream chunks                         | Keep low-level for now             | Last, after a complete design                                                                          |
+| Progressive form enhancement                | Implemented (Nuxt 5 only)          | Module-registered bridge middleware plus `useEndpointForm`; see [design](./progressive-enhancement.md) |
+| Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                                                                 |
+| Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                                                                      |
+| CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize                                                              |
+| Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics                                                             |
 
 ## Shared client extension track
 

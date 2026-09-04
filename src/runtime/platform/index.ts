@@ -12,6 +12,13 @@ export type {
 export { defineRuntimeHandler, getRuntimeMethod, getRuntimeWebRequest } from './handler'
 export type { RuntimeContractEvent, RuntimeEvent } from './handler'
 export {
+  defineRuntimeMiddleware,
+  getRuntimePathname,
+  runtimeRedirect,
+  runtimeServerFetch,
+} from './middleware'
+export type { RuntimeMiddleware, RuntimeMiddlewareResult } from './middleware'
+export {
   getRuntimeQuery,
   getRuntimeRequestHeaders,
   readRuntimeBinaryBody,

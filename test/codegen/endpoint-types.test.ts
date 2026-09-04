@@ -103,7 +103,7 @@ describe('generateEndpointTypes', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
     expect(content).toContain(
-      "import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod } from './runtime'",
+      "import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient } from './runtime'",
     )
     expect(content).toContain("import type { ServerRoutes } from '@nuxt/schema'")
     expect(content).toContain("import type { TypedFetchMetadataField } from 'nuxt/app'")

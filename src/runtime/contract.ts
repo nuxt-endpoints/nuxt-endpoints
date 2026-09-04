@@ -171,12 +171,38 @@ export type EndpointIdempotencyMetadata<
   required: REQUIRED
 }
 
+/**
+ * Declares that this endpoint can also be reached by a native `<form>`.
+ *
+ * Deliberately static, so the whole thing survives the build-time contract
+ * extraction and reaches both the client and the server bridge. A callback
+ * would have to live in a runtime slot instead, and then the client could not
+ * see it - the macro strips runtime-only properties from the contract.
+ *
+ * See docs/progressive-enhancement.md.
+ */
+export type EndpointFormContract = {
+  /**
+   * The page URL the form posts to. A browser navigation to this path is
+   * translated into a call to this endpoint, and its response is translated
+   * back into what a browser can act on.
+   */
+  from: string
+  /**
+   * Where the browser goes after a successful submission, as a template over
+   * the response body: `'/todos/{id}'`. A `303` is sent to it, so the history
+   * entry the user lands on is a `GET`.
+   */
+  redirect?: string
+}
+
 export type EndpointDefinition = EndpointRequestContract & {
   responses?: EndpointResponsesContract
   summary?: string
   description?: string
   tags?: string[]
   idempotency?: EndpointIdempotencyMetadata
+  form?: EndpointFormContract
 }
 
 export type EndpointContext<DEFINITION extends EndpointDefinition> = {
