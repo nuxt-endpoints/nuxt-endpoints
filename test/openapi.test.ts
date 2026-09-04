@@ -98,19 +98,67 @@ describe('createOpenApiDocument', () => {
       },
     ])
 
+    // A request body documents what a caller may send, so it is converted in
+    // Zod's input direction. That view carries no `additionalProperties: false`,
+    // and it is the honest one: `z.object` accepts extra keys and strips them
+    // rather than rejecting them. Only `z.strictObject` rejects, and it reports
+    // the constraint in both directions.
     expect(document.paths['/api/users'].post.requestBody).toMatchObject({
       required: true,
       content: {
         'application/json': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name'],
             properties: {
               name: { type: 'string', minLength: 1 },
             },
           },
         },
+      },
+    })
+    expect(
+      document.paths['/api/users']!.post!.requestBody!.content['application/json']!.schema,
+    ).not.toHaveProperty('additionalProperties')
+  })
+
+  it('documents a request body whose schema transforms its input', () => {
+    // Regression: the conversion asked for the input direction but never passed
+    // it to Zod, so Zod answered in its output direction - which is
+    // unrepresentable for a schema carrying `transform`/`pipe` and yielded `{}`.
+    // A contract declared that way documented as an empty schema.
+    const Confirmed = z
+      .object({ email: z.string(), password: z.string().min(8), confirmPassword: z.string() })
+      .refine((value) => value.password === value.confirmPassword, {
+        path: ['confirmPassword'],
+        message: 'Passwords do not match',
+      })
+      // Naming the discarded key aliases it, which is the idiom that keeps the
+      // omit form readable without tripping the unused-parameter rule.
+      .transform(({ confirmPassword: _confirmPassword, ...rest }) => rest)
+
+    const document = createOpenApiDocument([
+      {
+        path: '/api/signups',
+        method: 'post',
+        definition: {
+          body: Confirmed,
+          responses: { 201: z.object({ id: z.number().int() }) },
+        },
+      },
+    ])
+
+    const schema =
+      document.paths['/api/signups']!.post!.requestBody!.content['application/json']!.schema
+
+    // The caller sends the form's own shape, confirmation field included.
+    expect(schema).toMatchObject({
+      type: 'object',
+      required: ['email', 'password', 'confirmPassword'],
+      properties: {
+        email: { type: 'string' },
+        password: { type: 'string', minLength: 8 },
+        confirmPassword: { type: 'string' },
       },
     })
   })
@@ -138,7 +186,6 @@ describe('createOpenApiDocument', () => {
         'application/json': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name'],
             properties: { name: { type: 'string' } },
           },
@@ -146,7 +193,6 @@ describe('createOpenApiDocument', () => {
         'multipart/form-data': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name', 'tag'],
             properties: {
               name: { type: 'string' },

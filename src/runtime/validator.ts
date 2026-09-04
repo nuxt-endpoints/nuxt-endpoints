@@ -85,7 +85,7 @@ export function toJsonSchema(
   }
 
   if (isZodV4SchemaLike(schema)) {
-    return zodV4ToOpenApiSchema(schema, context)
+    return zodV4ToOpenApiSchema(schema, context, options.mode || 'output')
   }
 
   if (isValibotSchemaLike(schema)) {

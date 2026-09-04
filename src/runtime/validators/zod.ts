@@ -21,6 +21,8 @@ export type ZodV4SchemaLike = ZodLike & {
   isOptional?: () => boolean
   meta?: () => unknown
   toJSONSchema?: (options: {
+    /** Which direction to describe. Absent means Zod's own default, `'output'`. */
+    io?: 'input' | 'output'
     unrepresentable: 'any'
     override: (context: { zodSchema: ZodV4SchemaLike; jsonSchema: Record<string, unknown> }) => void
   }) => unknown
@@ -77,9 +79,24 @@ export async function parseZodLike<SCHEMA extends ZodLike>(
   }
 }
 
+/**
+ * `io` is the direction being described, and it is not cosmetic.
+ *
+ * Zod's output view of a schema carrying a `transform`/`pipe` is
+ * unrepresentable, so asking for it yields `{}` - which is how a request body
+ * declared with one used to document as nothing at all. The input view
+ * describes what a caller actually sends, which is what a request body means.
+ *
+ * The two views also differ for a plain `z.object`: the output view adds
+ * `additionalProperties: false`, and the input view does not. The input view is
+ * the honest one, because `z.object` *strips* unknown keys rather than
+ * rejecting them - measured. Only `z.strictObject` rejects, and it reports
+ * `additionalProperties: false` in both views.
+ */
 export function zodV4ToOpenApiSchema(
   schema: ZodV4SchemaLike,
   context: JsonSchemaConversionContext,
+  io: 'input' | 'output' = 'output',
 ): JsonSchema {
   if (typeof schema.toJSONSchema !== 'function') {
     throw new Error(
@@ -88,6 +105,7 @@ export function zodV4ToOpenApiSchema(
   }
 
   const converted = schema.toJSONSchema({
+    io,
     unrepresentable: 'any',
     override({ zodSchema, jsonSchema }) {
       if (zodSchema._zod?.def?.type === 'date') {
