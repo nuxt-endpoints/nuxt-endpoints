@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-09-06
+
+### Added
+
+- Optional `name` declarations generate typed client aliases such as
+  `$endpoint.getUser({ params: { id: '1' } })`. Named calls keep the same
+  `params`, `query`, `headers`, and `body` input types, status-aware results,
+  idempotency behavior, and Pinia Colada integration as path-based requests.
+- Names can be declared on individual members of a multi-method route.
+  Duplicate names, invalid identifiers, reserved client properties, and
+  method-group root names are rejected.
+
+### Documentation
+
+- Added named-call examples to the README and documentation site. Path and
+  method remain the canonical HTTP identity; names do not change OpenAPI
+  `operationId` values.
+
+This release targets Nuxt 4.5+. Progressive enhancement, including the renamed
+`form.action` option, remains exclusive to the experimental `nuxt5` branch.
+
 ## 0.9.0 - 2026-09-06
 
 ### Added
