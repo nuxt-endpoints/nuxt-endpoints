@@ -988,7 +988,7 @@ export type EndpointClientRouteConfig = {
    * never a schema object.
    */
   form?: {
-    from: string
+    action: string
     method: 'get' | 'post'
     redirect?: string
     enctype: string
@@ -1102,7 +1102,7 @@ export function createUseEndpointForm(
     const { route, endpointOptions } = resolveEndpointRoute(routes, path, requestOptions)
     if (!route.form) {
       throw new Error(
-        `[nuxt-endpoints] ${route.method.toUpperCase()} ${route.path} does not declare \`form\`, so it has no native-form projection. Add \`form: { from: '<page path>' }\` to its contract.`,
+        `[nuxt-endpoints] ${route.method.toUpperCase()} ${route.path} does not declare \`form\`, so it has no native-form projection. Add \`form: { action: '<page path>' }\` to its contract.`,
       )
     }
     if (route.form.method !== route.method) {
@@ -2023,7 +2023,7 @@ function createEndpointFormCall(
     const element = event.target as HTMLFormElement
     const encoded = toDeclaredEncoding(new FormData(element), form.enctype)
     if (form.method === 'get') {
-      await bindings.navigateTo?.(getFormNavigationTarget(form.from, encoded))
+      await bindings.navigateTo?.(getFormNavigationTarget(form.action, encoded))
     }
     const value = await submit(encoded)
     if (value.ok && formOptions.onSuccess) {
@@ -2049,7 +2049,7 @@ function createEndpointFormCall(
 
   return {
     attrs: {
-      action: form.from,
+      action: form.action,
       method: form.method,
       enctype: form.enctype,
       ...(formOptions.validation === 'server' ? { novalidate: true as const } : {}),
@@ -2118,12 +2118,12 @@ function queryFromFormEncoding(input: unknown): Record<string, unknown> {
 }
 
 /** Native GET form semantics: its controls replace the action URL's query. */
-function getFormNavigationTarget(from: string, query: URLSearchParams | FormData): string {
+function getFormNavigationTarget(action: string, query: URLSearchParams | FormData): string {
   if (!(query instanceof URLSearchParams)) {
     throw new TypeError('[nuxt-endpoints] A GET form cannot navigate with multipart data.')
   }
   const encoded = query.toString()
-  return `${from}${encoded ? `?${encoded}` : ''}`
+  return `${action}${encoded ? `?${encoded}` : ''}`
 }
 
 /** `'/todos/{id}'` against the response body. */

@@ -28,7 +28,7 @@ const route = {
   path: '/api/todos',
   method: 'post' as const,
   form: {
-    from: '/todos/new',
+    action: '/todos/new',
     method: 'post' as const,
     redirect: '/todos/{id}',
     enctype: 'application/x-www-form-urlencoded',
@@ -152,7 +152,7 @@ describe('useEndpointForm', () => {
           path: '/api/uploads',
           method: 'post',
           form: {
-            from: '/uploads',
+            action: '/uploads',
             method: 'post',
             enctype: 'multipart/form-data',
             fields: { attachment: { name: 'attachment', type: 'file', required: true } },
@@ -286,7 +286,7 @@ describe('useEndpointForm', () => {
           path: '/api/search',
           method: 'get',
           form: {
-            from: '/search',
+            action: '/search',
             method: 'get',
             enctype: 'application/x-www-form-urlencoded',
             fields: { q: { name: 'q', required: true } },
@@ -329,7 +329,7 @@ describe('useEndpointForm', () => {
           path: '/api/search',
           method: 'get',
           form: {
-            from: '/search',
+            action: '/search',
             method: 'get',
             enctype: 'application/x-www-form-urlencoded',
             fields: { q: { name: 'q' } },

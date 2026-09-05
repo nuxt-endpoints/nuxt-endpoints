@@ -149,7 +149,7 @@ describe('Nitro route contract provider', () => {
       {
         ...handler,
         contract: {
-          form: { from: '/todos/new', redirect: '/todos/{id}' },
+          form: { action: '/todos/new', redirect: '/todos/{id}' },
           body: {
             'application/json': Todo,
             'application/x-www-form-urlencoded': formOf(Todo),
@@ -164,7 +164,7 @@ describe('Nitro route contract provider', () => {
         route: '/api/todos',
         method: 'post',
         form: {
-          from: '/todos/new',
+          action: '/todos/new',
           method: 'post',
           redirect: '/todos/{id}',
           enctype: 'application/x-www-form-urlencoded',
@@ -175,6 +175,23 @@ describe('Nitro route contract provider', () => {
         },
       },
     ])
+  })
+
+  it('reports the form.action migration for JavaScript contracts using form.from', () => {
+    expect(() =>
+      indexRouteContracts([
+        {
+          handler: '/project/server/api/search.get.ts',
+          route: '/api/search',
+          method: 'get',
+          middleware: false,
+          contract: {
+            form: { from: '/search', method: 'get' },
+            query: z.object({ q: z.string().optional() }),
+          },
+        },
+      ] as never),
+    ).toThrow(/form.from was renamed to form.action/)
   })
 
   it('rejects a form projection on a route with a path parameter', async () => {
@@ -191,7 +208,7 @@ describe('Nitro route contract provider', () => {
       {
         ...handler,
         contract: {
-          form: { from: '/todos/edit' },
+          form: { action: '/todos/edit' },
           body: { 'application/x-www-form-urlencoded': formOf(Todo) },
           responses: {},
         },
@@ -214,7 +231,7 @@ describe('Nitro route contract provider', () => {
       {
         ...handler,
         contract: {
-          form: { from: '/search', method: 'get' },
+          form: { action: '/search', method: 'get' },
           query: z.object({ term: z.string().min(1), page: z.coerce.number().optional() }),
           responses: { 200: z.object({ items: z.array(z.string()) }) },
         },
@@ -226,7 +243,7 @@ describe('Nitro route contract provider', () => {
         route: '/api/search',
         method: 'get',
         form: {
-          from: '/search',
+          action: '/search',
           method: 'get',
           enctype: 'application/x-www-form-urlencoded',
           fields: {
@@ -249,7 +266,7 @@ describe('Nitro route contract provider', () => {
       {
         ...handler,
         contract: {
-          form: { from: '/profile/edit' },
+          form: { action: '/profile/edit' },
           body: {
             'application/x-www-form-urlencoded': formOf(z.object({ name: z.string() })),
           },
@@ -275,7 +292,7 @@ describe('Nitro route contract provider', () => {
       indexRouteContracts([
         {
           ...handler,
-          contract: { form: { from: '/search', method: 'get' }, responses: {} },
+          contract: { form: { action: '/search', method: 'get' }, responses: {} },
         },
       ]),
     ).toThrow(/GET form needs `validate.query`/)
@@ -294,7 +311,7 @@ describe('Nitro route contract provider', () => {
         {
           ...handler,
           contract: {
-            form: { from: '/todos/new', redirect: '/todos/{id}' },
+            form: { action: '/todos/new', redirect: '/todos/{id}' },
             body: {
               'application/x-www-form-urlencoded': formOf(z.object({ title: z.string() })),
             },
@@ -320,7 +337,7 @@ describe('Nitro route contract provider', () => {
           ...handler,
           // JSON only: a native form cannot send it.
           contract: {
-            form: { from: '/todos/new' },
+            form: { action: '/todos/new' },
             body: z.object({ title: z.string() }),
             responses: {},
           },
@@ -343,7 +360,7 @@ describe('Nitro route contract provider', () => {
         {
           ...handler,
           contract: {
-            form: { from: 'todos/new' },
+            form: { action: 'todos/new' },
             body: { 'application/x-www-form-urlencoded': formOf(Todo) },
             responses: {},
           },
@@ -353,8 +370,8 @@ describe('Nitro route contract provider', () => {
   })
 
   it.each(['/search?scope=all', '/search#results'])(
-    'rejects query strings and fragments in form.from: %s',
-    (from) => {
+    'rejects query strings and fragments in form.action: %s',
+    (action) => {
       const handler = {
         handler: '/project/server/api/search.get.ts',
         route: '/api/search',
@@ -367,7 +384,7 @@ describe('Nitro route contract provider', () => {
           {
             ...handler,
             contract: {
-              form: { from, method: 'get' },
+              form: { action, method: 'get' },
               query: z.object({ q: z.string().optional() }),
               responses: { 200: z.object({ items: z.array(z.string()) }) },
             },
@@ -394,7 +411,7 @@ describe('Nitro route contract provider', () => {
         {
           ...handler,
           contract: {
-            form: { from: '/todos/new' },
+            form: { action: '/todos/new' },
             body: { 'application/x-www-form-urlencoded': formOf(Todo) },
             responses: {},
             ...contract,

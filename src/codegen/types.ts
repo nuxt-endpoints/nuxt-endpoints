@@ -39,7 +39,7 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
 // structural superset and is passed in as-is.
 export type EndpointFormRouteMetadata = {
   /** The page URL a native form submits to. */
-  from: string
+  action: string
   /** GET projects query fields; POST projects a form-encoded body. */
   method: 'get' | 'post'
   /** Success target template over the response body, e.g. `/todos/{id}`. */

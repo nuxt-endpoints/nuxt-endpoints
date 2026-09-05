@@ -9,7 +9,7 @@ import { defineRouteHandler } from '../../../../src/runtime'
 export default defineRouteHandler({
   summary: 'Store a note with an attachment',
   form: {
-    from: '/form-pe/upload',
+    action: '/form-pe/upload',
     redirect: '/form-pe/upload?stored={name}&size={size}&session={session}',
   },
   validate: {

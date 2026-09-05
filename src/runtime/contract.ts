@@ -188,7 +188,7 @@ type EndpointFormContractBase = {
    * POST is translated into a call to this endpoint and its response is
    * translated back into what a browser can act on.
    */
-  from: string
+  action: string
 }
 
 export type EndpointFormContract =

@@ -69,7 +69,7 @@ type Routes =
       path: '/api/search'
       method: 'get'
       definition: {
-        form: { from: '/search'; method: 'get' }
+        form: { action: '/search'; method: 'get' }
         query: Schema<{ q: string; limit?: string }, { q: string; limit?: number }>
         responses: { 200: Schema<{ items: string[] }> }
       }

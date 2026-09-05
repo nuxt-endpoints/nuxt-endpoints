@@ -13,7 +13,7 @@ export default defineRouteHandler({
   // sends the browser to `redirect` on success. See
   // docs/progressive-enhancement.md.
   form: {
-    from: '/form-pe',
+    action: '/form-pe',
     redirect: '/form-pe?created={id}',
   },
   validate: {

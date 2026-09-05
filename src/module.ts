@@ -550,14 +550,19 @@ function resolveFormMetadata(
   if (!form) {
     return undefined
   }
-  if (typeof form.from !== 'string' || !form.from.startsWith('/')) {
+  if ('from' in form) {
     throw new Error(
-      `[nuxt-endpoints] form.from must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.from)}.`,
+      '[nuxt-endpoints] form.from was renamed to form.action (the native form submission URL).',
     )
   }
-  if (/[?#]/.test(form.from)) {
+  if (typeof form.action !== 'string' || !form.action.startsWith('/')) {
     throw new Error(
-      `[nuxt-endpoints] form.from must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.from)}. Declare form fields in validate.query for GET, or in the form-encoded body for POST.`,
+      `[nuxt-endpoints] form.action must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.action)}.`,
+    )
+  }
+  if (/[?#]/.test(form.action)) {
+    throw new Error(
+      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in validate.query for GET, or in the form-encoded body for POST.`,
     )
   }
   const method = form.method ?? 'post'
@@ -594,7 +599,7 @@ function resolveFormMetadata(
       )
     }
     return {
-      from: form.from,
+      action: form.action,
       method,
       enctype: 'application/x-www-form-urlencoded',
       fields: formFieldAttributes(definition.query),
@@ -621,7 +626,7 @@ function resolveFormMetadata(
     assertFormRedirectCanBeResolved(form.redirect, definition.responses)
   }
   return {
-    from: form.from,
+    action: form.action,
     method,
     ...(form.redirect ? { redirect: form.redirect } : {}),
     enctype: member.mediaType,

@@ -12,7 +12,7 @@ const NoteInput = z.object({
 
 export default defineRouteHandler({
   form: {
-    from: '/notes/new',
+    action: '/notes/new',
     redirect: '/notes/{id}',
   },
   validate: {

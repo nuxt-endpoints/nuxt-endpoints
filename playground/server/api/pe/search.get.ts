@@ -9,7 +9,7 @@ const names = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson']
 
 export default defineRouteHandler({
   form: {
-    from: '/form-pe/search',
+    action: '/form-pe/search',
     method: 'get',
   },
   validate: {

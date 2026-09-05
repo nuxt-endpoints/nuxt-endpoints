@@ -68,6 +68,23 @@ is derived from that pair. A `name` only removes the path and method from a call
 it does not flatten `params`, `query`, `headers`, or `body`, or create a second
 contract. Names must be unique valid JavaScript identifiers.
 
+## Progressively enhanced forms (Nuxt 5 prototype)
+
+Add a `form` declaration to a route with a compatible form-encoded body:
+
+```ts
+form: {
+  action: '/users/new',
+  redirect: '/users/{id}',
+},
+```
+
+`action` is the native form submission URL, as in HTML. NE registers a bridge
+at that page URL to call the endpoint; `redirect` names the destination after
+success. `useEndpointForm` derives the HTML attributes and typed fields from
+the contract. See the [complete server and client examples](https://github.com/nuxt-endpoints/nuxt-endpoints/blob/nuxt5/docs/progressive-enhancement.md).
+Earlier prototype versions used `from`; replace it with `action`.
+
 ## Validated request parts
 
 `params` sits at the root of the definition, because it describes the route template rather than one method. Everything else the request carries sits under `validate`.

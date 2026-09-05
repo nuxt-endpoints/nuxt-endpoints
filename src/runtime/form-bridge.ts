@@ -1,5 +1,5 @@
 // Translates a native form submission - a browser navigation POST to a page
-// URL - into an ordinary call to the endpoint that declared `form.from` for
+// URL - into an ordinary call to the endpoint that declared `form.action` for
 // that page, then answers the browser the way a browser needs to be answered:
 // `303` on success, and on failure the page itself, rendered inside the same
 // request with the issues the endpoint reported.

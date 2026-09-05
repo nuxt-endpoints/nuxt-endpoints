@@ -143,25 +143,30 @@ document is already shared.
 ### Where the declaration lives
 
 Per-route form projection belongs next to the contract, not in a separate
-registry keyed by route strings. `form.from`, `form.method`, `form.redirect`,
+registry keyed by route strings. `form.action`, `form.method`, `form.redirect`,
 the accepted encoding, and the projected fields are static, serializable facts needed by
 build-time validation and client generation. They therefore live on the route
 contract:
 
 ```ts
 defineRouteHandler({
-  form: { from: '/todos/new', redirect: '/todos/{id}' },
+  form: { action: '/todos/new', redirect: '/todos/{id}' },
   validate: { /* ... */ },
   handler: /* ... */,
 })
 ```
+
+`action` names the submission URL, matching HTML's `<form action="…">`.
+For POST, NE registers a bridge at that page URL which calls this endpoint;
+`redirect` is the destination after success. Earlier prototype versions called
+the submission URL `from`; replace it with `action`.
 
 POST is the default. GET must be selected explicitly and declares query fields
 instead of a form body:
 
 ```ts
 defineRouteHandler({
-  form: { from: '/search', method: 'get' },
+  form: { action: '/search', method: 'get' },
   validate: {
     query: SearchQuery,
     response: { 200: SearchResults },
@@ -204,7 +209,7 @@ Validation rejects loudly, in keeping with the existing rule that a declared
 contract is never silently dropped. These are build-time errors, raised
 while the handler manifest is composed:
 
-- a `form.from` that is not an absolute page pathname, or contains a query or
+- a `form.action` that is not an absolute page pathname, or contains a query or
   fragment. GET fields own the destination query and fragments never reach the
   POST bridge, so embedding either would create different native and enhanced
   behavior

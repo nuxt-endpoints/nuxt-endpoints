@@ -20,13 +20,13 @@ export function generateEndpointFormRoutes(handlers: readonly EndpointRouteHandl
     if (!handler.form || handler.form.method !== 'post' || !handler.route) {
       continue
     }
-    const existing = routes[handler.form.from]
+    const existing = routes[handler.form.action]
     if (existing) {
       throw new Error(
-        `[nuxt-endpoints] Two endpoints declare \`form.from: ${JSON.stringify(handler.form.from)}\`: ${existing.target} and ${handler.route}. A page URL can back one endpoint, because a native submission carries nothing that would tell them apart.`,
+        `[nuxt-endpoints] Two endpoints declare \`form.action: ${JSON.stringify(handler.form.action)}\`: ${existing.target} and ${handler.route}. A page URL can back one endpoint, because a native submission carries nothing that would tell them apart.`,
       )
     }
-    routes[handler.form.from] = {
+    routes[handler.form.action] = {
       target: handler.route,
       enctype: handler.form.enctype,
       ...(handler.form.redirect ? { redirect: handler.form.redirect } : {}),

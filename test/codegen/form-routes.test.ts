@@ -18,7 +18,7 @@ describe('generateEndpointFormRoutes', () => {
     const content = generateEndpointFormRoutes([
       handler({
         form: {
-          from: '/form-pe',
+          action: '/form-pe',
           method: 'post',
           redirect: '/form-pe?created={id}',
           enctype: 'application/x-www-form-urlencoded',
@@ -40,7 +40,7 @@ describe('generateEndpointFormRoutes', () => {
     const content = generateEndpointFormRoutes([
       handler({
         form: {
-          from: '/users/new',
+          action: '/users/new',
           method: 'post',
           enctype: 'application/x-www-form-urlencoded',
           fields: {},
@@ -57,7 +57,7 @@ describe('generateEndpointFormRoutes', () => {
     const content = generateEndpointFormRoutes([
       handler({
         form: {
-          from: '/form-pe',
+          action: '/form-pe',
           method: 'post',
           enctype: 'application/x-www-form-urlencoded',
           fields: { name: { name: 'name', required: true, minlength: 1 } },
@@ -74,7 +74,7 @@ describe('generateEndpointFormRoutes', () => {
         generateEndpointFormRoutes([
           handler({
             form: {
-              from: '/form-pe',
+              action: '/form-pe',
               method: 'post',
               enctype: 'application/x-www-form-urlencoded',
               fields: {},
@@ -83,7 +83,7 @@ describe('generateEndpointFormRoutes', () => {
           handler({
             route: '/api/comments',
             form: {
-              from: '/form-pe',
+              action: '/form-pe',
               method: 'post',
               enctype: 'application/x-www-form-urlencoded',
               fields: {},
@@ -105,7 +105,7 @@ describe('generateEndpointFormRoutes', () => {
         route: '/api/search',
         method: 'get',
         form: {
-          from: '/search',
+          action: '/search',
           method: 'get',
           enctype: 'application/x-www-form-urlencoded',
           fields: { q: { name: 'q' } },
