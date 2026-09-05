@@ -17,6 +17,50 @@ import {
 import { formOf } from '../src/runtime'
 
 describe('Nitro route contract provider', () => {
+  it('projects a declared endpoint name into generated client metadata', async () => {
+    const handler = {
+      handler: '/project/server/api/users/[id].get.ts',
+      route: '/api/users/:id',
+      method: 'get',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([{ ...handler, contract: { name: 'getUser' } }])
+
+    await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+      { route: '/api/users/:id', method: 'get', name: 'getUser' },
+    ])
+  })
+
+  it('rejects duplicate and unsafe endpoint names at build time', async () => {
+    const handlers = [
+      {
+        handler: '/project/server/api/users.get.ts',
+        route: '/api/users',
+        method: 'get',
+        middleware: false,
+      },
+      {
+        handler: '/project/server/api/accounts.get.ts',
+        route: '/api/accounts',
+        method: 'get',
+        middleware: false,
+      },
+    ]
+    const duplicateContracts = indexRouteContracts(
+      handlers.map((handler) => ({ ...handler, contract: { name: 'getUser' } })),
+    )
+    await expect(composeHandlers(handlers, duplicateContracts)).rejects.toThrow(
+      /Duplicate endpoint name `getUser`/,
+    )
+
+    const unsafeContracts = indexRouteContracts([
+      { ...handlers[0]!, contract: { name: 'not-valid' } },
+    ])
+    await expect(composeHandlers([handlers[0]!], unsafeContracts)).rejects.toThrow(
+      /valid JavaScript identifier/,
+    )
+  })
+
   it('projects cursor pagination capability into generated client metadata', async () => {
     const handler = {
       handler: '/project/server/api/articles.get.ts',

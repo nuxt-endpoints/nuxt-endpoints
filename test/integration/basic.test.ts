@@ -578,6 +578,8 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
 
       expect(endpointTypes).toContain("path: '/api/users/:id'")
       expect(endpointTypes).toContain("method: 'get'")
+      expect(endpointTypes).toContain("name: 'getUser'")
+      expect(endpointClient).toContain('"name": "getUser"')
       expect(endpointTypes).toContain("path: '/api/search'")
       expect(endpointTypes).toContain('export type $UseEndpoint')
       expect(endpointTypes).not.toContain('$UseEndpointResult')

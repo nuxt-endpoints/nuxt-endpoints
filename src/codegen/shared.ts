@@ -3,6 +3,7 @@ import type { EndpointFormRouteMetadata, EndpointRouteHandler } from './types'
 // The runtime-facing route config shape embedded (as a `JSON.stringify`'d `as
 // const` literal) in the generated client (`endpoints.ts`).
 export type EndpointRouteConfigEntry = {
+  name?: string
   path: string
   method: string
   idempotency?: { headerName: string; required: boolean }
@@ -15,6 +16,7 @@ export function toEndpointRouteConfigEntries(
   handlers: readonly EndpointRouteHandler[],
 ): EndpointRouteConfigEntry[] {
   return handlers.map((handler) => ({
+    ...(handler.name !== undefined ? { name: handler.name } : {}),
     path: handler.route,
     method: handler.method,
     ...(handler.idempotency

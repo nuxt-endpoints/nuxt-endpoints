@@ -59,6 +59,31 @@ describe('createEndpointClient', () => {
     })
   })
 
+  it('projects a declared name to the same endpoint request', async () => {
+    fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
+    const client = createEndpointClient([
+      { name: 'getUser', path: '/api/users/:id', method: 'get' },
+    ]) as ReturnType<typeof createEndpointClient> & {
+      getUser: (options: Record<string, unknown>) => PromiseLike<unknown>
+    }
+
+    await client.getUser({ params: { id: 123 } })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/123', { method: 'get' })
+  })
+
+  it('rejects duplicate and unsafe names in direct runtime configuration', () => {
+    expect(() =>
+      createEndpointClient([{ name: 'not-valid', path: '/api/users', method: 'get' }]),
+    ).toThrow(/valid JavaScript identifier/)
+    expect(() =>
+      createEndpointClient([
+        { name: 'getUser', path: '/api/users/:id', method: 'get' },
+        { name: 'getUser', path: '/api/accounts/:id', method: 'get' },
+      ]),
+    ).toThrow(/Duplicate endpoint name/)
+  })
+
   it('returns typed status data when awaited', async () => {
     const headers = new Headers({ 'x-request-id': 'req-1' })
     fetchRawMock.mockResolvedValue({

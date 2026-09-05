@@ -11,6 +11,7 @@ const ErrorResponse = z.object({
 })
 
 export default defineRouteHandler({
+  name: 'getUser',
   params: z.object({
     id: z.string(),
   }),

@@ -12,7 +12,8 @@ function buildEndpointRouteEntry(
   const serverResponses = serverRouteConfigPath
     ? `, serverResponses: ServerRouteResponsesFor<typeof import('${toImportPath(serverRouteConfigPath)}').default, '${handler.route}', '${handler.method}'>`
     : ''
-  return `{ path: '${handler.route}', method: '${handler.method}', definition: ${effectiveDefinition}, handlerReturn: ${handlerReturnAccessor}${serverResponses} }`
+  const name = handler.name ? `name: '${handler.name}', ` : ''
+  return `{ ${name}path: '${handler.route}', method: '${handler.method}', definition: ${effectiveDefinition}, handlerReturn: ${handlerReturnAccessor}${serverResponses} }`
 }
 
 export function buildEndpointRouteEntryUnion(

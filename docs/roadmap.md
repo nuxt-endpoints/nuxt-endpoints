@@ -284,7 +284,7 @@ A future tab could show:
 - runtime response-validation status;
 - generated client features and enabled adapters;
 - OpenAPI document links;
-- discovery and operation-name collision diagnostics.
+- discovery and endpoint-name collision diagnostics.
 
 It must not expose sensitive payloads or duplicate Pinia Colada Devtools'
 cache inspector.
@@ -332,7 +332,8 @@ Everything this module owns divides in two:
   JSON wire projection, typed client plumbing, OpenAPI generation, and
   build-time contract discovery. This is the layer upstream is growing into.
 - **Application layer** — idempotency, the Pinia Colada options, the Effect
-  adapter, Nuxt async-data integration, and operation-named call targets.
+  adapter, Nuxt async-data integration, and optional named aliases for the
+  existing path-and-method calls.
   Nothing upstream is proposing to own this.
 
 Compared on the primitive layer alone, this module is not uniformly ahead. It

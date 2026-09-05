@@ -23,6 +23,7 @@ const User = z.object({
 })
 
 export default defineRouteHandler({
+  name: 'getUser',
   summary: 'Get a user',
   params: z.object({
     id: z.coerce.number(),
@@ -43,7 +44,16 @@ export default defineRouteHandler({
 })
 ```
 
-The generated client calls this route by path and method:
+The optional `name` adds a typed shorthand to the generated client:
+
+```ts
+await $endpoint.getUser({
+  params: { id: '123' },
+  query: { includePosts: true },
+})
+```
+
+It is an alias for the same path-and-method request:
 
 ```ts
 await $endpoint('/api/users/:id', {
@@ -53,7 +63,10 @@ await $endpoint('/api/users/:id', {
 })
 ```
 
-Path and method are the whole client identity. There is no second operation-name API to keep in sync, and the OpenAPI `operationId` is derived from the same pair.
+Path and method remain the canonical HTTP identity, and the OpenAPI `operationId`
+is derived from that pair. A `name` only removes the path and method from a call;
+it does not flatten `params`, `query`, `headers`, or `body`, or create a second
+contract. Names must be unique valid JavaScript identifiers.
 
 ## Validated request parts
 
@@ -77,10 +90,12 @@ idempotency all work per method:
 export default defineRouteHandler({
   params: z.object({ id: z.coerce.number() }),
   get: {
+    name: 'getUser',
     validate: { response: { 200: User } },
     handler: (event) => findUser(event.validated.params.id),
   },
   put: {
+    name: 'updateUser',
     validate: {
       body: UpdateUser,
       response: { 200: User, 404: NotFound },

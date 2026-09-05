@@ -19,6 +19,7 @@ const listUsersHandler: EndpointRouteHandler = {
   handler: '/server/api/users.get.ts',
   route: '/api/users',
   method: 'get',
+  name: 'listUsers',
 }
 
 const healthHandler: EndpointRouteHandler = {
@@ -55,6 +56,7 @@ describe('buildEndpointRouteEntryUnion', () => {
 
     expect(union).toContain("path: '/api/users'")
     expect(union).toContain("method: 'get'")
+    expect(union).toContain("name: 'listUsers'")
     expect(union).toContain(
       "definition: ApplyEndpointPaginationFromRoute<TypedFetchMetadataField<ServerRoutes, '/api/users', 'contract', 'get'>",
     )

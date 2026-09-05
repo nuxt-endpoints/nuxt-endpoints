@@ -17,6 +17,13 @@ const healthHandler: EndpointRouteHandler = {
   method: 'get',
 }
 
+const namedUserHandler: EndpointRouteHandler = {
+  handler: '/server/api/users/[id].get.ts',
+  route: '/api/users/:id',
+  method: 'get',
+  name: 'getUser',
+}
+
 const exportUsersHandler: EndpointRouteHandler = {
   handler: '/server/api/export.get.ts',
   route: '/api/export',
@@ -39,6 +46,14 @@ const paginatedHandler: EndpointRouteHandler = {
 }
 
 describe('generateEndpointClient', () => {
+  it('embeds a declared endpoint name in the runtime route config', () => {
+    const content = generateEndpointClient(resolve, [namedUserHandler], {
+      client: { raw: true },
+    })
+
+    expect(content).toContain('"name": "getUser"')
+  })
+
   it('embeds an empty route config for an empty handler list', () => {
     const content = generateEndpointClient(resolve, [], {
       client: { raw: true },

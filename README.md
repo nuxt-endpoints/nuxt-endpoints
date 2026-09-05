@@ -78,6 +78,7 @@ import { z } from 'zod'
 import { defineRouteHandler } from 'nuxt-endpoints/runtime'
 
 export default defineRouteHandler({
+  name: 'getUser',
   summary: 'Get a user',
   params: z.object({ id: z.coerce.number() }),
   validate: {
@@ -108,8 +109,7 @@ second traversal by default; set `validation.response` in `server/endpoints/runt
 ```vue
 <script setup lang="ts">
 // The lazy request resolves to the declared status union.
-const result = await $endpoint('/api/users/:id', {
-  method: 'get',
+const result = await $endpoint.getUser({
   params: { id: '1' },
 })
 
@@ -129,6 +129,7 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Request validation for `params`, `query`, `headers`, and `body`
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
 - ✅ Lazy `$endpoint` request objects: status unions and `.raw()`
+- ✅ Optional named aliases such as `$endpoint.getUser({ params })`, while path and method stay canonical
 - ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
 - ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the Colada query adapter forward the request the way `useFetch` does
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`

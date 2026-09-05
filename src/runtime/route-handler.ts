@@ -79,6 +79,7 @@ type RouteHandlerInput<
   DEFINITION extends EndpointDefinition,
   ACTUAL_RETURN,
 > = {
+  name?: string
   params?: PARAMS
   validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
   summary?: SUMMARY
@@ -96,6 +97,7 @@ type RouteHandlerInput<
 }
 
 type RuntimeMethodMetadata = {
+  name?: string
   summary?: string
   description?: string
   tags?: string[]
@@ -116,6 +118,7 @@ type RuntimeMethodDefinition = RuntimeMethodMetadata & {
 }
 
 type RuntimeMethodsDefinition = {
+  name?: never
   params?: ValidatorSchema
   validate?: never
   get?: RuntimeMethodDefinition
@@ -162,6 +165,7 @@ type PaginationOf<Value> = Value extends {
   : undefined
 
 type EndpointDefinitionOf<Method, Params> = {
+  name: PropertyOf<Method, 'name'>
   params: Params
   query: ApplyPaginationQuery<ValidationPropertyOf<Method, 'query'>, PaginationOf<Method>>
   headers: ValidationPropertyOf<Method, 'headers'>
@@ -193,6 +197,7 @@ type ResolvedRuntimeMethodDefinition<
   Validation extends RuntimeMethodValidation,
   Pagination extends EndpointPaginationContract | undefined = undefined,
 > = {
+  name: PropertyOf<Metadata, 'name'>
   params: Params
   query: ApplyPaginationQuery<PropertyOf<Validation, 'query'>, Pagination>
   headers: PropertyOf<Validation, 'headers'>
@@ -373,6 +378,7 @@ type CursorPaginatedRouteHandlerInput<
   DEFINITION extends EndpointDefinition,
   ACTUAL_RETURN,
 > = {
+  name?: string
   params?: PARAMS
   validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
   summary?: SUMMARY
@@ -624,6 +630,8 @@ export function defineRouteHandler<
   const Definition extends Record<string, unknown> = Record<never, never>,
 >(
   definition: Definition & {
+    /** A name identifies one HTTP method, so declare it inside the method entry. */
+    name?: never
     params?: Params
     idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
     /** A method group has no root pagination contract. */
@@ -671,6 +679,11 @@ export function defineRouteHandler(
   }
 
   const methodsDefinition = definition as RuntimeMethodsDefinition
+  if ('name' in methodsDefinition) {
+    throw new TypeError(
+      'A method-group endpoint cannot declare a root name. Declare name inside each method entry.',
+    )
+  }
   const endpoints: Record<string, unknown> = {}
   const handlers: Record<string, (context: EndpointContext<any>) => unknown> = {}
   for (const method of [

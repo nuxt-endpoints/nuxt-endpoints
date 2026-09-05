@@ -110,6 +110,21 @@ describe('defineRouteHandler multi-method inference', () => {
     defineRouteHandler(duplicate)
   })
 
+  it('requires method-group names to identify one method', () => {
+    const invalidGroupName = {
+      name: 'users',
+      get: { handler: () => ({ ok: true }) },
+      post: { handler: () => ({ ok: true }) },
+    }
+    // @ts-expect-error a group-level name cannot identify one HTTP method
+    defineRouteHandler(invalidGroupName)
+
+    defineRouteHandler({
+      get: { name: 'getUsers', handler: () => ({ ok: true }) },
+      post: { name: 'createUser', handler: () => ({ ok: true }) },
+    })
+  })
+
   it('types a direct handler as a validated H3 event', () => {
     defineRouteHandler({
       params: schema<{ id: string }, { id: number }>(),

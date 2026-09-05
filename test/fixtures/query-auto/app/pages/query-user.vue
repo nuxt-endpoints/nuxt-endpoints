@@ -2,9 +2,7 @@
 import { useQuery } from '@pinia/colada'
 import { queryOptions } from '#endpoints/colada'
 
-const query = useQuery(
-  queryOptions($endpoint('/api/users/:id', { method: 'get', params: { id: '123' } })),
-)
+const query = useQuery(queryOptions($endpoint.getUser({ params: { id: '123' } })))
 </script>
 
 <template>

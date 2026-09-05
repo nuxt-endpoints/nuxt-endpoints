@@ -46,6 +46,7 @@ import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
 import { negotiateMediaType } from './accept'
+import { isReservedEndpointName, isValidEndpointName } from './endpoint-name'
 import {
   createResponse,
   isJsonMediaType,
@@ -950,9 +951,22 @@ export function defineEndpoint(
 // Shared only with the H3-compatible route-handler adapter. It deliberately
 // stays out of runtime/index.ts so it does not become application API.
 export function validateEndpointDefinition(contract: EndpointDefinition): void {
+  validateEndpointName(contract.name)
   validateEndpointIdempotencyDefinition(contract.idempotency)
   validateEndpointBodyDefinition(contract.body)
   validateEndpointResponseDefinitions(contract)
+}
+
+function validateEndpointName(name: EndpointDefinition['name']): void {
+  if (name === undefined) return
+  if (typeof name !== 'string' || !isValidEndpointName(name)) {
+    throw new TypeError(
+      `Endpoint name must be a valid JavaScript identifier. Received ${JSON.stringify(name)}.`,
+    )
+  }
+  if (isReservedEndpointName(name)) {
+    throw new TypeError(`Endpoint name \`${name}\` is reserved by $endpoint.`)
+  }
 }
 
 function validateEndpointIdempotencyDefinition(

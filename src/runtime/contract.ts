@@ -206,6 +206,8 @@ export type EndpointFormContract =
     })
 
 export type EndpointDefinition = EndpointRequestContract & {
+  /** Optional stable property name for the generated `$endpoint` client. */
+  name?: string
   responses?: EndpointResponsesContract
   summary?: string
   description?: string

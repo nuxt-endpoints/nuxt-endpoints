@@ -16,6 +16,7 @@ export type ResolvePath = (path: string) => string
 export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
   route: string
   method: string
+  name?: string
   idempotency?: EndpointIdempotencyMetadata
   // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.

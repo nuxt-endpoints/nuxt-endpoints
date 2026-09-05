@@ -35,6 +35,7 @@ import type {
 import { inspectValidatorInputObject, inspectValidatorOutputObject } from './runtime/validator'
 import { cursorPaginationRouteMetadata } from './runtime/pagination'
 import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
+import { isReservedEndpointName, isValidEndpointName } from './runtime/endpoint-name'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -90,12 +91,13 @@ type ResolvedEndpointsModuleOptions = {
 // surfaces here as a compile error instead of silently going unread.
 type EndpointCarrierDefinition = Pick<
   EndpointDefinition,
-  'idempotency' | 'headers' | 'responses' | 'pagination'
+  'name' | 'idempotency' | 'headers' | 'responses' | 'pagination'
 >
 
 // Detection result for one declared method (single endpoint, or one member
 // of a defineEndpointMethods() group).
 type EndpointMethodDetection = {
+  name?: string
   idempotency?: EndpointIdempotencyMetadata
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
@@ -343,6 +345,7 @@ export async function composeHandlers(
   routeContracts: ReadonlyMap<string, EndpointDetection>,
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
+  const endpointNames = new Map<string, string>()
 
   // Applies the checks a single detected method has always gone through
   // (catch-all/optional route rejection, idempotency-gap-without-policy
@@ -365,7 +368,26 @@ export async function composeHandlers(
       )
     }
 
-    const { idempotency, mediaResponse, form, pagination } = detection
+    const { name, idempotency, mediaResponse, form, pagination } = detection
+    if (name !== undefined) {
+      if (!isValidEndpointName(name)) {
+        throw new Error(
+          `[nuxt-endpoints] Endpoint name must be a valid JavaScript identifier. Received ${JSON.stringify(name)} for ${method.toUpperCase()} ${route}.`,
+        )
+      }
+      if (isReservedEndpointName(name)) {
+        throw new Error(
+          `[nuxt-endpoints] Endpoint name \`${name}\` is reserved by $endpoint. Choose another name for ${method.toUpperCase()} ${route}.`,
+        )
+      }
+      const previous = endpointNames.get(name)
+      if (previous) {
+        throw new Error(
+          `[nuxt-endpoints] Duplicate endpoint name \`${name}\` on ${previous} and ${method.toUpperCase()} ${route}. Endpoint names must be unique.`,
+        )
+      }
+      endpointNames.set(name, `${method.toUpperCase()} ${route}`)
+    }
     if (form && /[:*]/.test(route)) {
       // The bridge forwards a submission to this route template verbatim; a
       // native form carries nothing that would fill a path parameter in.
@@ -388,6 +410,7 @@ export async function composeHandlers(
       ...handler,
       route,
       method,
+      ...(name !== undefined ? { name } : {}),
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(form ? { form } : {}),
@@ -487,6 +510,11 @@ function assertNativeFormCanSatisfy(
 }
 
 function getEndpointFromProviderContract(definition: EndpointDefinition): EndpointMethodDetection {
+  if (definition.name !== undefined && typeof definition.name !== 'string') {
+    throw new Error(
+      `[nuxt-endpoints] Endpoint name must be a string. Received ${JSON.stringify(definition.name)}.`,
+    )
+  }
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
   if (idempotency && definition.headers) {
@@ -497,6 +525,7 @@ function getEndpointFromProviderContract(definition: EndpointDefinition): Endpoi
     ? cursorPaginationRouteMetadata(definition.pagination)
     : undefined
   return {
+    ...(definition.name !== undefined ? { name: definition.name } : {}),
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
     ...(form ? { form } : {}),
