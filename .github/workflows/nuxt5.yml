@@ -57,8 +57,11 @@ jobs:
       - name: Build H3 prototype
         working-directory: .upstream/h3
         # Corepack currently rejects H3's semver range in devEngines before
-        # Vite+ can resolve it. Vite+ still performs the install and build.
-        run: COREPACK_ENABLE_PROJECT_SPEC=0 vp install --frozen-lockfile && vp run build
+        # Vite+ can resolve it. Ignore only pnpm's self-version switch: a
+        # floating `^12` otherwise makes packageManagerDependencies stale as
+        # soon as a new pnpm patch is published. Package dependencies remain
+        # protected by the frozen lockfile.
+        run: COREPACK_ENABLE_PROJECT_SPEC=0 vp install --frozen-lockfile -- --pm-on-fail=ignore && vp run build
 
       - name: Build Nitro prototype
         working-directory: .upstream/nitro
