@@ -12,6 +12,7 @@ route-contract work happening in H3 and Nitro. Directly default-export
 import { z } from 'zod'
 
 export default defineRouteHandler({
+  name: 'getUser',
   params: z.object({ id: z.coerce.number() }),
   validate: {
     query: z.object({ include: z.string().optional() }),
@@ -32,11 +33,26 @@ On Nuxt 4/Nitro 2/H3 1, the module implements this API through a private
 compatibility adapter. As compatible upstream primitives become available, that
 adapter can shrink without changing the route or client UX.
 
+The optional name creates a typed shorthand for the same HTTP request:
+
+```ts
+await $endpoint.getUser({
+  params: { id: '123' },
+  query: { include: 'profile' },
+})
+```
+
+`$endpoint('/api/users/:id', { method: 'get', ... })` remains available. Path
+and method are the canonical identity; `name` only removes those two fields at
+the call site. It does not flatten the explicit `params`, `query`, `headers`, or
+`body` slots. Names must be unique valid JavaScript identifiers.
+
 ## Definition fields
 
-Root fields describe route-wide metadata and path params:
+A single-method definition accepts:
 
 - `params`: Standard Schema for router params.
+- `name`: optional typed `$endpoint` property alias for this method.
 - `summary`, `description`, `tags`: OpenAPI metadata.
 - `idempotency`: serializable idempotency contract metadata.
 - `validate`: request and response schemas.
@@ -68,6 +84,7 @@ const Params = z.object({ id: z.coerce.number() })
 export default defineRouteHandler({
   params: Params,
   get: {
+    name: 'getUser',
     validate: {
       response: { 200: User, 404: z.object({ message: z.string() }) },
     },
@@ -76,6 +93,7 @@ export default defineRouteHandler({
     },
   },
   put: {
+    name: 'updateUser',
     validate: {
       body: z.object({ name: z.string() }),
       response: { 200: User },

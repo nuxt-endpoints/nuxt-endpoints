@@ -19,6 +19,7 @@ type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 
 type Routes =
   | {
+      name: 'getUser'
       path: '/api/users/:id'
       method: 'get'
       definition: {
@@ -96,6 +97,16 @@ describe('path-based endpoint client types', () => {
     $endpoint('/api/users', { method: 'get' })
     // @ts-expect-error params use the schema input type.
     $endpoint('/api/users/:id', { method: 'get', params: { id: 1 } })
+  })
+
+  it('projects a named call without hiding the HTTP input slots', async () => {
+    const result = await $endpoint.getUser({ params: { id: '1' } })
+
+    expectTypeOf(result).toEqualTypeOf<EndpointResult<Extract<Routes, { name: 'getUser' }>>>()
+    // @ts-expect-error named calls retain the params schema input.
+    $endpoint.getUser({ params: { id: 1 } })
+    // @ts-expect-error only declared names are generated.
+    $endpoint.missing({})
   })
 
   it('awaits to a status-discriminated result', async () => {

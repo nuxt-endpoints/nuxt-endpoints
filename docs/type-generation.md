@@ -11,6 +11,7 @@ implementation is active. Both platform lines expose:
 
 ```ts
 export default defineRouteHandler({
+  name: 'getItem',
   params: z.object({ id: z.string() }),
   validate: {
     response: {
@@ -31,14 +32,17 @@ const result = await $endpoint('/api/items/:id', {
   params: { id: '1' },
 })
 
+const sameResult = await $endpoint.getItem({ params: { id: '1' } })
+
 const state = await useEndpoint('/api/items/:id', {
   method: 'get',
   params: { id: '1' },
 })
 ```
 
-Path plus method is the canonical client identity. There are no operation-name
-aliases or generated operation factories.
+Path plus method is the canonical client identity. An optional route `name`
+adds a property alias to the same request without restoring operation factories
+or creating a second contract identity.
 
 Application-wide responses live separately in `server/routes.config.ts`.
 Nuxt Endpoints adds matching global, exact-path, prefix (`/**`), and method

@@ -14,6 +14,12 @@ import {
 } from '../src/module'
 
 describe('build-time idempotency runtime gap detection', () => {
+  it('projects a declared endpoint name into detection metadata', () => {
+    expect(getEndpointFromCarrier({ definition: { name: 'getUser' } })).toEqual({
+      name: 'getUser',
+    })
+  })
+
   it('returns null for carriers without endpoint metadata', () => {
     expect(getEndpointFromCarrier(undefined)).toBeNull()
     expect(getEndpointFromCarrier({ definition: undefined })).toBeNull()

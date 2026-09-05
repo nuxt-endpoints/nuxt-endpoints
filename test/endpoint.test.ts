@@ -371,6 +371,23 @@ describe('DefinedEndpoint', () => {
     ).toThrow('The `response` contract was removed; declare `responses: { 200: … }` instead.')
   })
 
+  it('rejects endpoint names that cannot become safe client properties', async () => {
+    const { defineRouteHandler } = await import('./internal-runtime')
+
+    expect(() =>
+      defineRouteHandler({ name: 'not-valid', handler: () => ({ ok: true }) } as never),
+    ).toThrow(/valid JavaScript identifier/)
+    expect(() =>
+      defineRouteHandler({ name: 'then', handler: () => ({ ok: true }) } as never),
+    ).toThrow(/reserved by \$endpoint/)
+    expect(() =>
+      defineRouteHandler({
+        name: 'users',
+        get: { handler: () => ({ ok: true }) },
+      } as never),
+    ).toThrow(/method-group endpoint cannot declare a root name/)
+  })
+
   it.each([
     ['storage', (): undefined => undefined],
     ['scope', (): string => 'public'],

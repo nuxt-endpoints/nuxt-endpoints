@@ -34,6 +34,7 @@ import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/
 import { inspectValidatorInputObject } from './runtime/validator'
 import { cursorPaginationRouteMetadata } from './runtime/pagination'
 import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
+import { isReservedEndpointName, isValidEndpointName } from './runtime/endpoint-name'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -96,7 +97,7 @@ type ResolvedEndpointsModuleOptions = {
 // surfaces here as a compile error instead of silently going unread.
 type EndpointCarrierDefinition = Pick<
   EndpointDefinition,
-  'idempotency' | 'headers' | 'responses' | 'pagination'
+  'name' | 'idempotency' | 'headers' | 'responses' | 'pagination'
 >
 
 // `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
@@ -121,6 +122,7 @@ type EndpointRouteModule = {
 // Detection result for one declared method (a single-method route, or one
 // member of a multi-method `defineRouteHandler()` definition).
 type EndpointMethodDetection = {
+  name?: string
   idempotency?: EndpointIdempotencyMetadata
   /** Runtime options (storage/scope/authorization) the endpoint itself did not provide. */
   idempotencyRuntimeGaps?: readonly string[]
@@ -348,6 +350,7 @@ async function composeHandlers(
   policyFileExists: boolean,
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
+  const endpointNames = new Map<string, string>()
 
   // Applies the checks a single detected method has always gone through
   // (catch-all/optional route rejection, idempotency-gap-without-policy
@@ -370,7 +373,26 @@ async function composeHandlers(
       )
     }
 
-    const { idempotency, idempotencyRuntimeGaps, mediaResponse, pagination } = detection
+    const { name, idempotency, idempotencyRuntimeGaps, mediaResponse, pagination } = detection
+    if (name !== undefined) {
+      if (!isValidEndpointName(name)) {
+        throw new Error(
+          `[nuxt-endpoints] Endpoint name must be a valid JavaScript identifier. Received ${JSON.stringify(name)} for ${method.toUpperCase()} ${route}.`,
+        )
+      }
+      if (isReservedEndpointName(name)) {
+        throw new Error(
+          `[nuxt-endpoints] Endpoint name \`${name}\` is reserved by $endpoint. Choose another name for ${method.toUpperCase()} ${route}.`,
+        )
+      }
+      const previous = endpointNames.get(name)
+      if (previous) {
+        throw new Error(
+          `[nuxt-endpoints] Duplicate endpoint name \`${name}\` on ${previous} and ${method.toUpperCase()} ${route}. Endpoint names must be unique.`,
+        )
+      }
+      endpointNames.set(name, `${method.toUpperCase()} ${route}`)
+    }
     if (idempotencyRuntimeGaps?.length && !policyFileExists) {
       throw new Error(
         `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} needs ${idempotencyRuntimeGaps.join(', ')}, but no endpoint runtime file was found. Declare an application policy or route override in server/endpoints/runtime.ts.`,
@@ -385,6 +407,7 @@ async function composeHandlers(
       ...handler,
       route,
       method,
+      ...(name !== undefined ? { name } : {}),
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(pagination ? { pagination } : {}),
@@ -532,6 +555,12 @@ export function getEndpointFromCarrier(
     return null
   }
 
+  if (definition.name !== undefined && typeof definition.name !== 'string') {
+    throw new Error(
+      `[nuxt-endpoints] Endpoint name must be a string. Received ${JSON.stringify(definition.name)}.`,
+    )
+  }
+
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
   const pagination = definition.pagination
@@ -549,6 +578,7 @@ export function getEndpointFromCarrier(
     assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
   }
   return {
+    ...(definition.name !== undefined ? { name: definition.name } : {}),
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
     ...(pagination ? { pagination } : {}),

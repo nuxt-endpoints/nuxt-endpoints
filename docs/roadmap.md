@@ -129,7 +129,9 @@ contain.
 - Creating a second authentication, rate-limiting, CSRF, or middleware system.
 - Typing arbitrary streaming chunks or pretending redirects and proxies are
   ordinary JSON contracts.
-- Maintaining operation-name aliases alongside path-and-method calls.
+- Maintaining a separate operation registry or operation factories alongside
+  path-and-method calls. Optional endpoint names remain aliases of that same
+  canonical request.
 - Promising support for an unreleased platform combination before it is covered
   by the test matrix.
 

@@ -17,6 +17,9 @@ async function checkClient() {
   if (user.status === 401) user.body.error.toUpperCase()
 
   const userCall = client('/api/users/:id', { method: 'get', params: { id: '1' } })
+  const namedUser = await client.getUser({ params: { id: '1' } })
+  if (namedUser.status === 200) namedUser.body.name.toUpperCase()
+  if (namedUser.status === 404) namedUser.body.message.toUpperCase()
   queryOptions(userCall)
   // @ts-expect-error Colada adapters are functions, not request methods.
   userCall.queryOptions()
@@ -24,7 +27,7 @@ async function checkClient() {
   mutationOptions(userCall)
   // @ts-expect-error .result() was replaced by awaiting the request.
   userCall.result()
-  // @ts-expect-error operation aliases were removed.
+  // @ts-expect-error names are properties, not alternate path arguments.
   await client('getUser', { params: { id: '1' } })
 
   const raw = await userCall.raw()

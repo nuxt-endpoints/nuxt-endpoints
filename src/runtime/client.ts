@@ -1,5 +1,6 @@
 import type {
   EndpointClientOptions,
+  EndpointClientOptionsAreOptional,
   EndpointDefinition,
   EndpointResponsesContract,
   EndpointMediaResponseStream,
@@ -15,6 +16,8 @@ import type {
   StatusNumber,
   UnknownIfNever,
 } from './contract'
+import type { ReservedEndpointName } from './endpoint-name'
+import { isReservedEndpointName, isValidEndpointName } from './endpoint-name'
 import { hasHttpControlCharacter } from './idempotency'
 import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
@@ -22,6 +25,7 @@ import type { EndpointWireValue } from './platform'
 import type { CursorPaginationPage, EndpointCursorPaginationContract } from './pagination'
 
 export type EndpointRouteEntry = {
+  name?: string
   path: string
   method: HttpMethod
   definition: EndpointDefinition
@@ -40,7 +44,33 @@ export type DefaultEndpointClientFeatures = {
 export type EndpointClient<
   ROUTES extends EndpointRouteEntry,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = EndpointPathCaller<ROUTES, FEATURES>
+> = EndpointPathCaller<ROUTES, FEATURES> & EndpointNamedCalls<ROUTES, FEATURES>
+
+type EndpointName<ROUTES extends EndpointRouteEntry> = ROUTES extends {
+  name: infer NAME extends string
+}
+  ? NAME extends ReservedEndpointName
+    ? never
+    : NAME
+  : never
+
+type EndpointNamedCallArgs<ROUTE extends EndpointRouteEntry> =
+  EndpointClientOptionsAreOptional<ROUTE['definition']> extends true
+    ? [
+        options?: EndpointClientOptions<ROUTE['definition']> extends void
+          ? undefined
+          : EndpointClientOptions<ROUTE['definition']>,
+      ]
+    : [options: EndpointClientOptions<ROUTE['definition']>]
+
+type EndpointNamedCalls<
+  ROUTES extends EndpointRouteEntry,
+  FEATURES extends EndpointClientFeatureOptions,
+> = {
+  [NAME in EndpointName<ROUTES>]: (
+    ...args: EndpointNamedCallArgs<Extract<ROUTES, { name: NAME }>>
+  ) => EndpointCall<Extract<ROUTES, { name: NAME }>, FEATURES>
+}
 
 /**
  * Path/method index emitted by codegen. Keeping lookup indexed avoids
@@ -73,13 +103,14 @@ type EndpointMappedClientOptions<
 export type EndpointMappedClient<
   ROUTES,
   FEATURES extends EndpointClientFeatureOptions = DefaultEndpointClientFeatures,
-> = <
+> = (<
   const PATH extends keyof ROUTES & string,
   const METHOD extends keyof ROUTES[PATH] & HttpMethod,
 >(
   path: PATH,
   options: EndpointMappedClientOptions<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, METHOD>,
-) => EndpointCall<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, FEATURES>
+) => EndpointCall<EndpointRouteMapEntry<ROUTES, PATH, METHOD>, FEATURES>) &
+  EndpointNamedCalls<EndpointRouteMapValue<ROUTES>, FEATURES>
 
 export type EndpointMappedPathCall<
   ROUTES,
@@ -810,6 +841,7 @@ export type EndpointResultRuntime = {
 export type EndpointResultDataRuntime = Omit<EndpointResultRuntime, 'headers'>
 
 export type EndpointClientRouteConfig = {
+  name?: string
   path: string
   method: HttpMethod
   idempotency?: {
@@ -865,7 +897,36 @@ export function createEndpointClient(
     return createEndpointCall(route, endpointOptions, features, fetcher, queryFetcher)
   }) as EndpointClientRuntimeValue
 
+  attachEndpointNames(client, routes)
+
   return client
+}
+
+function attachEndpointNames(
+  client: EndpointClientRuntimeValue,
+  routes: EndpointClientRouteConfig[],
+): void {
+  const names = new Set<string>()
+  for (const route of routes) {
+    if (route.name === undefined) continue
+    if (!isValidEndpointName(route.name)) {
+      throw new TypeError(`Endpoint name must be a valid JavaScript identifier: ${route.name}`)
+    }
+    if (isReservedEndpointName(route.name)) {
+      throw new TypeError(`Endpoint name is reserved by $endpoint: ${route.name}`)
+    }
+    if (names.has(route.name)) {
+      throw new TypeError(`Duplicate endpoint name: ${route.name}`)
+    }
+    names.add(route.name)
+    Object.defineProperty(client, route.name, {
+      configurable: false,
+      enumerable: true,
+      value(callOptions: Record<string, unknown> = {}) {
+        return client(route.path, { ...callOptions, method: route.method })
+      },
+    })
+  }
 }
 
 export function createUseEndpoint(

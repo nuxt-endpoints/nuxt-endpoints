@@ -15,7 +15,7 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` calls with typed request options. The returned lazy request can be awaited, passed to Pinia Colada, or read as a raw Web Response. Paths and HTTP methods are the public identity; there is no second operation-name API to keep in sync.
+Each endpoint route is generated onto `$endpoint('/path', { method })` calls with typed request options. A route may also declare a unique `name` for a shorter `$endpoint.getUser({ params })` alias. The alias keeps the same explicit HTTP input slots and returns the same lazy request, which can be awaited, passed to Pinia Colada, or read as a raw Web Response. Path and method remain the canonical HTTP identity.
 
 ## 4. Response handling is explicit
 
