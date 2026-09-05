@@ -1,6 +1,7 @@
 import type { RuntimeEvent } from './platform'
 import type { InferInput, InferOutput, ValidatorSchema } from './validator'
 import type { ResponseOptions, StatusCode, StatusResponse } from './response'
+import type { EndpointPaginationContract } from './pagination'
 
 export type HttpMethod =
   | 'get'
@@ -211,6 +212,7 @@ export type EndpointDefinition = EndpointRequestContract & {
   tags?: string[]
   idempotency?: EndpointIdempotencyMetadata
   form?: EndpointFormContract
+  pagination?: EndpointPaginationContract
 }
 
 export type EndpointContext<DEFINITION extends EndpointDefinition> = {

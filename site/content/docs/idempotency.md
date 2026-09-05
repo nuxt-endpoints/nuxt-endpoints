@@ -162,13 +162,14 @@ The generated key belongs to the request object, not to an individual fetch atte
 
 ```ts
 import { useMutation } from '@pinia/colada'
+import { mutationOptions } from '#endpoints/colada'
 
 const request = $endpoint('/api/points/grants', {
   method: 'post',
   body: { userId: 'u_1', amount: 10 },
 })
 
-const mutation = useMutation(request.mutationOptions())
+const mutation = useMutation(mutationOptions(request))
 ```
 
 The key belongs to `request`. Re-executing that logical mutation performs a

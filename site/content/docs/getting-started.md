@@ -102,13 +102,13 @@ export default defineNuxtConfig({
 
 Shared application responses use the conventional `server/routes.config.ts` file. Set `endpoints.serverRouteConfig.path` only when that file lives elsewhere; see [Responses](/docs/responses#application-and-middleware-responses).
 
-Endpoint request objects expose standard Pinia Colada query and mutation options. For cache, SSR, and hydration support, install Colada and its official Nuxt modules:
+The `#endpoints/colada` adapters convert endpoint requests into standard Pinia Colada query and mutation options. For cache, SSR, and hydration support, install Colada and its official Nuxt modules:
 
 ```bash
 vp add @pinia/colada @pinia/colada-nuxt pinia @pinia/nuxt
 ```
 
-Add `@pinia/nuxt` and `@pinia/colada-nuxt` to `modules`; Nuxt Endpoints does not install a second cache plugin. See [Pinia Colada](/docs/pinia-colada) for `.queryOptions()` and `.mutationOptions()`.
+Add `@pinia/nuxt` and `@pinia/colada-nuxt` to `modules`; Nuxt Endpoints does not install a second cache plugin. See [Pinia Colada](/docs/pinia-colada) for `queryOptions(request)` and `mutationOptions(request)`.
 
 ## What gets generated
 

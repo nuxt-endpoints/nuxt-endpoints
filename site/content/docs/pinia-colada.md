@@ -3,7 +3,7 @@ title: Pinia Colada
 description: Use typed endpoint request objects as Pinia Colada queries and mutations with its official Nuxt integration.
 ---
 
-Nuxt Endpoints request objects produce ordinary Pinia Colada options. Nuxt Endpoints owns typed HTTP input, request identity, idempotency, and status-aware output; Pinia Colada owns server-state caching, invalidation, mutations, and optimistic updates.
+Nuxt Endpoints converts its request objects into ordinary Pinia Colada options. Nuxt Endpoints owns typed HTTP input, request identity, idempotency, and status-aware output; Pinia Colada owns server-state caching, invalidation, mutations, and optimistic updates.
 
 Install Pinia Colada and its official Nuxt integration:
 
@@ -21,17 +21,18 @@ The Colada Nuxt module performs SSR prefetching, serialization, and hydration. N
 
 ## Queries
 
-`GET` and `HEAD` request objects expose `.queryOptions()`:
+`queryOptions()` accepts only `GET` and `HEAD` endpoint requests:
 
 ```ts
 import { useQuery } from '@pinia/colada'
+import { queryOptions } from '#endpoints/colada'
 
 const request = $endpoint('/api/users/:id', {
   method: 'get',
   params: { id: '123' },
 })
 
-const user = useQuery(request.queryOptions())
+const user = useQuery(queryOptions(request))
 
 if (user.data.value?.status === 200) {
   user.data.value.body.name
@@ -44,16 +45,19 @@ The key includes the route method, path, and a stable serialization of the reque
 
 ## Mutations
 
-`POST`, `PUT`, `PATCH`, and `DELETE` request objects expose `.mutationOptions()`:
+`mutationOptions()` accepts only `POST`, `PUT`, `PATCH`, and `DELETE` endpoint requests:
 
 ```ts
 import { useMutation } from '@pinia/colada'
+import { mutationOptions } from '#endpoints/colada'
 
 const createPayment = useMutation(
-  $endpoint('/api/payments', {
-    method: 'post',
-    body: { amount: 1000 },
-  }).mutationOptions(),
+  mutationOptions(
+    $endpoint('/api/payments', {
+      method: 'post',
+      body: { amount: 1000 },
+    }),
+  ),
 )
 
 createPayment.mutate()
@@ -76,17 +80,75 @@ const createUser = useMutation({
 })
 ```
 
-Use the `key` returned by `.queryOptions()` with the Colada query cache:
+Use the `key` returned by `queryOptions()` with the Colada query cache:
 
 ```ts
 import { useQueryCache } from '@pinia/colada'
+import { queryOptions } from '#endpoints/colada'
 
 const queryCache = useQueryCache()
 const usersRequest = $endpoint('/api/users', { method: 'get' })
 
 await queryCache.invalidateQueries({
-  key: usersRequest.queryOptions().key,
+  key: queryOptions(usersRequest).key,
 })
+```
+
+## Cursor pagination
+
+Declare the item schema once in the server contract. Nuxt Endpoints generates
+the optional `cursor` and `limit` query, the typed page response, runtime
+validation, and OpenAPI from it:
+
+```ts
+export default defineRouteHandler({
+  pagination: {
+    kind: 'cursor',
+    item: Article,
+  },
+  handler: ({ validated }) => {
+    return listArticles(validated.query)
+    // { items: Article[], nextCursor?: string }
+  },
+})
+```
+
+Pass the resulting request to Pinia Colada without wiring `pageParam` by hand:
+
+```ts
+import { useInfiniteQuery } from '@pinia/colada'
+import { infiniteQueryOptions } from '#endpoints/colada'
+
+const articles = useInfiniteQuery(
+  infiniteQueryOptions(
+    $endpoint('/api/articles', {
+      method: 'get',
+      query: { limit: 20 },
+    }),
+  ),
+)
+```
+
+The default fields are `cursor`, `limit`, `items`, and `nextCursor`. The limit
+defaults to 20 and is bounded at 100. `infiniteQueryOptions()` only accepts a
+GET request whose server contract declares pagination.
+
+Pagination owns these query fields and response status 200. Do not repeat them
+in `validate`; duplicate declarations fail TypeScript and Nuxt build checks.
+Additional filters and other response statuses remain ordinary `validate`
+entries.
+
+A non-200 page is not cached as page data. It rejects with a typed
+`EndpointPaginationError`; its optional `result` retains the endpoint's
+status-discriminated response union. `result` is undefined when the request
+failed before receiving an HTTP response:
+
+```ts
+const failure = articles.error.value?.result
+
+if (failure?.status === 429) {
+  // failure.body is the route's declared 429 body
+}
 ```
 
 ## SSR
@@ -96,12 +158,15 @@ With `@pinia/colada-nuxt`, queries created during component setup are automatica
 ```vue
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
+import { queryOptions } from '#endpoints/colada'
 
 const user = useQuery(
-  $endpoint('/api/users/:id', {
-    method: 'get',
-    params: { id: '123' },
-  }).queryOptions(),
+  queryOptions(
+    $endpoint('/api/users/:id', {
+      method: 'get',
+      params: { id: '123' },
+    }),
+  ),
 )
 </script>
 ```

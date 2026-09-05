@@ -8,6 +8,7 @@ export type EndpointRouteConfigEntry = {
   idempotency?: { headerName: string; required: boolean }
   mediaResponse?: true
   form?: EndpointFormRouteMetadata
+  pagination?: EndpointRouteHandler['pagination']
 }
 
 export function toEndpointRouteConfigEntries(
@@ -26,6 +27,7 @@ export function toEndpointRouteConfigEntries(
       : {}),
     ...(handler.mediaResponse ? { mediaResponse: true as const } : {}),
     ...(handler.form ? { form: handler.form } : {}),
+    ...(handler.pagination ? { pagination: handler.pagination } : {}),
   }))
 }
 

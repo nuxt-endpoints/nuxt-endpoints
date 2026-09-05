@@ -1,6 +1,7 @@
 import type { NitroRouteHandlerDescriptor } from '../nitro-route-handlers'
 import type { FormFieldAttributes } from '../runtime/form-schema'
 import type { EndpointIdempotencyMetadata } from '../runtime/contract'
+import type { EndpointPaginationRouteMetadata } from '../runtime/pagination'
 
 // Mirrors `resolver.resolve` (from `@nuxt/kit`'s `createResolver`), which every
 // codegen builder receives so generated import specifiers stay relative to
@@ -23,6 +24,7 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   // at build time, so the client receives plain HTML attributes and no schema
   // object ever reaches the browser.
   form?: EndpointFormRouteMetadata
+  pagination?: EndpointPaginationRouteMetadata
   // Set when this entry was expanded from one method-suffix-free route file.
   // Nitro initially contributes a `default` return for that dispatcher;
   // module.ts removes it and contributes one schema entry per method.

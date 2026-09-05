@@ -33,6 +33,8 @@ import type {
   ResponseContract,
 } from './runtime/contract'
 import { inspectValidatorInputObject, inspectValidatorOutputObject } from './runtime/validator'
+import { cursorPaginationRouteMetadata } from './runtime/pagination'
+import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -86,7 +88,10 @@ type ResolvedEndpointsModuleOptions = {
 // The definition fields a discovery-evaluated module's carrier exposes.
 // Derived (rather than hand-declared) so a shape change to `EndpointDefinition`
 // surfaces here as a compile error instead of silently going unread.
-type EndpointCarrierDefinition = Pick<EndpointDefinition, 'idempotency' | 'headers' | 'responses'>
+type EndpointCarrierDefinition = Pick<
+  EndpointDefinition,
+  'idempotency' | 'headers' | 'responses' | 'pagination'
+>
 
 // Detection result for one declared method (single endpoint, or one member
 // of a defineEndpointMethods() group).
@@ -96,6 +101,7 @@ type EndpointMethodDetection = {
   mediaResponse?: true
   /** Set when the route declares `form`, with its field attributes resolved. */
   form?: EndpointFormRouteMetadata
+  pagination?: EndpointPaginationRouteMetadata
 }
 
 // A single-endpoint route's detection stays exactly the shape it always was
@@ -325,6 +331,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     nuxt.options.alias = {
       ...nuxt.options.alias,
       '#endpoints': typeFile,
+      '#endpoints/colada': resolve('./runtime/colada'),
     }
   },
 })
@@ -358,7 +365,7 @@ export async function composeHandlers(
       )
     }
 
-    const { idempotency, mediaResponse, form } = detection
+    const { idempotency, mediaResponse, form, pagination } = detection
     if (form && /[:*]/.test(route)) {
       // The bridge forwards a submission to this route template verbatim; a
       // native form carries nothing that would fill a path parameter in.
@@ -371,6 +378,11 @@ export async function composeHandlers(
         `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form.method: '${form.method}'\`, but the endpoint method is ${method.toUpperCase()}. The native form method and endpoint method must match; PUT, PATCH, and DELETE are not emulated over POST.`,
       )
     }
+    if (pagination && method.toLowerCase() !== 'get') {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares cursor pagination, but its method is ${method.toUpperCase()}. Cursor pagination is only supported on GET routes.`,
+      )
+    }
 
     endpointHandlers.push({
       ...handler,
@@ -379,6 +391,7 @@ export async function composeHandlers(
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(form ? { form } : {}),
+      ...(pagination ? { pagination } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
     })
   }
@@ -480,10 +493,14 @@ function getEndpointFromProviderContract(definition: EndpointDefinition): Endpoi
     assertNoIdempotencyHeaderSchemaCollision(definition.headers, idempotency.headerName)
   }
   const form = resolveFormMetadata(definition)
+  const pagination = definition.pagination
+    ? cursorPaginationRouteMetadata(definition.pagination)
+    : undefined
   return {
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
     ...(form ? { form } : {}),
+    ...(pagination ? { pagination } : {}),
   }
 }
 
@@ -783,7 +800,7 @@ export function resolveModuleOptions(
 
   if (options.client && 'query' in options.client) {
     throw new TypeError(
-      'endpoints.client.query was removed with the TanStack Query adapter. Install @pinia/colada-nuxt and @pinia/nuxt; endpoint request objects now expose Pinia Colada options directly.',
+      'endpoints.client.query was removed with the TanStack Query adapter. Install @pinia/colada-nuxt and @pinia/nuxt; import the Pinia Colada queryOptions and mutationOptions adapters from #endpoints/colada.',
     )
   }
 

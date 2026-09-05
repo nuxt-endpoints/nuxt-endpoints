@@ -29,6 +29,39 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       })
     })
 
+    it('serves the generated cursor-pagination contract', async () => {
+      await expect($fetch('/api/articles?limit=2')).resolves.toEqual({
+        items: [
+          { id: 1, title: 'One' },
+          { id: 2, title: 'Two' },
+        ],
+        nextCursor: '2',
+      })
+      await expect($fetch('/api/articles?limit=2&cursor=2')).resolves.toEqual({
+        items: [{ id: 3, title: 'Three' }],
+      })
+    })
+
+    it('documents pagination-generated query and response fields', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      const operation = schema.paths['/api/articles'].get
+
+      expect(operation.parameters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'cursor', in: 'query' }),
+          expect.objectContaining({ name: 'limit', in: 'query' }),
+        ]),
+      )
+      expect(operation.responses['200'].content['application/json'].schema).toMatchObject({
+        type: 'object',
+        required: ['items'],
+        properties: {
+          items: { type: 'array' },
+          nextCursor: { type: 'string' },
+        },
+      })
+    })
+
     it('renders generated useEndpoint calls through Nuxt async data', async () => {
       await expect($fetch<string>('/')).resolves.toContain('nuxt-endpoints fixture: Tom')
     })
@@ -555,7 +588,9 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(endpointClient).toContain('export const useEndpoint')
       expect(endpointClient).not.toContain('useEndpointResult')
       expect(endpointTypes).not.toContain('plain')
-      expect(endpointTypes).toContain('EndpointClient<EndpointRouteEntry, EndpointClientFeatures>')
+      expect(endpointTypes).toContain(
+        'EndpointMappedClient<EndpointRouteMap, EndpointClientFeatures>',
+      )
       expect(endpointTypes).toContain('raw: true')
       expect(serverRoutes).toContain('export interface GeneratedServerRoutes')
       expect(serverRoutes).toContain('"/api"')
@@ -567,7 +602,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(serverRoutes).toContain('interface ServerRoutes extends GeneratedServerRoutes')
     })
 
-    it('uses endpoint request Query options without generated Query factories', async () => {
+    it('uses endpoint request Query adapters without generated Query factories', async () => {
       const buildDir = getBuildDir(useTestContext)
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
 
@@ -589,7 +624,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       )
       // Deliberately without `typecheck.ts`: `scripts/typecheck-fixture.mjs`
       // compiles it against the same generated types, and both run in
-      // `pnpm check`, so including it here was the same tsc pass twice. What is
+      // `vp run check`, so including it here was the same tsc pass twice. What is
       // only provable with a real Nuxt build stays: the generated route tree
       // this agreement file compares against.
       const generatedTypeFiles = await existingFiles([
@@ -694,13 +729,14 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
 }
 
 function generateServerRoutesAgreementTypecheck(endpointTypes: string): string {
-  // Each union member is one line. The provider contributes every discovered
-  // method separately, including methods authored together in one route file,
-  // so Nuxt's ordinary typed-fetch projection must agree method by method.
+  // Each indexed method entry is one line. The provider contributes every
+  // discovered method separately, including methods authored together in one
+  // route file, so Nuxt's ordinary typed-fetch projection must agree method by
+  // method.
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
-      const match = line.match(/\| \{ path: '([^']+)', method: '([^']+)'/)
+      const match = line.match(/\{ path: '([^']+)', method: '([^']+)'/)
       if (!match) return []
       const [, path, method] = match
       return [{ path, method }]

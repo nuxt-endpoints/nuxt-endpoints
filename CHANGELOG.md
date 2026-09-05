@@ -4,6 +4,15 @@
 
 ### Added
 
+- Cursor pagination is now a contract constructor: `pagination: { kind:
+'cursor', item: Article }` generates the optional `cursor`/`limit` query,
+  the typed `{ items, nextCursor? }` response, runtime validation, OpenAPI,
+  and a method-safe `infiniteQueryOptions(request)` adapter for Pinia Colada.
+  Pagination-owned query fields and response status 200 cannot be declared a
+  second time in `validate`; TypeScript and build discovery both reject the
+  duplicate instead of choosing an implicit winner. Non-success pages reject
+  with an `EndpointPaginationError` whose `result` preserves the route's typed
+  status union.
 - `server/endpoints/runtime.ts` now accepts route-and-method runtime overrides
   for `fingerprint`, replay statuses and TTLs, plus validation-error handling.
   This makes bodyless and multipart/File idempotent routes
@@ -16,8 +25,9 @@
   `validation.response` in `server/endpoints/runtime.ts` to `always`,
   `development`, or `never`; request/protocol validation and undeclared-status
   rejection remain active in every mode.
-- **Breaking:** `.queryOptions()` and `.mutationOptions()` now return standard
-  Pinia Colada options. The previous query dependency, adapter, and
+- **Breaking:** Pinia Colada options are now created by `queryOptions(request)`
+  and `mutationOptions(request)` from `#endpoints/colada`, rather than methods
+  on the request object. The previous query dependency, adapter, and
   `endpoints.client.query` auto-setup option have been removed; the official
   Colada Nuxt module owns SSR prefetching and hydration.
   Required idempotency keys are generated when the request object is created

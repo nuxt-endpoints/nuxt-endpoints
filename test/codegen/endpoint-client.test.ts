@@ -24,6 +24,20 @@ const exportUsersHandler: EndpointRouteHandler = {
   mediaResponse: true,
 }
 
+const paginatedHandler: EndpointRouteHandler = {
+  handler: '/server/api/articles.get.ts',
+  route: '/api/articles',
+  method: 'get',
+  pagination: {
+    kind: 'cursor',
+    status: 200,
+    cursor: 'cursor',
+    limit: 'limit',
+    items: 'items',
+    next: 'nextCursor',
+  },
+}
+
 describe('generateEndpointClient', () => {
   it('embeds an empty route config for an empty handler list', () => {
     const content = generateEndpointClient(resolve, [], {
@@ -67,6 +81,16 @@ describe('generateEndpointClient', () => {
     })
 
     expect(content).not.toContain('"mediaResponse"')
+  })
+
+  it('embeds pagination capability in the runtime route config', () => {
+    const content = generateEndpointClient(resolve, [paginatedHandler], {
+      client: { raw: true },
+    })
+
+    expect(content).toContain('"pagination": {')
+    expect(content).toContain('"kind": "cursor"')
+    expect(content).toContain('"next": "nextCursor"')
   })
 
   // `useFetch` swaps in `useRequestFetch()` for relative paths during SSR, so

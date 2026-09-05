@@ -386,8 +386,8 @@ statement - `z.object` accepts unknown keys and strips them; only
 
 `useEndpointForm` takes the same request `$endpoint` takes and returns
 everything the page needs. It is a composable rather than a projection off the
-request object - `.queryOptions()` and `.mutationOptions()` hand back a plain
-description that any caller can hold, while a form needs component-scoped
+request object - `queryOptions(request)` and `mutationOptions(request)` hand
+back a plain description that any caller can hold, while a form needs component-scoped
 reactivity and the current request's context, and only a composable has those.
 
 The body the request is constructed with becomes the form's initial values, so

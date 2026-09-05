@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useMutation } from '@pinia/colada'
+import { mutationOptions } from '#endpoints/colada'
 
-// Drives `.mutationOptions()` through the real Pinia Colada `useMutation`
+// Drives `mutationOptions()` through the real Pinia Colada `useMutation`
 // rather than calling the returned `mutation` function directly, so the
 // `{ key, mutation }` shape is proven against the actual library.
 //
@@ -10,7 +11,7 @@ import { useMutation } from '@pinia/colada'
 // handler really runs, which makes a server-side replay observable as an
 // unchanged id instead of having to inspect the outgoing header.
 const request = $endpoint('/api/idempotent', { method: 'post', body: { amount: 25 } })
-const options = request.mutationOptions()
+const options = mutationOptions(request)
 const mutation = useMutation(options)
 
 const first = await mutation.mutateAsync()

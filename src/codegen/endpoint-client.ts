@@ -12,7 +12,7 @@ export function generateEndpointClient(
   const routes = toEndpointRouteConfigEntries(handlers)
   const clientFeatures = { raw: options.client.raw }
   const clientRuntimeImportPath = toImportPath(resolve('./runtime/client'))
-  // Direct `$endpoint` awaits mirror `$fetch`; its Pinia Colada option methods and
+  // Direct `$endpoint` awaits mirror `$fetch`; Pinia Colada adapters and
   // `useEndpoint` use `captureFetcher` to forward SSR request headers.
   const clientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`
   const asyncDataClientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`

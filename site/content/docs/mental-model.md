@@ -27,4 +27,4 @@ The module can serve an OpenAPI 3.1 document without maintaining a separate rout
 
 ## 6. Server-state adapters remain optional
 
-Endpoint request objects expose ordinary query or mutation options for Pinia Colada. Colada owns cache behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and response types aligned with the server contract.
+The `#endpoints/colada` adapters convert endpoint requests into ordinary query or mutation options. Colada owns cache behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and response types aligned with the server contract.

@@ -10,6 +10,106 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 }
 
 describe('defineRouteHandler multi-method inference', () => {
+  it('constructs one cursor-pagination contract for the handler', () => {
+    const Article = schema<{ id: number; title: string }>()
+    const handler = defineRouteHandler({
+      pagination: { kind: 'cursor', item: Article },
+      handler: (event) => {
+        expectTypeOf(event.validated.query).toMatchTypeOf<{
+          cursor?: string
+          limit: number
+        }>()
+        return { items: [{ id: 1, title: 'one' }], nextCursor: 'next' }
+      },
+    })
+
+    expectTypeOf(handler).not.toBeAny()
+  })
+
+  it('refuses duplicate pagination query and response declarations', () => {
+    const Article = schema<{ id: number }>()
+    const duplicateQuery = {
+      pagination: { kind: 'cursor' as const, item: Article },
+      validate: { query: schema<{ cursor?: string }>() },
+      handler: () => ({ items: [{ id: 1 }] }),
+    }
+    // @ts-expect-error pagination is the sole owner of query.cursor
+    defineRouteHandler(duplicateQuery)
+
+    const duplicateResponse = {
+      pagination: { kind: 'cursor' as const, item: Article },
+      validate: { response: { 200: schema<{ items: { id: number }[] }>() } },
+      handler: () => ({ items: [{ id: 1 }] }),
+    }
+    // @ts-expect-error pagination is the sole owner of response status 200
+    defineRouteHandler(duplicateResponse)
+
+    defineRouteHandler({
+      pagination: { kind: 'cursor', item: Article },
+      // @ts-expect-error the generated successful response requires items
+      handler: (event) => event.respond(200, { nextCursor: 'next' }),
+    })
+
+    defineRouteHandler({
+      // @ts-expect-error a direct successful return must use the generated envelope too
+      pagination: { kind: 'cursor', item: Article },
+      // @ts-expect-error overload resolution also rejects the incompatible handler
+      handler: () => ({ nextCursor: 'next' }),
+    })
+  })
+
+  it('combines non-pagination query fields and response statuses', () => {
+    defineRouteHandler({
+      pagination: { kind: 'cursor', item: schema<{ id: number }>() },
+      validate: {
+        query: schema<{ category?: string }>(),
+        response: { 404: schema<{ message: string }>() },
+      },
+      handler: (event) => {
+        expectTypeOf(event.validated.query).toMatchTypeOf<{
+          category?: string
+          cursor?: string
+          limit: number
+        }>()
+        return { items: [{ id: 1 }] }
+      },
+    })
+  })
+
+  it('supports pagination only on the GET member of a method group', () => {
+    defineRouteHandler({
+      get: {
+        pagination: { kind: 'cursor', item: schema<{ id: number }>() },
+        handler: (event) => {
+          expectTypeOf(event.validated.query.limit).toEqualTypeOf<number>()
+          return { items: [{ id: 1 }] }
+        },
+      },
+      post: {
+        handler: () => ({ created: true }),
+      },
+    })
+
+    const invalidMethod = {
+      post: {
+        pagination: { kind: 'cursor' as const, item: schema<{ id: number }>() },
+        handler: () => ({ items: [{ id: 1 }] }),
+      },
+    }
+    // @ts-expect-error cursor pagination only belongs to GET
+    defineRouteHandler(invalidMethod)
+
+    const duplicate = {
+      get: {
+        pagination: { kind: 'cursor' as const, item: schema<{ id: number }>() },
+        validate: { query: schema<{ limit?: number }>() },
+        handler: () => ({ items: [{ id: 1 }] }),
+      },
+    }
+    // @ts-expect-error pagination owns the GET member's query.limit
+    defineRouteHandler(duplicate)
+  })
+
   it('types a direct handler as a validated H3 event', () => {
     defineRouteHandler({
       params: schema<{ id: string }, { id: number }>(),

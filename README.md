@@ -66,6 +66,10 @@ preparation sequence.
 
 ## One definition, everything typed
 
+For a runnable contract-to-client example, see the
+[cursor pagination walkthrough](docs/pagination-demo.md): inspect the HTTP
+fields, server type errors, and Pinia Colada page loading from one declaration.
+
 Describe the HTTP contract once, next to the handler, with the schema library you already use (Zod, Valibot, or Effect Schema):
 
 ```ts
@@ -124,12 +128,13 @@ Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, ot
 - ✅ Schema-agnostic: Zod v4, Valibot, and Effect Schema (Standard Schema based)
 - ✅ Request validation for `params`, `query`, `headers`, and `body`
 - ✅ Multiple response statuses, checked at the type level via `respond(status, body)`
-- ✅ Lazy `$endpoint` request objects: status unions, `.raw()`, `.queryOptions()`, `.mutationOptions()`
+- ✅ Lazy `$endpoint` request objects: status unions and `.raw()`
 - ✅ Status-aware `useEndpoint` composable wired into Nuxt async data (`key`, `lazy`, `watch`, …)
-- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the request Query options forward the request the way `useFetch` does
+- ✅ SSR-correct without replacing Nuxt's transport: `useEndpoint` and the Colada query adapter forward the request the way `useFetch` does
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Importable path, method, request, and result helper types from `#endpoints`
-- ✅ Pinia Colada integration through standard `.queryOptions()` / `.mutationOptions()`, with its official Nuxt SSR module
+- ✅ Pinia Colada integration through typed `queryOptions(request)` / `mutationOptions(request)` adapters, with its official Nuxt SSR module
+- ✅ Contract-generated cursor pagination with a typed `infiniteQueryOptions(request)` Pinia Colada adapter — Nuxt 5 line only
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
 - ✅ Progressive enhancement: `useEndpointForm` projects GET query forms and POST mutation forms that work before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md)) — Nuxt 5 line only
 

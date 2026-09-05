@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildEndpointRouteEntryUnion, generateEndpointTypes } from '../../src/codegen'
+import {
+  buildEndpointRouteEntryUnion,
+  buildEndpointRouteMap,
+  generateEndpointTypes,
+} from '../../src/codegen'
 import type {
   EndpointClientCodegenOptions,
   EndpointRouteHandler,
@@ -52,7 +56,7 @@ describe('buildEndpointRouteEntryUnion', () => {
     expect(union).toContain("path: '/api/users'")
     expect(union).toContain("method: 'get'")
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<ServerRoutes, '/api/users', 'contract', 'get'>",
+      "definition: ApplyEndpointPaginationFromRoute<TypedFetchMetadataField<ServerRoutes, '/api/users', 'contract', 'get'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/users.get.ts').default['~routeDef'], 'get'>",
@@ -69,13 +73,13 @@ describe('buildEndpointRouteEntryUnion', () => {
     const union = buildEndpointRouteEntryUnion([multiGetHandler, multiPutHandler])
 
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'get'>",
+      "definition: ApplyEndpointPaginationFromRoute<TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'get'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'get'>",
     )
     expect(union).toContain(
-      "definition: TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'put'>",
+      "definition: ApplyEndpointPaginationFromRoute<TypedFetchMetadataField<ServerRoutes, '/api/multi', 'contract', 'put'>",
     )
     expect(union).toContain(
       "handlerReturn: EndpointHandlerReturnFromRoute<typeof import('/server/api/multi.ts').default['~routeDef'], 'put'>",
@@ -92,19 +96,35 @@ describe('buildEndpointRouteEntryUnion', () => {
   })
 })
 
+describe('buildEndpointRouteMap', () => {
+  it('renders an empty map body when there are no handlers', () => {
+    expect(buildEndpointRouteMap([])).toBe('')
+  })
+
+  it('indexes methods below their path instead of leaving lookup to a route union', () => {
+    const map = buildEndpointRouteMap([multiGetHandler, multiPutHandler, healthHandler])
+
+    expect(map.match(/'\/api\/multi':/gu)).toHaveLength(1)
+    expect(map).toContain("'get': { path: '/api/multi', method: 'get'")
+    expect(map).toContain("'put': { path: '/api/multi', method: 'put'")
+    expect(map).toContain("'/api/health':")
+  })
+})
+
 describe('generateEndpointTypes', () => {
-  it('renders a never route entry union for an empty handler list', () => {
+  it('renders an empty route map for an empty handler list', () => {
     const content = generateEndpointTypes(resolve, [], defaultClientOptions)
 
-    expect(content).toContain('type EndpointRouteEntry =\n  | never')
+    expect(content).toContain('type EndpointRouteMap = {\n\n}')
+    expect(content).toContain('type EndpointRouteEntry = EndpointRouteMapValue<EndpointRouteMap>')
   })
 
   it('imports the runtime client types via the resolver', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], defaultClientOptions)
 
-    expect(content).toContain(
-      "import type { EndpointClient, EndpointHandlerReturnFromRoute, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient } from './runtime'",
-    )
+    expect(content).toContain('EndpointMappedClient')
+    expect(content).toContain('EndpointRouteMapEntry')
+    expect(content).toContain("from './runtime'")
     expect(content).toContain("import type { ServerRoutes } from '@nuxt/schema'")
     expect(content).toContain("import type { TypedFetchMetadataField } from 'nuxt/app'")
   })
@@ -128,12 +148,14 @@ describe('generateEndpointTypes', () => {
     )
   })
 
-  it('uses the plain EndpointClient type', () => {
+  it('uses the indexed client type', () => {
     const content = generateEndpointTypes(resolve, [listUsersHandler], {
       client: { raw: true },
     })
 
-    expect(content).toContain('export type $EndpointClient = EndpointClient<')
+    expect(content).toContain(
+      'export type $EndpointClient = EndpointMappedClient<EndpointRouteMap, EndpointClientFeatures>',
+    )
   })
 
   it('adds path-aware server responses from the central route config', () => {

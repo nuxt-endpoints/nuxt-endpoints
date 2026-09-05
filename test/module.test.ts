@@ -17,6 +17,61 @@ import {
 import { formOf } from '../src/runtime'
 
 describe('Nitro route contract provider', () => {
+  it('projects cursor pagination capability into generated client metadata', async () => {
+    const handler = {
+      handler: '/project/server/api/articles.get.ts',
+      route: '/api/articles',
+      method: 'get',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          pagination: { kind: 'cursor', item: z.object({ id: z.number() }) },
+          responses: {},
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+      {
+        route: '/api/articles',
+        method: 'get',
+        pagination: {
+          kind: 'cursor',
+          status: 200,
+          cursor: 'cursor',
+          limit: 'limit',
+          items: 'items',
+          next: 'nextCursor',
+        },
+      },
+    ])
+  })
+
+  it('rejects cursor pagination on a non-GET route at build time', async () => {
+    const handler = {
+      handler: '/project/server/api/articles.post.ts',
+      route: '/api/articles',
+      method: 'post',
+      middleware: false,
+    }
+    const contracts = indexRouteContracts([
+      {
+        ...handler,
+        contract: {
+          pagination: { kind: 'cursor', item: z.object({ id: z.number() }) },
+          responses: {},
+        },
+      },
+    ])
+
+    await expect(composeHandlers([handler], contracts)).rejects.toThrow(
+      /Cursor pagination is only supported on GET routes/,
+    )
+  })
+
   it('composes handlers exclusively from provider contracts', async () => {
     const handler = {
       handler: '/project/server/api/users.get.ts',

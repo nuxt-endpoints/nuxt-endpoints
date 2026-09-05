@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
+import { queryOptions } from '#endpoints/colada'
 
-const query = useQuery($endpoint('/api/whoami', { method: 'get' }).queryOptions())
+const query = useQuery(queryOptions($endpoint('/api/whoami', { method: 'get' })))
 </script>
 
 <template>

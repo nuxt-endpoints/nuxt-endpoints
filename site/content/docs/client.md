@@ -49,10 +49,11 @@ if (result.value?.status === 200) {
 </script>
 ```
 
-The same request object exposes `.queryOptions()` for `GET`/`HEAD` and
-`.mutationOptions()` for unsafe methods. Pass those ordinary options to the
-[Pinia Colada](/docs/pinia-colada) when the request needs shared server-state
-caching, invalidation, or optimistic updates.
+Pass the same request object to `queryOptions()` for `GET`/`HEAD`, or
+`mutationOptions()` for unsafe methods. These adapters are imported from
+`#endpoints/colada` and return ordinary [Pinia Colada](/docs/pinia-colada)
+options when the request needs shared server-state caching, invalidation, or
+optimistic updates.
 
 ## Request forwarding during SSR
 
