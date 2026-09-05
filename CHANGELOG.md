@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-09-06
+
 ### Added
 
 - Cursor pagination contracts now generate their `cursor` / `limit` input,

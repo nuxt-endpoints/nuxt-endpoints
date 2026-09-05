@@ -18,6 +18,10 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 
 ## One definition, everything typed
 
+For a runnable contract-to-client example, see the
+[cursor pagination walkthrough](docs/pagination-demo.md): inspect the HTTP
+fields, server type errors, and Pinia Colada page loading from one declaration.
+
 Describe the HTTP contract once, next to the handler, with the schema library you already use (Zod, Valibot, or Effect Schema):
 
 ```ts
