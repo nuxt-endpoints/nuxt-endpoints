@@ -16,10 +16,6 @@ export default defineRouteHandler({
       201: PlaygroundUser,
     },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => event.respond(201, createPlaygroundUser(event.validated.body.name)),
 })

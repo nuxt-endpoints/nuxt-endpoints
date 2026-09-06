@@ -10,11 +10,7 @@ export default defineRouteHandler({
       201: z.object({ id: z.number(), amount: z.number() }),
     },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => {
     executionCount += 1
     return event.respond(201, { id: executionCount, amount: event.validated.body.amount })

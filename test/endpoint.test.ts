@@ -425,6 +425,49 @@ describe('DefinedEndpoint', () => {
     ).toThrow(/Runtime-only idempotency option.*storage/)
   })
 
+  it('normalizes route idempotency authoring input and rejects disabled JS forms', async () => {
+    const { defineRouteHandler } = await import('./internal-runtime')
+    const direct = defineRouteHandler({
+      validate: { body: userResponse },
+      idempotency: true,
+      handler: () => ({ id: 1, name: 'Tom' }),
+    }) as unknown as {
+      __endpoint_contract__: { definition: import('./internal-runtime').EndpointDefinition }
+    }
+    const grouped = defineRouteHandler({
+      post: {
+        validate: { body: userResponse },
+        idempotency: { headerName: 'X-Request-Key' },
+        handler: () => ({ id: 1, name: 'Tom' }),
+      },
+    }) as unknown as {
+      __endpoint_contracts__: Record<
+        string,
+        { definition: import('./internal-runtime').EndpointDefinition }
+      >
+    }
+
+    expect(direct.__endpoint_contract__.definition.idempotency).toEqual({
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: true,
+    })
+    expect(grouped.__endpoint_contracts__.post.definition.idempotency).toEqual({
+      enabled: true,
+      headerName: 'X-Request-Key',
+      required: true,
+    })
+    expect(() =>
+      defineRouteHandler({ idempotency: false, handler: () => ({ ok: true }) } as never),
+    ).toThrow(/omit the property to disable/i)
+    expect(() =>
+      defineRouteHandler({
+        idempotency: { enabled: false },
+        handler: () => ({ ok: true }),
+      } as never),
+    ).toThrow(/enabled can only be true/i)
+  })
+
   it('rejects a declared response that mixes media with body', async () => {
     const { defineEndpoint } = await import('./internal-runtime')
 

@@ -66,8 +66,8 @@ const storage = createMemoryIdempotencyStorage()
 export default defineEndpointRuntime({
   idempotency: {
     storage: () => storage,
-    scope: () => 'packed-smoke',
-    authorization: 'middleware',
+    scope: 'global',
+    authorization: 'public',
   },
   routes: {
     '/api/echo': {
@@ -106,11 +106,7 @@ export default defineRouteHandler({
       201: z.object({ message: z.string() }),
     },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => {
     return event.respond(201, event.validated.body)
   },

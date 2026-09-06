@@ -6,7 +6,8 @@ Last consolidated: 2026-07-21
 
 Nuxt Endpoints deliberately does not depend on a Redis or database client. A
 production application implements `IdempotencyStorage` with the infrastructure
-it already owns, then supplies one shared adapter to `.idempotency()`.
+it already owns, then supplies one shared adapter through
+`defineEndpointRuntime()`.
 
 This document describes the atomic operations an adapter must implement. The
 pseudocode is not a copy-paste production adapter. Client-specific result
@@ -234,29 +235,28 @@ returns the existing adapter; trusted scope and authorization still run on
 every request.
 
 ```ts
+// server/endpoints/runtime.ts
 const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
 
-export default defineRouteHandler(
-  {
-    validate: {
-      body: GrantPointsBody,
-      response: { 201: GrantPointsResult },
-    },
-    idempotency: {
-      enabled: true,
-      headerName: 'Idempotency-Key',
-      required: true,
-    },
-    handler: ({ body, respond }) => respond(201, grantPoints(body)),
+export default defineEndpointRuntime({
+  idempotency: {
+    storage: () => idempotencyStorage,
+    scope: ({ event }) => event.context.tenant.id,
+    authorization: ({ event }) => requirePermission(event, 'points:grant'),
   },
-  {
-    idempotency: {
-      storage: () => idempotencyStorage,
-      scope: ({ event }) => event.context.tenant.id,
-      authorization: ({ event }) => requirePermission(event, 'points:grant'),
-    },
+})
+```
+
+```ts
+// server/api/points/grants.post.ts
+export default defineRouteHandler({
+  validate: {
+    body: GrantPointsBody,
+    response: { 201: GrantPointsResult },
   },
-)
+  idempotency: true,
+  handler: (event) => event.respond(201, grantPoints(event.validated.body)),
+})
 ```
 
 ## Conformance before production

@@ -5,10 +5,11 @@ Status: historical design record; production durability remains application-owne
 Last consolidated: 2026-08-15
 
 > The public API alternatives recorded below explain how the feature evolved;
-> they are not the current API. Current routes declare serializable metadata on
-> `defineRouteHandler`, central runtime callbacks live in
+> they are not the current API. A route declares serializable metadata in the
+> `idempotency` slot of `defineRouteHandler`, the request-time callbacks live in
 > `server/endpoints/runtime.ts`, and `$endpoint(path, { method, ... })` creates
-> or accepts the client key. See the current [public guide](../site/content/docs/idempotency.md).
+> or accepts the client key. See the current
+> [public guide](../site/content/docs/idempotency.md).
 
 This document defines the guarantees, ownership boundary, and state model for
 optional `Idempotency-Key` replay protection in Nuxt Endpoints. The public API,
@@ -285,9 +286,9 @@ export const endpoint = defineEndpoint({
 })
 ```
 
-Historical decision at the time: adopt C. `DefinedEndpoint.idempotency()` returns a new endpoint and
-does not mutate the original. The returned definition gains only serializable,
-client-safe metadata:
+Historical decision at the time: adopt C. `DefinedEndpoint.idempotency()`
+returned a new endpoint and did not mutate the original. The returned definition
+gained only serializable, client-safe metadata:
 
 ```ts
 type EndpointIdempotencyMetadata<HeaderName extends string, Required extends boolean> = {
@@ -297,9 +298,9 @@ type EndpointIdempotencyMetadata<HeaderName extends string, Required extends boo
 }
 ```
 
-The method return type preserves the configured string and boolean literals;
-omitting `required` normalizes its metadata type to `false` rather than
-`boolean`. This is what lets generated calls distinguish required and optional
+The method return type preserved the configured string and boolean literals;
+omitting `required` originally normalized its metadata type to `false` rather than
+`boolean`. That is what let generated calls distinguish required and optional
 keys.
 
 The storage resolver, scope resolver, authorization policy, fingerprint
@@ -307,10 +308,10 @@ projection, TTLs, and replay-status policy stay in private server runtime
 options. This gives discovery enough information for generated client and
 OpenAPI output without exposing infrastructure callbacks.
 
-The metadata is method-generated and cannot be supplied directly to
-`defineEndpoint()`. Build and server startup also verify that metadata has a
-matching private runtime policy, so untyped JavaScript cannot make generated
-clients/OpenAPI claim idempotency while leaving the handler unprotected.
+The metadata was method-generated and could not be written by hand. Server
+startup still verifies that metadata has a matching runtime policy, so untyped
+JavaScript cannot make generated clients or OpenAPI claim idempotency while
+leaving the handler unprotected.
 
 The callback context contains the already validated `event`, `params`, `query`,
 `headers`, and `body`. Execution order is fixed:
@@ -337,6 +338,13 @@ Defaults:
 - `replayTtlMs`: `86_400_000`;
 - `replayStatuses`: every successful `2xx` result returned by the handler;
 - `fingerprint`: validated params, query, and body with no headers/event state.
+
+This optional-by-default builder behavior was later replaced by the current
+authoring API: `idempotency: true`, `.idempotency()`, and an empty options
+object all mean the standard required `Idempotency-Key` contract. Optional mode
+is now written explicitly as `{ required: false }`. The normalized
+`{ enabled, headerName, required }` object remains internal metadata; see the
+public guide for current usage.
 
 `authorization` has no implicit default. Every idempotent endpoint must either
 supply a callback that runs on every request, including replay, or explicitly
@@ -438,9 +446,8 @@ runtime callbacks, so the server plugin resolves the endpoint override and
 central policy together and fails before serving when `storage`, `scope`, or
 `authorization` is still missing, or when the policy file does not
 default-export a valid policy.
-This builder decision was later superseded by the canonical
-`defineRouteHandler` contract plus central runtime policy described in the
-public guide.
+This builder decision was later superseded by the single `defineRouteHandler`
+contract plus the central runtime policy described in the public guide.
 
 Deferred extensions, recorded as open questions: an application-wide
 `headerName` default (conflicts with literal-type inference from the method),
@@ -458,16 +465,16 @@ of overwriting metadata. Two handlers independently created from one endpoint
 definition remain valid because each has its own closure.
 
 Runtime execution refuses an idempotent request if metadata is missing rather
-than falling back to the raw URL and silently changing storage identity. During
-build-time discovery, the module that defines each endpoint contract must be
-evaluated successfully — the route module for co-located contracts, or only
-the imported contract module when the route uses a separate contract file. If
-Jiti evaluation fails, or evaluated exports do not expose endpoint metadata,
-the module reports a build error because callbacks and metadata cannot be
-reconstructed safely from source text. Contract-defining modules may import
-resolver functions but must not create storage clients or connections at top
-level; with a central policy, contract-side `.idempotency()` arguments are
-fully serializable and this constraint becomes easy to satisfy.
+than falling back to the raw URL and silently changing storage identity.
+Build-time metadata comes from Nitro's contract macro and its route-contract
+provider: the macro keeps the contract expression and only the imports and
+immutable bindings that expression reaches, so a handler's own dependencies are
+never run during the build. A declaration the macro cannot compile fails with a
+source diagnostic, because callbacks and metadata cannot be reconstructed safely
+from source text. What the contract expression itself references is evaluated,
+so schema and metadata modules must not create storage clients or connections at
+top level — with a central policy, the contract-side `idempotency` slot is fully
+serializable and this constraint is easy to satisfy.
 
 ## Completion and failure policy
 

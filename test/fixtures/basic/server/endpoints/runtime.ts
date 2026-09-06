@@ -58,8 +58,8 @@ export default defineEndpointRuntime({
   },
   idempotency: {
     storage: () => storage,
-    scope: () => 'integration-fixture',
-    authorization: 'middleware',
+    scope: 'global',
+    authorization: 'public',
   },
   openApi: {
     document: {

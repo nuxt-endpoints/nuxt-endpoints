@@ -7,7 +7,10 @@
 import type { EndpointDefinition } from './contract'
 import type { EndpointIdempotencyContext } from './endpoint'
 import { validateIdempotencyTtl } from './idempotency'
-import type { EndpointIdempotencyPolicy } from './idempotency-policy'
+import {
+  type EndpointIdempotencyPolicy,
+  validateEndpointIdempotencyPolicy,
+} from './idempotency-policy'
 import type { OpenApiDocument, OpenApiDocumentPatch } from './openapi'
 import type { EndpointHandlerWrapper } from './interceptor'
 import type { EndpointValidationErrorHandler } from './validation-error'
@@ -137,8 +140,8 @@ export function validateEndpointRuntime(runtime: unknown): asserts runtime is En
       throw new TypeError(`defineEndpointRuntime(): "${key}" must be a function when provided.`)
     }
   }
-  if (candidate.idempotency !== undefined && typeof candidate.idempotency !== 'object') {
-    throw new TypeError('defineEndpointRuntime(): "idempotency" must be a policy object.')
+  if (candidate.idempotency !== undefined) {
+    validateEndpointIdempotencyPolicy(candidate.idempotency)
   }
   if (candidate.routes !== undefined) {
     validateEndpointRouteRuntimeMap(candidate.routes)

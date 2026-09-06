@@ -71,14 +71,14 @@ describe('endpoint idempotency runtime', () => {
     })
   })
 
-  it('defaults to Idempotency-Key/optional metadata and an all-false runtime marker without options', () => {
+  it('defaults to Idempotency-Key/required metadata and an all-false runtime marker without options', () => {
     const endpoint = defineEndpoint({ body: jsonRecord }).idempotency()
     const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
 
     expect(endpoint.definition.idempotency).toEqual({
       enabled: true,
       headerName: 'Idempotency-Key',
-      required: false,
+      required: true,
     })
     expect(handler.__endpoint_contract__.__idempotency_runtime_marker__).toEqual({
       storage: false,
@@ -102,14 +102,42 @@ describe('endpoint idempotency runtime', () => {
     })
   })
 
+  it('normalizes merged true and rejects disabled builder inputs at runtime', () => {
+    const merged = defineEndpoint({
+      body: jsonRecord,
+      idempotency: true,
+      handler: () => ({ created: true }),
+    })
+
+    expect(merged.__endpoint_contract__.definition.idempotency).toEqual({
+      enabled: true,
+      headerName: 'Idempotency-Key',
+      required: true,
+    })
+    expect(() =>
+      defineEndpoint({ body: jsonRecord }).idempotency({ enabled: false } as never),
+    ).toThrow(/enabled can only be true/i)
+    expect(() => defineEndpoint({ body: jsonRecord }).idempotency(false as never)).toThrow(
+      /must be an object/i,
+    )
+    expect(() =>
+      defineEndpoint({ idempotency: false, handler: () => ({ created: true }) } as never),
+    ).toThrow(/must be an object/i)
+  })
+
   it('bypasses storage when an optional key is absent', async () => {
     const storage = createMemoryIdempotencyStorage()
     const claim = vi.spyOn(storage, 'claim')
+    const resolveStorage = vi.fn(() => storage)
+    const resolveScope = vi.fn(() => 'public')
+    const fingerprint = vi.fn(() => ({ amount: 100 }))
     const authorize = vi.fn()
     const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
-      storage: () => storage,
-      scope: () => 'public',
+      storage: resolveStorage,
+      scope: resolveScope,
       authorization: authorize,
+      fingerprint,
+      required: false,
     })
     const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
 
@@ -117,7 +145,29 @@ describe('endpoint idempotency runtime', () => {
       created: true,
     })
     expect(claim).not.toHaveBeenCalled()
+    expect(resolveStorage).not.toHaveBeenCalled()
+    expect(resolveScope).not.toHaveBeenCalled()
+    expect(fingerprint).not.toHaveBeenCalled()
     expect(authorize).toHaveBeenCalledOnce()
+  })
+
+  it('claims and replays when an optional route receives a key', async () => {
+    const storage = createMemoryIdempotencyStorage()
+    const execute = vi.fn(() => ({ created: true }))
+    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+      storage: () => storage,
+      scope: 'global',
+      authorization: 'public',
+      required: false,
+    })
+    const handler = defineEndpointHandler(endpoint, execute)
+    attachRoute(handler, { method: 'post', routeTemplate: '/api/optional-items' })
+    const request = () =>
+      createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'optional-request' } })
+
+    await expect(handler(request())).resolves.toEqual({ created: true })
+    await expect(handler(request())).resolves.toEqual({ created: true })
+    expect(execute).toHaveBeenCalledOnce()
   })
 
   it('returns Problem Details for a missing required key and malformed keys', async () => {
@@ -631,6 +681,31 @@ describe('endpoint idempotency runtime', () => {
   })
 
   describe('central policy injection', () => {
+    it('uses explicit public/global policy for normal execution and replay', async () => {
+      const storage = createMemoryIdempotencyStorage()
+      const claim = vi.spyOn(storage, 'claim')
+      const complete = vi.spyOn(storage, 'complete')
+      const execute = vi.fn(() => ({ id: 1 }))
+      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency()
+      const handler = defineEndpointHandler(endpoint, execute)
+      attachRoute(handler, { method: 'post', routeTemplate: '/api/public-items' })
+      handler.__set_endpoint_runtime__({
+        idempotency: {
+          storage: () => storage,
+          scope: 'global',
+          authorization: 'public',
+        },
+      })
+
+      const request = () =>
+        createEvent({ body: { amount: 100 }, headers: { 'idempotency-key': 'public-request' } })
+      await expect(handler(request())).resolves.toEqual({ id: 1 })
+      await expect(handler(request())).resolves.toEqual({ id: 1 })
+      expect(execute).toHaveBeenCalledOnce()
+      expect(claim).toHaveBeenCalledWith(expect.objectContaining({ leaseTtlMs: 60_000 }))
+      expect(complete).toHaveBeenCalledWith(expect.objectContaining({ replayTtlMs: 86_400_000 }))
+    })
+
     it('applies route fingerprint, replay statuses, and TTL overrides before the central policy', async () => {
       const storage = createMemoryIdempotencyStorage()
       const claim = vi.spyOn(storage, 'claim')

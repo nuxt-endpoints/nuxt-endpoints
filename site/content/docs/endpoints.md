@@ -262,11 +262,7 @@ export default defineRouteHandler({
     body: PaymentInput,
     response: { 201: Payment },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => event.respond(201, createPayment(event.validated.body)),
 })
 ```

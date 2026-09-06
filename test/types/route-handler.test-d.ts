@@ -229,23 +229,14 @@ describe('defineRouteHandler multi-method inference', () => {
     defineRouteHandler({ idempotency: metadata, handler: () => ({ ok: true }) })
     defineRouteHandler({ post: { idempotency: metadata, handler: () => ({ ok: true }) } })
 
-    defineRouteHandler({
-      // @ts-expect-error storage belongs to the runtime implementation, not the route contract.
-      idempotency: withStorage,
-      handler: () => ({ ok: true }),
-    })
+    // @ts-expect-error storage belongs to the runtime implementation, not the route contract.
+    defineRouteHandler({ idempotency: withStorage, handler: () => ({ ok: true }) })
 
-    defineRouteHandler({
-      // @ts-expect-error scope belongs to the runtime implementation, not the route contract.
-      idempotency: withScope,
-      handler: () => ({ ok: true }),
-    })
+    // @ts-expect-error scope belongs to the runtime implementation, not the route contract.
+    defineRouteHandler({ idempotency: withScope, handler: () => ({ ok: true }) })
 
-    defineRouteHandler({
-      // @ts-expect-error authorization belongs to the runtime implementation, not the route contract.
-      idempotency: withAuthorization,
-      handler: () => ({ ok: true }),
-    })
+    // @ts-expect-error authorization belongs to the runtime implementation, not the route contract.
+    defineRouteHandler({ idempotency: withAuthorization, handler: () => ({ ok: true }) })
 
     defineRouteHandler({
       // @ts-expect-error method entries are route contracts too.
@@ -257,29 +248,77 @@ describe('defineRouteHandler multi-method inference', () => {
     const withLeaseTtl = { ...metadata, leaseTtlMs: 1000 }
     const withReplayTtl = { ...metadata, replayTtlMs: 1000 }
 
-    defineRouteHandler({
-      // @ts-expect-error fingerprint is resolved by the runtime, not declared in the contract.
-      idempotency: withFingerprint,
+    // @ts-expect-error fingerprint is resolved by the runtime, not declared in the contract.
+    defineRouteHandler({ idempotency: withFingerprint, handler: () => ({ ok: true }) })
+
+    // @ts-expect-error replayStatuses is resolved by the runtime, not declared in the contract.
+    defineRouteHandler({ idempotency: withReplayStatuses, handler: () => ({ ok: true }) })
+
+    // @ts-expect-error leaseTtlMs is resolved by the runtime, not declared in the contract.
+    defineRouteHandler({ idempotency: withLeaseTtl, handler: () => ({ ok: true }) })
+
+    // @ts-expect-error replayTtlMs is resolved by the runtime, not declared in the contract.
+    defineRouteHandler({ idempotency: withReplayTtl, handler: () => ({ ok: true }) })
+  })
+
+  it('accepts shorthand authoring and normalizes inferred route metadata', () => {
+    const direct = defineRouteHandler({
+      validate: { body: schema<{ text: string }>() },
+      idempotency: true,
       handler: () => ({ ok: true }),
+    })
+    const grouped = defineRouteHandler({
+      post: {
+        validate: { body: schema<{ text: string }>() },
+        idempotency: true,
+        handler: () => ({ ok: true }),
+      },
     })
 
-    defineRouteHandler({
-      // @ts-expect-error replayStatuses is resolved by the runtime, not declared in the contract.
-      idempotency: withReplayStatuses,
-      handler: () => ({ ok: true }),
-    })
+    type DirectContract = EndpointDefinitionFromRoute<(typeof direct)['~routeDef']>
+    type GroupedContract = EndpointDefinitionFromRoute<(typeof grouped)['~routeDef'], 'post'>
+    expectTypeOf<DirectContract['idempotency']>().toEqualTypeOf<{
+      enabled: true
+      headerName: 'Idempotency-Key'
+      required: true
+    }>()
+    expectTypeOf<GroupedContract['idempotency']>().toEqualTypeOf<DirectContract['idempotency']>()
 
-    defineRouteHandler({
-      // @ts-expect-error leaseTtlMs is resolved by the runtime, not declared in the contract.
-      idempotency: withLeaseTtl,
+    const empty = defineRouteHandler({ idempotency: {}, handler: () => ({ ok: true }) })
+    const optional = defineRouteHandler({
+      idempotency: { required: false },
       handler: () => ({ ok: true }),
     })
+    const custom = defineRouteHandler({
+      idempotency: { headerName: 'X-Request-Key' },
+      handler: () => ({ ok: true }),
+    })
+    expectTypeOf<
+      EndpointDefinitionFromRoute<(typeof empty)['~routeDef']>['idempotency']
+    >().toEqualTypeOf<{
+      enabled: true
+      headerName: 'Idempotency-Key'
+      required: true
+    }>()
+    expectTypeOf<
+      EndpointDefinitionFromRoute<(typeof optional)['~routeDef']>['idempotency']
+    >().toEqualTypeOf<{
+      enabled: true
+      headerName: 'Idempotency-Key'
+      required: false
+    }>()
+    expectTypeOf<
+      EndpointDefinitionFromRoute<(typeof custom)['~routeDef']>['idempotency']
+    >().toEqualTypeOf<{
+      enabled: true
+      headerName: 'X-Request-Key'
+      required: true
+    }>()
 
-    defineRouteHandler({
-      // @ts-expect-error replayTtlMs is resolved by the runtime, not declared in the contract.
-      idempotency: withReplayTtl,
-      handler: () => ({ ok: true }),
-    })
+    // @ts-expect-error omit idempotency to disable it.
+    defineRouteHandler({ idempotency: false, handler: () => ({ ok: true }) })
+    // @ts-expect-error enabled: false is not an authoring option.
+    defineRouteHandler({ idempotency: { enabled: false }, handler: () => ({ ok: true }) })
   })
 
   it('uses the same one-argument shape as H3', () => {

@@ -281,8 +281,10 @@ function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyP
   const candidate = value as Record<string, unknown>
   return (
     typeof candidate.storage === 'function' &&
-    typeof candidate.scope === 'function' &&
-    (candidate.authorization === 'middleware' || typeof candidate.authorization === 'function')
+    (candidate.scope === 'global' || typeof candidate.scope === 'function') &&
+    (candidate.authorization === 'public' ||
+      candidate.authorization === 'middleware' ||
+      typeof candidate.authorization === 'function')
   )
 }
 
