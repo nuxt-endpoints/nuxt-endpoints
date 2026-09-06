@@ -189,16 +189,22 @@ export type EndpointIdempotencyInput =
       required?: boolean
     }
 
-type IdempotencyHeaderNameFromInput<INPUT> = INPUT extends {
-  headerName: infer NAME extends string
-}
-  ? NAME
+type IdempotencyInputProperty<INPUT, KEY extends PropertyKey> = KEY extends keyof INPUT
+  ? INPUT[KEY]
+  : never
+
+type IdempotencyHeaderNameFromInput<INPUT> = 'headerName' extends keyof INPUT
+  ?
+      | Extract<IdempotencyInputProperty<INPUT, 'headerName'>, string>
+      | (undefined extends IdempotencyInputProperty<INPUT, 'headerName'>
+          ? 'Idempotency-Key'
+          : never)
   : 'Idempotency-Key'
 
-type IdempotencyRequiredFromInput<INPUT> = INPUT extends {
-  required: infer REQUIRED extends boolean
-}
-  ? REQUIRED
+type IdempotencyRequiredFromInput<INPUT> = 'required' extends keyof INPUT
+  ?
+      | Extract<IdempotencyInputProperty<INPUT, 'required'>, boolean>
+      | (undefined extends IdempotencyInputProperty<INPUT, 'required'> ? true : never)
   : true
 
 /** Converts authoring syntax into the metadata consumed after discovery. */

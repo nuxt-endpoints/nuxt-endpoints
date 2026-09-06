@@ -1497,6 +1497,54 @@ function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
   if (options.enabled !== undefined && options.enabled !== true) {
     throw new TypeError('idempotency.enabled can only be true; omit idempotency to disable it.')
   }
+  const unknown = Object.keys(options).find(
+    (key) =>
+      ![
+        'enabled',
+        'storage',
+        'scope',
+        'authorization',
+        'fingerprint',
+        'headerName',
+        'required',
+        'leaseTtlMs',
+        'replayTtlMs',
+        'replayStatuses',
+      ].includes(key),
+  )
+  if (unknown) {
+    throw new TypeError(`Unknown idempotency option \`${unknown}\``)
+  }
+  if (options.storage !== undefined && typeof options.storage !== 'function') {
+    throw new TypeError('Idempotency storage must be a function')
+  }
+  if (
+    options.scope !== undefined &&
+    options.scope !== 'global' &&
+    typeof options.scope !== 'function'
+  ) {
+    throw new TypeError('Idempotency scope must be "global" or a function')
+  }
+  if (
+    options.authorization !== undefined &&
+    options.authorization !== 'public' &&
+    options.authorization !== 'middleware' &&
+    typeof options.authorization !== 'function'
+  ) {
+    throw new TypeError('Idempotency authorization must be "public", "middleware", or a function')
+  }
+  if (options.fingerprint !== undefined && typeof options.fingerprint !== 'function') {
+    throw new TypeError('Idempotency fingerprint must be a function')
+  }
+  if (options.headerName !== undefined && typeof options.headerName !== 'string') {
+    throw new TypeError('Idempotency headerName must be a string')
+  }
+  if (options.required !== undefined && typeof options.required !== 'boolean') {
+    throw new TypeError('Idempotency required must be a boolean')
+  }
+  if (options.replayStatuses !== undefined && !Array.isArray(options.replayStatuses)) {
+    throw new TypeError('Idempotency replayStatuses must be an array')
+  }
   const headerName = options.headerName ?? defaultIdempotencyHeaderName
   if (!isValidHttpHeaderName(headerName)) {
     throw new TypeError('Idempotency headerName must be a valid HTTP header field name')

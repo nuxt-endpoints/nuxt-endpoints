@@ -125,6 +125,12 @@ describe('endpoint idempotency runtime', () => {
     expect(() => defineEndpoint({ body: jsonRecord }).idempotency(false as never)).toThrow(
       /must be an object/i,
     )
+    expect(() =>
+      defineEndpoint({ body: jsonRecord }).idempotency({ scope: 'shared' } as never),
+    ).toThrow(/scope must be "global" or a function/i)
+    expect(() =>
+      defineEndpoint({ body: jsonRecord }).idempotency({ authorization: 'publci' } as never),
+    ).toThrow(/authorization must be "public", "middleware", or a function/i)
   })
 
   it('bypasses storage when an optional key is absent', async () => {

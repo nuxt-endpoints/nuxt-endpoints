@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import type { InferRouteHandlerContract } from 'h3'
 import { defineRouteHandler } from '../../src/runtime'
-import type { StandardSchemaLike } from '../../src/runtime'
+import type { EndpointIdempotencyInput, StandardSchemaLike } from '../../src/runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
 
@@ -312,6 +312,25 @@ describe('defineRouteHandler multi-method inference', () => {
     defineRouteHandler({ idempotency: false, handler: () => ({ ok: true }) })
     // @ts-expect-error enabled: false is not an authoring option.
     defineRouteHandler({ idempotency: { enabled: false }, handler: () => ({ ok: true }) })
+  })
+
+  it('keeps widened authoring options sound after normalization', () => {
+    const options: Exclude<EndpointIdempotencyInput, true> = {
+      headerName: 'X-Request-Key',
+      required: false,
+    }
+    const handler = defineRouteHandler({
+      validate: { body: schema<{ text: string }>() },
+      idempotency: options,
+      handler: () => ({ ok: true }),
+    })
+
+    type Contract = InferRouteHandlerContract<typeof handler>
+    expectTypeOf<Contract['idempotency']>().toEqualTypeOf<{
+      enabled: true
+      headerName: string
+      required: boolean
+    }>()
   })
 
   it('preserves authored idempotency metadata through the H3 contract projection', () => {
