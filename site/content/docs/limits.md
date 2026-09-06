@@ -13,7 +13,12 @@ See [Compatibility](/docs/getting-started#compatibility) for the currently suppo
 
 ### Endpoint discovery evaluates contract-defining modules
 
-During Nuxt and Nitro type generation, the module that defines each endpoint contract is imported and its metadata is read. For a co-located contract that is the route file itself, so keep route top-level code lightweight. Routes that import their contract from a [separate contract file](/docs/endpoints#separate-contract-files) are not evaluated — only the contract module is. Routes that define no endpoint are never evaluated.
+On the Nuxt 4 line, each canonical endpoint route module is evaluated with Jiti
+during type generation so its contract metadata can be read. Keep route
+top-level code and its imported dependency graph deterministic; do not open
+database connections or start other runtime infrastructure there. Put
+request-time wiring in `server/endpoints/runtime.ts`. Routes that do not use
+the canonical endpoint authoring form are skipped.
 
 ### Endpoint discovery fails closed
 
@@ -25,9 +30,9 @@ A route whose template contains a catch-all (`[...slug]`) or optional parameter 
 
 ### Response bodies are JSON-first
 
-Request bodies accept [media-type maps](/docs/endpoints#media-type-request-bodies) — JSON, URL-encoded forms, multipart uploads, and raw text. Validated response bodies are JSON: a validated status may be labelled with a `+json` profile such as `application/problem+json`, and nothing else.
+Request bodies accept [media-type maps](/docs/endpoints#request-media-types) — JSON, URL-encoded forms, multipart uploads, and raw text. Validated response bodies are JSON: a validated status may be labelled with a `+json` profile such as `application/problem+json`, and nothing else.
 
-Everything non-JSON goes through the single [media response](/docs/endpoints#non-json-responses) door. It carries its own media type, reaches OpenAPI, and can offer [several representations negotiated from `Accept`](/docs/endpoints#several-representations-of-one-status) — but nothing about its payload is validated, and its chunks are not typed. Use [Low-level HTTP](/docs/low-level-http) for redirects, proxies, and native Web Responses that should not be modelled as a status at all.
+Everything non-JSON goes through the single [media response](/docs/endpoints#media-responses) door. It carries its own media type, reaches OpenAPI, and can offer several representations negotiated from `Accept` — but nothing about its payload is validated, and its chunks are not typed. Use [Low-level HTTP](/docs/low-level-http) for redirects, proxies, and native Web Responses that should not be modelled as a status at all.
 
 Contracted JSON responses use the supported Nitro line's wire-type mapping. Native `Response`, files, and custom response parsers are outside the generated JSON body type.
 

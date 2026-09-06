@@ -55,6 +55,7 @@ A single-method definition accepts:
 - `name`: optional typed `$endpoint` property alias for this method.
 - `summary`, `description`, `tags`: OpenAPI metadata.
 - `idempotency`: serializable idempotency contract metadata.
+- `pagination`: an optional cursor-pagination contract for GET routes.
 - `validate`: request and response schemas.
 - `handler`: the single-method handler.
 

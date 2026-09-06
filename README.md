@@ -72,7 +72,9 @@ if (result.status === 404) {
 
 **3. An OpenAPI 3.1 document** — served at `/_endpoints/schema` in dev, generated from the same schemas. No separate spec to maintain.
 
-Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, other services, or `curl`.
+The boundary stays an explicit, file-based Nuxt HTTP route, callable by mobile
+apps, other services, or `curl`. Nuxt Endpoints extends the handler contract; it
+does not replace the route with a remote function.
 
 ## Features
 

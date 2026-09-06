@@ -26,6 +26,19 @@ if (result.status === 200) {
 </script>
 ```
 
+When a route declares a unique `name`, the generated client also exposes a
+typed alias for that same path-and-method request:
+
+```ts
+const result = await $endpoint.getUser({
+  params: { id: '123' },
+  query: { includePosts: true },
+})
+```
+
+The name does not create another operation or flatten HTTP input. `params`,
+`query`, `headers`, and `body` keep the same types as the canonical path call.
+
 Use `useEndpoint` when the same typed call should be managed as Nuxt async data.
 It forwards Nuxt async-data options such as `key`, `lazy`, `server`, `watch`, and
 `default`, while keeping endpoint `params`, `query`, `headers`, and `body` typed.

@@ -51,7 +51,9 @@ npm install effect
 
 ## Your first endpoint
 
-Create an ordinary Nuxt server route and default-export a `defineRouteHandler()` call:
+Create an explicit, file-based Nuxt server route and default-export a
+`defineRouteHandler()` call. The route remains an HTTP endpoint; Nuxt Endpoints
+adds the contract-aware handler API inside it.
 
 ```ts
 // server/api/users/[id].get.ts

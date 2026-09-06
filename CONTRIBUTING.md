@@ -54,7 +54,7 @@ vp run fmt             # apply formatting
 
 Please include:
 
-- The route definition (`defineEndpoint`) and handler involved.
+- The `defineRouteHandler({...})` route definition and handler involved.
 - The schema library and its version (Zod v4 / Valibot / Effect).
 - Nuxt and `nuxt-endpoints` versions.
 - What you expected, and what happened instead — generated-type issues are easiest to fix with a minimal reproduction repo.

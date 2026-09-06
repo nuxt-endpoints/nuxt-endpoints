@@ -8,7 +8,7 @@ is being developed in public against matching H3, Nitro, and fetchdts
 prototypes. These branches are experimental working branches, not the supported
 Nuxt 4 release line.
 
-Last updated: **2026-09-04**
+Last updated: **2026-09-07**
 
 ## Working branches
 

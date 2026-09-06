@@ -62,9 +62,9 @@ export type EndpointsServerRouteConfigModuleOptions = {
 
 const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
 
-// Helpers that discovery-evaluated modules (route and contract files) may use
-// through Nuxt auto-imports. Each needs a matching global shim while jiti
-// evaluates those modules, where Nuxt auto-imports do not exist.
+// Helpers that discovery-evaluated route modules may use through Nuxt
+// auto-imports. Each needs a matching global shim while jiti evaluates those
+// modules, where Nuxt auto-imports do not exist.
 const discoveryEvaluatedServerHelpers = [
   { name: 'defineRouteHandler', value: defineRouteHandler },
 ] as const

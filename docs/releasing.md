@@ -46,29 +46,41 @@ configure the Trusted Publisher and enable the variable for later versions.
 
 ## Prepare a release
 
-1. Update `package.json` to the intended version.
-2. Replace `Unreleased` in `CHANGELOG.md` with the release date.
-3. Run the full checks on Node 22:
+Use the repository release script from a clean `main` worktree. Before running
+it, put every user-visible change under `## Unreleased` in `CHANGELOG.md` and
+commit it.
 
-   ```bash
-   vp install --frozen-lockfile
-   vp run check
-   vp run build
-   vp run site:generate
-   ```
+Preview the version derived from commits since the previous tag:
 
-4. Preview the package contents without publishing:
+```bash
+node scripts/release.mjs --dry-run
+```
 
-   ```bash
-   vp pm pack --out /tmp/nuxt-endpoints.tgz
-   tar -tzf /tmp/nuxt-endpoints.tgz
-   ```
+Then run the complete release. This updates `package.json` and the changelog,
+runs formatting, lint, type checks, fixture checks, unit tests, build, and a
+fresh-app smoke test of the packed tarball. It commits the release preparation,
+pushes `main` and the tag, and creates the GitHub Release:
 
-5. Commit and push the release preparation.
-6. Ensure the release commit is contained in `main`.
-7. Create tag `v<version>` and publish the matching GitHub Release. Mark the
-   GitHub Release as a prerelease exactly when the package version contains a
-   SemVer prerelease suffix.
+```bash
+node scripts/release.mjs
+```
+
+The final prompt requires typing the exact version because publishing the
+GitHub Release starts the immutable npm release process. Pass an explicit
+version such as `0.12.0` only when the derived version is intentionally being
+overridden. Use `--no-publish` to prepare and commit without pushing; finish a
+prepared release with `--publish-only`.
+
+The browser E2E suite and documentation generation are not part of the local
+release script. Run them before releasing when their affected surfaces changed:
+
+```bash
+vp run test:e2e:browser
+vp run site:generate
+```
+
+CI repeats the full package checks, and the Pages workflow generates and
+deploys the documentation after `main` is pushed.
 
 ## Stage and approve
 
@@ -81,9 +93,12 @@ use the `next` dist-tag; other releases use `latest`.
 
 After the workflow succeeds:
 
-1. Inspect the staged package on npm.
-2. Approve it from a trusted maintainer session with 2FA.
-3. Verify the published version and dist-tag on npmjs.org.
+1. Sign in to npm and list the staged versions with `vp pm stage list`.
+2. Inspect the stage with `vp pm stage view <stage-id>` and, when needed,
+   download the exact tarball with `vp pm stage download <stage-id>`.
+3. Approve it from a trusted maintainer session with
+   `vp pm stage approve <stage-id>` and 2FA.
+4. Verify the published version and dist-tag on npmjs.org.
 
 ## Documentation deployment setup
 

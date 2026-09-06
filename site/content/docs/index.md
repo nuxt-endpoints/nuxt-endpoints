@@ -50,7 +50,9 @@ if (result.status === 404) {
 </script>
 ```
 
-Routes stay ordinary Nuxt server routes: plain HTTP, callable by mobile apps, other services, or `curl`, and documented via the generated OpenAPI document.
+The boundary stays an explicit, file-based Nuxt HTTP route, callable by mobile
+apps, other services, or `curl`, and documented through the generated OpenAPI
+document.
 
 ## Adopt at your own pace
 

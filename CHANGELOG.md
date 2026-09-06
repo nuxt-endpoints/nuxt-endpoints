@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- Replaced the obsolete builder-era idempotency design log with the current
+  `defineRouteHandler` contract, runtime-policy, lease, and storage model.
+- Corrected stale contributor, discovery, pagination, and release-process
+  guidance.
+
 ## 0.11.0 - 2026-09-06
 
 ### Added
@@ -12,11 +21,11 @@
 
 - **Breaking:** the idempotency authoring API now uses `idempotency: true` for
   the standard required `Idempotency-Key` contract. Object form is reserved for
-  exceptions such as `{ required: false }` or a custom `headerName`. Calling
-  `.idempotency()` and writing an empty object now default `required` to `true`
-  instead of `false`; optional mode must be explicit. The old normalized
-  `{ enabled: true, headerName, required }` spelling is accepted temporarily as
-  deprecated input, while `false` and `{ enabled: false }` are rejected.
+  exceptions such as `{ required: false }` or a custom `headerName`. An empty
+  object now defaults `required` to `true`; optional mode must be explicit. The
+  old normalized `{ enabled: true, headerName, required }` spelling is accepted
+  temporarily as deprecated input, while `false` and `{ enabled: false }` are
+  rejected.
 
 ### Fixed
 

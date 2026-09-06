@@ -2,7 +2,7 @@
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-09-02
+Last consolidated: 2026-09-07
 
 ## Product boundary
 
@@ -55,9 +55,10 @@ adapter and build-time metadata boundary.
   verified with the official Nuxt module.
 - Cursor pagination contracts that own their query/page envelope, runtime
   validation, OpenAPI projection, and typed Pinia Colada invocation.
-- Required idempotency keys generated when the request object is created and
-  reused by retries of that object.
-- Application-owned idempotency storage and central runtime policy.
+- `idempotency: true` authoring, required keys generated when the request
+  object is created, and reuse by retries of that object.
+- Application-owned idempotency storage, explicit public/authenticated scope,
+  and central runtime policy.
 - Global, path-prefix, and method response contracts from
   `server/routes.config.ts`, composed into client unions and OpenAPI without
   changing middleware execution.

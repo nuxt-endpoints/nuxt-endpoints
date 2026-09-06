@@ -63,9 +63,14 @@ const createPayment = useMutation(
 createPayment.mutate()
 ```
 
-One request object represents one logical mutation. Its automatically generated idempotency key remains fixed whenever that mutation is executed again. Create a new request object for a separate logical action.
+For a route with required idempotency, one request object represents one
+logical mutation. Its automatically generated key remains fixed whenever that
+object is executed again. Create a new request object for a separate logical
+action. Non-idempotent routes do not generate a key.
 
-When each `mutate(...)` call supplies different variables, create the endpoint request inside a normal Colada mutation function. Each invocation then receives a new idempotency key:
+When each `mutate(...)` call supplies different variables, create the endpoint
+request inside a normal Colada mutation function. For a required idempotent
+route, each invocation then receives a new key:
 
 ```ts
 const createUser = useMutation({

@@ -59,7 +59,7 @@ Request schemas, response schemas, summaries, and route paths are collected from
 
 Application-wide and path-scoped responses declared in [`server/routes.config.ts`](/docs/responses#application-and-middleware-responses) are merged into the same operations. This keeps middleware and infrastructure outcomes aligned with the status unions exposed by `$endpoint`.
 
-A [media response](/docs/endpoints#non-json-responses) appears like any other status. Its content keys are the declared `media` — one entry per type when it declares several — and each schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload, or one chunk of it, in more detail. A validated status labelled with a `+json` profile is keyed by that profile instead of `application/json`.
+A [media response](/docs/endpoints#media-responses) appears like any other status. Its content keys are the declared `media` — one entry per type when it declares several — and each schema is the opaque `{ type: 'string', contentEncoding: 'binary' }` unless the declaration supplies a `schema` to document the payload, or one chunk of it, in more detail. A validated status labelled with a `+json` profile is keyed by that profile instead of `application/json`.
 
 ## Nitro's own OpenAPI
 
@@ -76,8 +76,8 @@ Keep Nitro's enabled only if you want its bundled UI. Nothing stops you from poi
 Some responses the runtime produces itself, without the handler being involved, and they are in the document because a consumer cannot detect them otherwise:
 
 - `400` once the endpoint validates any request part;
-- `415` when the request body is a [media-type map](/docs/endpoints#media-type-request-bodies);
-- `406` when the endpoint [negotiates](/docs/endpoints#several-representations-of-one-status);
+- `415` when the request body is a [media-type map](/docs/endpoints#request-media-types);
+- `406` when the endpoint [negotiates a media response](/docs/endpoints#media-responses);
 - `400`, `409`, and `422` for an [idempotent](/docs/idempotency) endpoint.
 
 Each is derived from the contract alone, so the document lists exactly what that endpoint's configuration makes reachable. Declaring one of those statuses yourself does not hide the generated shape — the two are merged as a `oneOf`, so the document keeps describing both.
