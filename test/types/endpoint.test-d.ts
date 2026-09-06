@@ -23,6 +23,7 @@ describe('defineEndpoint handler types', () => {
       },
       scope: ({ event }) => String(event.context.tenant),
       authorization: 'middleware',
+      required: false,
     })
     const required = base.idempotency({
       storage: () => storage,
@@ -48,7 +49,7 @@ describe('defineEndpoint handler types', () => {
     const central = endpoint.idempotency()
 
     expectTypeOf(central.definition.idempotency).toEqualTypeOf<
-      EndpointIdempotencyMetadata<'Idempotency-Key', false>
+      EndpointIdempotencyMetadata<'Idempotency-Key', true>
     >()
   })
 
@@ -77,6 +78,19 @@ describe('defineEndpoint handler types', () => {
       scope: () => 'public',
       // @ts-expect-error authorization must be 'middleware' or a callback.
       authorization: 'not-middleware',
+    })
+  })
+
+  it('accepts explicit public/global sentinels and rejects unknown ones', () => {
+    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+    endpoint.idempotency({ scope: 'global', authorization: 'public' })
+    endpoint.idempotency({
+      // @ts-expect-error only the explicit global sentinel or a callback is supported.
+      scope: 'shared',
+    })
+    endpoint.idempotency({
+      // @ts-expect-error only public, middleware, or a callback is supported.
+      authorization: 'anonymous',
     })
   })
 

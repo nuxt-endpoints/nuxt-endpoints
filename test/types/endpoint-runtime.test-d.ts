@@ -2,6 +2,32 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { defineEndpointRuntime } from '../../src/runtime'
 
 describe('defineEndpointRuntime route overrides', () => {
+  it('accepts explicit public idempotency policy sentinels', () => {
+    defineEndpointRuntime({
+      idempotency: {
+        storage: () => ({}) as import('../../src/runtime').IdempotencyStorage,
+        scope: 'global',
+        authorization: 'public',
+      },
+    })
+    defineEndpointRuntime({
+      idempotency: {
+        storage: () => ({}) as import('../../src/runtime').IdempotencyStorage,
+        // @ts-expect-error only global or a resolver is a valid scope.
+        scope: 'shared',
+        authorization: 'public',
+      },
+    })
+    defineEndpointRuntime({
+      idempotency: {
+        storage: () => ({}) as import('../../src/runtime').IdempotencyStorage,
+        scope: 'global',
+        // @ts-expect-error only public, middleware, or a callback is valid.
+        authorization: 'anonymous',
+      },
+    })
+  })
+
   it('accepts only the public response-validation modes', () => {
     defineEndpointRuntime({ validation: { response: 'development' } })
     defineEndpointRuntime({ validation: { response: 'always' } })

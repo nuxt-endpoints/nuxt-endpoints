@@ -175,15 +175,27 @@ describe('single-define endpoint types', () => {
     })
   })
 
-  it('N: hand-written idempotency metadata is still rejected', () => {
-    defineEndpoint({
-      // @ts-expect-error idempotency metadata is created only by .idempotency().
+  it('N: accepts the deprecated normalized metadata spelling temporarily', () => {
+    const legacy = defineEndpoint({
+      body: z.object({ amount: z.number() }),
       idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
       handler: () => ({ ok: true }),
     })
+    expectTypeOf<
+      (typeof legacy)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
   })
 
   it('O: the idempotency slot carries options and lands as metadata', () => {
+    const shorthand = defineEndpoint({
+      body: z.object({ amount: z.number() }),
+      idempotency: true,
+      handler: () => ({ ok: true }),
+    })
+    expectTypeOf<
+      (typeof shorthand)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
+
     const merged = defineEndpoint({
       body: z.object({ amount: z.number() }),
       idempotency: {
@@ -200,7 +212,7 @@ describe('single-define endpoint types', () => {
 
     expectTypeOf<
       (typeof merged)['__endpoint_contract__']['definition']['idempotency']
-    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: false }>()
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
 
     // An empty slot still enables idempotency, exactly as `.idempotency()` with
     // no arguments does - it must not collapse the way an absent slot does.
@@ -212,7 +224,7 @@ describe('single-define endpoint types', () => {
 
     expectTypeOf<
       (typeof bare)['__endpoint_contract__']['definition']['idempotency']
-    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: false }>()
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
 
     // ...and without the slot the assembled definition carries `undefined`, so
     // nothing downstream sees idempotency metadata.
@@ -224,6 +236,15 @@ describe('single-define endpoint types', () => {
     expectTypeOf<
       (typeof none)['__endpoint_contract__']['definition']['idempotency']
     >().toEqualTypeOf<undefined>()
+
+    const optional = defineEndpoint({
+      body: z.object({ amount: z.number() }),
+      idempotency: { required: false },
+      handler: () => ({ ok: true }),
+    })
+    expectTypeOf<
+      (typeof optional)['__endpoint_contract__']['definition']['idempotency']
+    >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: false }>()
   })
 
   it('O2: a custom headerName and required: true are reflected in the type', () => {

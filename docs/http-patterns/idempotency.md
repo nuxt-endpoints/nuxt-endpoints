@@ -52,10 +52,7 @@ NE already has the intended split:
 
 ```ts
 export default defineRouteHandler({
-  idempotency: {
-    enabled: true,
-    required: true,
-  },
+  idempotency: true,
   validate: {
     body: CreatePayment,
     response: { 201: Payment },
@@ -75,10 +72,9 @@ when a natural key exists.
 
 ## 4. Server conformance
 
-TypeScript can constrain the feature to supported mutation methods, carry the
-header name/required flag into generated clients, and reject runtime callbacks
-from the static contract. It can add the framework `400`, `409`, and `422`
-branches to the client result.
+TypeScript carries the header name/required flag into generated clients and
+rejects runtime callbacks from the static contract. It can add the framework
+`400`, `409`, and `422` branches to the client result.
 
 Runtime code must validate the header, calculate the fingerprint, atomically
 claim storage, fence leases, detect mismatched payloads, record a replay-safe

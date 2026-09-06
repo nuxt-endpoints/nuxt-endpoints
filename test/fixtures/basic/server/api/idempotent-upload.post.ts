@@ -15,11 +15,7 @@ export default defineRouteHandler({
       201: z.object({ executionCount: z.number(), name: z.string() }),
     },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => {
     executionCount += 1
     return event.respond(201, {

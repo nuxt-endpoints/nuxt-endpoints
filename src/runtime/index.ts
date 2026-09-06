@@ -85,6 +85,7 @@ export type {
   EndpointContext,
   EndpointDefinition,
   EndpointHandler,
+  EndpointIdempotencyInput,
   EndpointIdempotencyMetadata,
   EndpointRequestContract,
   EndpointResponder,
@@ -97,6 +98,7 @@ export type {
   HttpMethod,
   IsEndpointBodyMediaTypeMap,
   NormalizeResponses,
+  NormalizeEndpointIdempotencyInput,
   ResponseBody,
   ResponseBodyForStatus,
   ResponseContract,
@@ -156,6 +158,8 @@ export type {
   EndpointIdempotencyContext,
   EndpointIdempotencyOptions,
   EndpointIdempotencyRuntimeMarker,
+  IdempotencyGlobalScope,
+  IdempotencyPublicAuthorization,
   IdempotencyProblem,
 } from './endpoint'
 export { defineIdempotencyPolicy } from './idempotency-policy'

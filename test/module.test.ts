@@ -420,9 +420,7 @@ describe('Nitro route contract provider', () => {
       ])
 
     it('rejects an idempotent route, which needs a header a form cannot send', () => {
-      expect(
-        index({ idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true } }),
-      ).toThrow(/cannot send an Idempotency-Key header/)
+      expect(index({ idempotency: true })).toThrow(/cannot send an Idempotency-Key header/)
     })
 
     it('rejects a required request header', () => {

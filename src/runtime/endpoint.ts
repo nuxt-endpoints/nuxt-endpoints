@@ -14,6 +14,7 @@ import type {
   ResponseContract,
   UnknownIfNever,
   WidenCapturedReturn,
+  NormalizeEndpointIdempotencyInput,
 } from './contract'
 import {
   formDataToPlainObject,
@@ -45,6 +46,7 @@ import type { RouteContractValidator, RuntimeEvent } from './platform'
 import { createIdempotencyInterceptor } from './idempotency-interceptor'
 import type { EndpointIdempotencyPolicy } from './idempotency-policy'
 import type { IdempotencyRuntimeOptionKey, IdempotencyStorage } from './idempotency'
+import { defaultIdempotencyHeaderName, isValidHttpHeaderName } from './idempotency-contract'
 import { negotiateMediaType } from './accept'
 import { isReservedEndpointName, isValidEndpointName } from './endpoint-name'
 import {
@@ -109,15 +111,22 @@ export type EndpointIdempotencyContext<DEFINITION extends EndpointDefinition> = 
  * typically by server middleware that runs before this handler."
  */
 export type IdempotencyAuthorizationDelegation = 'middleware'
+export type IdempotencyPublicAuthorization = 'public'
+export type IdempotencyGlobalScope = 'global'
 
 export type EndpointIdempotencyOptions<DEFINITION extends EndpointDefinition> = {
+  /** @deprecated Omit this field; calling `.idempotency()` enables the protocol. */
+  enabled?: true
   // storage/scope/authorization may instead be supplied by the central policy
-  // in server/endpoints/idempotency.ts, so they are optional here; build-time
+  // in server/endpoints/runtime.ts, so they are optional here; build-time
   // and startup validation enforce that every endpoint ends up with all three.
   storage?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<IdempotencyStorage>
-  scope?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<string>
+  scope?:
+    | IdempotencyGlobalScope
+    | ((context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<string>)
   authorization?:
     | IdempotencyAuthorizationDelegation
+    | IdempotencyPublicAuthorization
     | ((context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<void>)
   fingerprint?: (context: EndpointIdempotencyContext<DEFINITION>) => MaybePromise<unknown>
   headerName?: string
@@ -169,9 +178,10 @@ type BuildContextResult<DEFINITION extends EndpointDefinition> =
 
 export type NormalizedEndpointIdempotencyOptions = {
   storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope?: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  scope?: IdempotencyGlobalScope | ((context: RuntimeIdempotencyContext) => MaybePromise<string>)
   authorization?:
     | IdempotencyAuthorizationDelegation
+    | IdempotencyPublicAuthorization
     | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
   fingerprint?: (context: RuntimeIdempotencyContext) => MaybePromise<unknown>
   headerName: string
@@ -192,10 +202,8 @@ export type EndpointIdempotencyRuntimeMarker = Record<IdempotencyRuntimeOptionKe
 // validation), which both reject hand-written idempotency metadata that
 // bypassed `.idempotency()` and therefore carries no runtime marker.
 export function idempotencyMetadataWithoutRuntimeMessage(subject: string): string {
-  return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Use DefinedEndpoint.idempotency() instead of writing metadata directly.`
+  return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Declare idempotency: true in defineRouteHandler() and configure server/endpoints/runtime.ts instead of writing normalized metadata directly.`
 }
-
-const defaultIdempotencyHeaderName = 'Idempotency-Key'
 
 type HeaderNameFromOptions<OPTIONS> = OPTIONS extends { headerName: infer NAME extends string }
   ? NAME
@@ -203,7 +211,7 @@ type HeaderNameFromOptions<OPTIONS> = OPTIONS extends { headerName: infer NAME e
 
 type RequiredFromOptions<OPTIONS> = OPTIONS extends { required: infer REQUIRED extends boolean }
   ? REQUIRED
-  : false
+  : true
 
 export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   public readonly __idempotency_runtime_marker__: false | EndpointIdempotencyRuntimeMarker
@@ -237,7 +245,7 @@ export class DefinedEndpoint<const DEFINITION extends EndpointDefinition> {
   // the default instead of the argument.
   idempotency(): DefinedEndpoint<
     DEFINITION & {
-      idempotency: EndpointIdempotencyMetadata<typeof defaultIdempotencyHeaderName, false>
+      idempotency: EndpointIdempotencyMetadata<typeof defaultIdempotencyHeaderName, true>
     }
   >
   idempotency<const OPTIONS extends EndpointIdempotencyOptions<DEFINITION>>(
@@ -677,10 +685,7 @@ export type AssembledEndpointContract<
  */
 export type IdempotencyMetadataFromOptions<IDEMPOTENCY> = IDEMPOTENCY extends undefined
   ? undefined
-  : EndpointIdempotencyMetadata<
-      HeaderNameFromOptions<IDEMPOTENCY>,
-      RequiredFromOptions<IDEMPOTENCY>
-    >
+  : NormalizeEndpointIdempotencyInput<IDEMPOTENCY>
 
 export type AssembledEndpointDefinition<
   PARAMS extends ValidatorSchema | undefined,
@@ -742,7 +747,7 @@ export function defineEndpoint<
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
   const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
-  const REQUIRED extends boolean = false,
+  const REQUIRED extends boolean = true,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
     PARAMS,
     QUERY,
@@ -761,12 +766,23 @@ export function defineEndpoint<
   definition: Partial<
     AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
-    idempotency: EndpointIdempotencyOptions<
-      AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
-    > & {
-      headerName?: HEADER_NAME
-      required?: REQUIRED
-    }
+    idempotency:
+      | true
+      | (EndpointIdempotencyOptions<
+          AssembledEndpointContract<
+            PARAMS,
+            QUERY,
+            HEADERS,
+            BODY,
+            RESPONSES,
+            SUMMARY,
+            DESCRIPTION,
+            TAGS
+          >
+        > & {
+          headerName?: HEADER_NAME
+          required?: REQUIRED
+        })
     handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
   },
   options?: EndpointRuntimeOptions,
@@ -850,7 +866,7 @@ export function defineEndpoint<
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
   const HEADER_NAME extends string = typeof defaultIdempotencyHeaderName,
-  const REQUIRED extends boolean = false,
+  const REQUIRED extends boolean = true,
   DEFINITION extends EndpointDefinition = AssembledEndpointDefinition<
     PARAMS,
     QUERY,
@@ -869,12 +885,23 @@ export function defineEndpoint<
   definition: Partial<
     AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
   > & {
-    idempotency: EndpointIdempotencyOptions<
-      AssembledEndpointContract<PARAMS, QUERY, HEADERS, BODY, RESPONSES, SUMMARY, DESCRIPTION, TAGS>
-    > & {
-      headerName?: HEADER_NAME
-      required?: REQUIRED
-    }
+    idempotency:
+      | true
+      | (EndpointIdempotencyOptions<
+          AssembledEndpointContract<
+            PARAMS,
+            QUERY,
+            HEADERS,
+            BODY,
+            RESPONSES,
+            SUMMARY,
+            DESCRIPTION,
+            TAGS
+          >
+        > & {
+          headerName?: HEADER_NAME
+          required?: REQUIRED
+        })
     handler: CapturedEndpointHandler<DEFINITION, ACTUAL_RETURN>
   },
   options?: EndpointRuntimeOptions,
@@ -921,7 +948,7 @@ export function defineEndpoint(
     handler?: (context: never) => unknown
     // The merged form's slot carries idempotency *options*; the metadata is
     // produced by `.idempotency()` below, never written by a caller.
-    idempotency?: EndpointIdempotencyOptions<EndpointDefinition>
+    idempotency?: true | EndpointIdempotencyOptions<EndpointDefinition>
   },
   options?: EndpointRuntimeOptions,
 ): unknown {
@@ -941,7 +968,12 @@ export function defineEndpoint(
   // deliberate: `.idempotency()` already normalizes the options, asserts the
   // fingerprint is determinable, and creates the runtime marker - in that order
   // and before any handler is attached.
-  const endpoint = idempotency === undefined ? base : base.idempotency(idempotency as never)
+  const endpoint =
+    idempotency === undefined
+      ? base
+      : idempotency === true
+        ? base.idempotency()
+        : base.idempotency(idempotency as never)
   // The merged form hands back the event handler, which carries the
   // same `__endpoint_contract__` marker discovery already reads off a route
   // module's default export.
@@ -972,14 +1004,25 @@ function validateEndpointName(name: EndpointDefinition['name']): void {
 function validateEndpointIdempotencyDefinition(
   idempotency: EndpointDefinition['idempotency'],
 ): void {
-  if (typeof idempotency !== 'object' || idempotency === null) return
+  if (idempotency === undefined) return
+  if (typeof idempotency !== 'object' || idempotency === null) {
+    throw new TypeError('Endpoint idempotency metadata must be normalized before execution.')
+  }
 
   for (const runtimeOption of idempotencyRouteContractForbiddenOptionKeys) {
     if (runtimeOption in idempotency) {
       throw new TypeError(
-        `Runtime-only idempotency option \`${runtimeOption}\` cannot be declared in a route contract. Keep only enabled, headerName, and required in the contract.`,
+        `Runtime-only idempotency option \`${runtimeOption}\` cannot be declared in a route contract. Use idempotency: true, or an object containing only headerName and required.`,
       )
     }
+  }
+  if (
+    idempotency.enabled !== true ||
+    typeof idempotency.headerName !== 'string' ||
+    !isValidHttpHeaderName(idempotency.headerName) ||
+    typeof idempotency.required !== 'boolean'
+  ) {
+    throw new TypeError('Endpoint idempotency metadata is invalid.')
   }
 }
 
@@ -1448,6 +1491,12 @@ function assertIdempotencyFingerprintIsDeterminable(
 function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
   options: EndpointIdempotencyOptions<DEFINITION>,
 ): NormalizedEndpointIdempotencyOptions {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new TypeError('Idempotency options must be an object')
+  }
+  if (options.enabled !== undefined && options.enabled !== true) {
+    throw new TypeError('idempotency.enabled can only be true; omit idempotency to disable it.')
+  }
   const headerName = options.headerName ?? defaultIdempotencyHeaderName
   if (!isValidHttpHeaderName(headerName)) {
     throw new TypeError('Idempotency headerName must be a valid HTTP header field name')
@@ -1474,7 +1523,7 @@ function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
     authorization: runtimeCallbacks.authorization,
     fingerprint: runtimeCallbacks.fingerprint,
     headerName,
-    required: options.required ?? false,
+    required: options.required ?? true,
     leaseTtlMs:
       options.leaseTtlMs !== undefined
         ? validateIdempotencyTtl(options.leaseTtlMs, 'leaseTtlMs')
@@ -1485,10 +1534,6 @@ function normalizeIdempotencyOptions<DEFINITION extends EndpointDefinition>(
         : undefined,
     replayStatuses: [...replayStatuses],
   }
-}
-
-function isValidHttpHeaderName(value: string): boolean {
-  return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value)
 }
 
 function omitRequestHeader(

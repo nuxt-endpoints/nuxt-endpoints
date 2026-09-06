@@ -1,7 +1,11 @@
 import { createApp, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointRuntime } from './internal-runtime'
+import {
+  createMemoryIdempotencyStorage,
+  defineEndpoint,
+  defineEndpointRuntime,
+} from './internal-runtime'
 import type { EndpointRuntime } from './internal-runtime'
 
 async function request(handler: unknown, url: string, init?: RequestInit): Promise<Response> {
@@ -188,6 +192,25 @@ describe('defineEndpointRuntime', () => {
         },
       }),
     ).toThrow(/\.idempotency\.storage is not supported/i)
+  })
+
+  it('validates public idempotency policy sentinels at definition time', () => {
+    const storage = () => createMemoryIdempotencyStorage()
+    expect(() =>
+      defineEndpointRuntime({
+        idempotency: { storage, scope: 'global', authorization: 'public' },
+      }),
+    ).not.toThrow()
+    expect(() =>
+      defineEndpointRuntime({
+        idempotency: { storage, scope: 'shared', authorization: 'public' },
+      } as never),
+    ).toThrow(/scope must be "global" or a function/i)
+    expect(() =>
+      defineEndpointRuntime({
+        idempotency: { storage, scope: 'global', authorization: 'anonymous' },
+      } as never),
+    ).toThrow(/authorization must be "public", "middleware", or a function/i)
   })
 
   it('rejects a malformed openApi section', () => {

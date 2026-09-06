@@ -4,7 +4,7 @@ import { getPlaygroundIdempotencyStorage } from '../utils/sqlite-idempotency-sto
 export default defineEndpointRuntime({
   idempotency: {
     storage: getPlaygroundIdempotencyStorage,
-    scope: () => 'playground',
-    authorization: 'middleware',
+    scope: 'global',
+    authorization: 'public',
   },
 })

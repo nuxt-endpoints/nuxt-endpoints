@@ -112,11 +112,7 @@ export default defineRouteHandler({
       201: z.object({ message: z.string() }),
     },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => event.respond(201, event.validated.body),
 })
 `,

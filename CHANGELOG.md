@@ -4,6 +4,10 @@
 
 ### Added
 
+- Idempotency runtime policy now accepts explicit public-operation sentinels:
+  `scope: 'global'` selects one shared namespace and
+  `authorization: 'public'` states that replay needs no authorization callback.
+
 - Cursor pagination is now a contract constructor: `pagination: { kind:
 'cursor', item: Article }` generates the optional `cursor`/`limit` query,
   the typed `{ items, nextCursor? }` response, runtime validation, OpenAPI,
@@ -19,6 +23,14 @@
   expressible without putting callbacks in the build-time contract.
 
 ### Changed
+
+- **Breaking:** the idempotency authoring API now uses `idempotency: true` for
+  the standard required `Idempotency-Key` contract. Object form is reserved for
+  exceptions such as `{ required: false }` or a custom `headerName`. Calling
+  `.idempotency()` and writing an empty object now default `required` to `true`
+  instead of `false`; optional mode must be explicit. The old normalized
+  `{ enabled: true, headerName, required }` spelling is accepted temporarily as
+  deprecated input, while `false` and `{ enabled: false }` are rejected.
 
 - Response body and declared-header schema validation now defaults to
   development builds instead of traversing every production response. Set

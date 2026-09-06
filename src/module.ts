@@ -36,6 +36,7 @@ import { inspectValidatorInputObject, inspectValidatorOutputObject } from './run
 import { cursorPaginationRouteMetadata } from './runtime/pagination'
 import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
 import { isReservedEndpointName, isValidEndpointName } from './runtime/endpoint-name'
+import { normalizeEndpointIdempotencyMetadata } from './runtime/idempotency-contract'
 
 export type EndpointsModuleOptions = {
   openApi?: boolean | EndpointsOpenApiModuleOptions
@@ -797,19 +798,8 @@ function assertNoIdempotencyHeaderSchemaCollision(headers: unknown, headerName: 
 }
 
 function parseEndpointIdempotencyMetadata(value: unknown): EndpointIdempotencyMetadata | undefined {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('enabled' in value) ||
-    value.enabled !== true ||
-    !('headerName' in value) ||
-    typeof value.headerName !== 'string' ||
-    !('required' in value) ||
-    typeof value.required !== 'boolean'
-  ) {
-    return undefined
-  }
-  return { enabled: true, headerName: value.headerName, required: value.required }
+  if (value === undefined) return undefined
+  return normalizeEndpointIdempotencyMetadata(value)
 }
 
 // Exported for focused unit testing of option defaulting/normalization

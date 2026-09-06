@@ -6,7 +6,8 @@ Last consolidated: 2026-07-21
 
 Nuxt Endpoints deliberately does not depend on a Redis or database client. A
 production application implements `IdempotencyStorage` with the infrastructure
-it already owns, then supplies one shared adapter to `.idempotency()`.
+it already owns, then supplies one shared adapter through
+`defineEndpointRuntime()`.
 
 This document describes the atomic operations an adapter must implement. The
 pseudocode is not a copy-paste production adapter. Client-specific result
@@ -253,11 +254,7 @@ export default defineRouteHandler({
     body: GrantPointsBody,
     response: { 201: GrantPointsResult },
   },
-  idempotency: {
-    enabled: true,
-    headerName: 'Idempotency-Key',
-    required: true,
-  },
+  idempotency: true,
   handler: (event) => event.respond(201, grantPoints(event.validated.body)),
 })
 ```

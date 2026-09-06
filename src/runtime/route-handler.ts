@@ -3,10 +3,12 @@ import type {
   EndpointBodyMediaTypeMap,
   EndpointContext,
   EndpointDefinition,
+  EndpointIdempotencyInput,
   EndpointIdempotencyMetadata,
   EndpointResponsesContract,
   HandlerReturn,
   HasEndpointResponses,
+  NormalizeEndpointIdempotencyInput,
   WidenCapturedReturn,
 } from './contract'
 import type { EndpointFormContract } from './contract'
@@ -31,6 +33,7 @@ import {
   type EndpointRuntimeOptions,
   validateEndpointDefinition,
 } from './endpoint'
+import { normalizeEndpointIdempotencyMetadata } from './idempotency-contract'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './endpoint-methods'
 import type { EndpointRuntime } from './endpoint-runtime'
 import type { RuntimeContractEvent, RuntimeEvent } from './platform'
@@ -49,6 +52,14 @@ type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
 // The shared key union also drives JavaScript definition-time validation.
 type RouteContractIdempotency = {
   [KEY in IdempotencyRouteContractForbiddenOptionKey]?: never
+}
+
+type RouteContractIdempotencyInput =
+  | true
+  | (Exclude<EndpointIdempotencyInput, true> & RouteContractIdempotency)
+
+type RouteContractIdempotencyConstraint<Input> = {
+  idempotency?: Input extends object ? Input & RouteContractIdempotency : Input
 }
 
 export type EndpointRouteEvent<DEFINITION extends EndpointDefinition = EndpointDefinition> =
@@ -85,7 +96,7 @@ type RouteHandlerInput<
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
-  idempotency?: IDEMPOTENCY & RouteContractIdempotency
+  idempotency?: IDEMPOTENCY
   /**
    * Projects this endpoint into a native `<form>` on a page. The constraint
    * refuses a contract a browser could not produce a request for - see
@@ -94,14 +105,14 @@ type RouteHandlerInput<
   form?: FORM & NativeFormProjectionConstraint<FORM, QUERY, HEADERS, BODY, IDEMPOTENCY>
   pagination?: PAGINATION & PaginationContractConstraint<PAGINATION, QUERY, RESPONSES>
   handler: CapturedRouteHandler<NoInfer<DEFINITION>, ACTUAL_RETURN>
-}
+} & RouteContractIdempotencyConstraint<IDEMPOTENCY>
 
 type RuntimeMethodMetadata = {
   name?: string
   summary?: string
   description?: string
   tags?: string[]
-  idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
+  idempotency?: RouteContractIdempotencyInput
 }
 
 type RuntimeMethodValidation = RouteValidation<
@@ -118,6 +129,7 @@ type RuntimeMethodDefinition = RuntimeMethodMetadata & {
 }
 
 type RuntimeMethodsDefinition = {
+  handler?: never
   name?: never
   params?: ValidatorSchema
   validate?: never
@@ -177,7 +189,7 @@ type EndpointDefinitionOf<Method, Params> = {
   summary: PropertyOf<Method, 'summary'>
   description: PropertyOf<Method, 'description'>
   tags: PropertyOf<Method, 'tags'>
-  idempotency: PropertyOf<Method, 'idempotency'>
+  idempotency: NormalizeEndpointIdempotencyInput<PropertyOf<Method, 'idempotency'>>
   pagination: PaginationOf<Method>
 }
 
@@ -206,7 +218,7 @@ type ResolvedRuntimeMethodDefinition<
   summary: PropertyOf<Metadata, 'summary'>
   description: PropertyOf<Metadata, 'description'>
   tags: PropertyOf<Metadata, 'tags'>
-  idempotency: PropertyOf<Metadata, 'idempotency'>
+  idempotency: NormalizeEndpointIdempotencyInput<PropertyOf<Metadata, 'idempotency'>>
   pagination: Pagination
 }
 
@@ -263,6 +275,16 @@ type RouteMethodRequest<Definition> = {
   >
 }[RouteMethodKeys<Definition>]
 
+type NormalizeRouteAuthoringDefinition<Definition> = Omit<Definition, 'idempotency'> & {
+  idempotency: NormalizeEndpointIdempotencyInput<PropertyOf<Definition, 'idempotency'>>
+}
+
+type NormalizeMethodRouteAuthoringDefinition<Definition> = {
+  [Key in keyof Definition]: Key extends RouteMethodKey
+    ? NormalizeRouteAuthoringDefinition<Definition[Key]>
+    : Definition[Key]
+}
+
 type RouteSchemaInput<Schema> = Schema extends ValidatorSchema ? InferInput<Schema> : never
 
 type RouteBodyInput<Body> = Body extends ValidatorSchema
@@ -278,7 +300,7 @@ type RouteBodyInput<Body> = Body extends ValidatorSchema
 export type EndpointRouteMethodsEventHandler<Definition> = ((
   event: RuntimeContractEvent<RouteMethodRequest<Definition>>,
 ) => Promise<RouteMethodSuccessBody<Definition>>) & {
-  readonly '~routeDef': Definition
+  readonly '~routeDef': NormalizeMethodRouteAuthoringDefinition<Definition>
   __endpoint_contracts__: RouteMethodContracts<Definition>
   __endpoint_method_handler_returns__: RouteMethodHandlerReturns<Definition>
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
@@ -337,7 +359,7 @@ type EndpointRouteEventHandler<
       ? Resolved
       : EndpointDefinition,
 > = ((event: RuntimeContractEvent<EndpointRouteRequest<ResolvedDefinition>>) => Promise<Return>) & {
-  readonly '~routeDef': Definition
+  readonly '~routeDef': NormalizeRouteAuthoringDefinition<Definition>
 }
 
 type AssembledRouteDefinition<
@@ -361,7 +383,11 @@ type AssembledRouteDefinition<
   SUMMARY,
   DESCRIPTION,
   TAGS
-> & { idempotency: IDEMPOTENCY; form: FORM; pagination: PAGINATION }
+> & {
+  idempotency: NormalizeEndpointIdempotencyInput<IDEMPOTENCY>
+  form: FORM
+  pagination: PAGINATION
+}
 
 type CursorPaginatedRouteHandlerInput<
   PARAMS,
@@ -384,12 +410,12 @@ type CursorPaginatedRouteHandlerInput<
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
-  idempotency?: IDEMPOTENCY & RouteContractIdempotency
+  idempotency?: IDEMPOTENCY
   form?: FORM & NativeFormProjectionConstraint<FORM, QUERY, HEADERS, BODY, IDEMPOTENCY>
   pagination: EndpointCursorPaginationContract<ITEM> &
     PaginationContractConstraint<EndpointCursorPaginationContract<ITEM>, QUERY, RESPONSES>
   handler: CapturedRouteHandler<NoInfer<DEFINITION>, ACTUAL_RETURN>
-}
+} & RouteContractIdempotencyConstraint<IDEMPOTENCY>
 
 /**
  * Nuxt Endpoints adapter for H3's unified route-handler authoring shape.
@@ -405,8 +431,7 @@ export function defineRouteHandler<
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
-    undefined,
+  const IDEMPOTENCY extends RouteContractIdempotencyInput | undefined = undefined,
   const FORM extends EndpointFormContract | undefined = undefined,
   const ITEM extends ValidatorSchema = ValidatorSchema,
   const ACTUAL_RETURN extends DeepReadonly<
@@ -468,8 +493,7 @@ export function defineRouteHandler<
   const SUMMARY extends string | undefined = undefined,
   const DESCRIPTION extends string | undefined = undefined,
   TAGS extends string[] | undefined = undefined,
-  const IDEMPOTENCY extends (EndpointIdempotencyMetadata & RouteContractIdempotency) | undefined =
-    undefined,
+  const IDEMPOTENCY extends RouteContractIdempotencyInput | undefined = undefined,
   const FORM extends EndpointFormContract | undefined = undefined,
   const PAGINATION extends EndpointPaginationContract | undefined = undefined,
   DEFINITION extends EndpointDefinition = AssembledRouteDefinition<
@@ -549,7 +573,11 @@ export function defineRouteHandler<
     PAGINATION,
     DEFINITION,
     ACTUAL_RETURN
-  > & { idempotency: IDEMPOTENCY; form: FORM; pagination: PAGINATION },
+  > & {
+    idempotency: NormalizeEndpointIdempotencyInput<IDEMPOTENCY>
+    form: FORM
+    pagination: PAGINATION
+  },
   EndpointHandlerSuccessBody<
     DEFINITION,
     HasEndpointResponses<DEFINITION> extends true
@@ -630,10 +658,12 @@ export function defineRouteHandler<
   const Definition extends Record<string, unknown> = Record<never, never>,
 >(
   definition: Definition & {
+    /** A method group contains handlers only inside method entries. */
+    handler?: never
     /** A name identifies one HTTP method, so declare it inside the method entry. */
     name?: never
     params?: Params
-    idempotency?: EndpointIdempotencyMetadata & RouteContractIdempotency
+    idempotency?: RouteContractIdempotencyInput
     /** A method group has no root pagination contract. */
     pagination?: never
     /** Request validation is per method: declare it inside each method entry. */
@@ -761,6 +791,7 @@ function toEndpointDefinition(
   const responses = normalizeResponses(validate?.response)
   const contract: EndpointDefinition = {
     ...metadata,
+    idempotency: normalizeEndpointIdempotencyMetadata(metadata.idempotency),
     params,
     query,
     headers: validate?.headers,

@@ -299,7 +299,7 @@ type EndpointIdempotencyMetadata<HeaderName extends string, Required extends boo
 ```
 
 The method return type preserved the configured string and boolean literals;
-omitting `required` normalized its metadata type to `false` rather than
+omitting `required` originally normalized its metadata type to `false` rather than
 `boolean`. That is what let generated calls distinguish required and optional
 keys.
 
@@ -338,6 +338,13 @@ Defaults:
 - `replayTtlMs`: `86_400_000`;
 - `replayStatuses`: every successful `2xx` result returned by the handler;
 - `fingerprint`: validated params, query, and body with no headers/event state.
+
+This optional-by-default builder behavior was later replaced by the current
+authoring API: `idempotency: true`, `.idempotency()`, and an empty options
+object all mean the standard required `Idempotency-Key` contract. Optional mode
+is now written explicitly as `{ required: false }`. The normalized
+`{ enabled, headerName, required }` object remains internal metadata; see the
+public guide for current usage.
 
 `authorization` has no implicit default. Every idempotent endpoint must either
 supply a callback that runs on every request, including replay, or explicitly

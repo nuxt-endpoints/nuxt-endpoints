@@ -173,6 +173,45 @@ export type EndpointIdempotencyMetadata<
 }
 
 /**
+ * Serializable route-authoring input for HTTP idempotency.
+ *
+ * `enabled` is retained only as a deprecated compatibility spelling. Presence
+ * of the `idempotency` property enables the protocol, so `false` is
+ * intentionally not representable.
+ */
+export type EndpointIdempotencyInput =
+  | true
+  | {
+      /** @deprecated Omit this field; the idempotency declaration is the opt-in. */
+      enabled?: true
+      headerName?: string
+      /** Defaults to true. Write false only for an optional key. */
+      required?: boolean
+    }
+
+type IdempotencyHeaderNameFromInput<INPUT> = INPUT extends {
+  headerName: infer NAME extends string
+}
+  ? NAME
+  : 'Idempotency-Key'
+
+type IdempotencyRequiredFromInput<INPUT> = INPUT extends {
+  required: infer REQUIRED extends boolean
+}
+  ? REQUIRED
+  : true
+
+/** Converts authoring syntax into the metadata consumed after discovery. */
+export type NormalizeEndpointIdempotencyInput<INPUT> = INPUT extends undefined
+  ? undefined
+  : INPUT extends EndpointIdempotencyInput
+    ? EndpointIdempotencyMetadata<
+        IdempotencyHeaderNameFromInput<INPUT>,
+        IdempotencyRequiredFromInput<INPUT>
+      >
+    : never
+
+/**
  * Declares that this endpoint can also be reached by a native `<form>`.
  *
  * Deliberately static, so the whole thing survives the build-time contract

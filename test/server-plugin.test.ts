@@ -430,7 +430,7 @@ describe('idempotency policy module validation at Nitro startup', () => {
     const plugin = await import('../src/runtime/server-plugin')
     const runPlugin = plugin.default as unknown as () => Promise<void>
     await expect(runPlugin()).rejects.toThrow(
-      '[nuxt-endpoints] The idempotency policy in server/endpoints/runtime.ts needs storage, scope, and authorization.',
+      '[nuxt-endpoints] server/endpoints/runtime.ts must default-export a valid defineEndpointRuntime({ ... }) value.',
     )
 
     vi.doUnmock('#nuxt-endpoints/options')

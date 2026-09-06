@@ -1,7 +1,7 @@
 // The idempotency execution flow, wired in as the built-in consumer of the
 // handler-wrapper extension point (see `interceptor.ts`). Everything
 // here runs between request validation and handler execution for endpoints
-// that called `.idempotency()`; it owns key parsing, authorization,
+// that opted into idempotency; it owns key parsing, authorization,
 // storage claim/replay, and completion, and always resolves to an
 // `EndpointRuntimeResponse` rather than mutating the event itself.
 import type { EndpointDefinition } from './contract'
@@ -10,6 +10,8 @@ import type { RuntimeEvent } from './platform'
 import type {
   EndpointRouteIdentity,
   IdempotencyAuthorizationDelegation,
+  IdempotencyGlobalScope,
+  IdempotencyPublicAuthorization,
   NormalizedEndpointIdempotencyOptions,
   RuntimeIdempotencyContext,
 } from './endpoint'
@@ -50,9 +52,10 @@ type IdempotencyKeyResult =
 
 type ResolvedIdempotencyRuntimeOptions = {
   storage: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  scope: IdempotencyGlobalScope | ((context: RuntimeIdempotencyContext) => MaybePromise<string>)
   authorization:
     | IdempotencyAuthorizationDelegation
+    | IdempotencyPublicAuthorization
     | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
   leaseTtlMs: number
   replayTtlMs: number
@@ -123,7 +126,7 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
     const routeOptions = getRouteOptions()
     const runtime = resolveIdempotencyRuntimeOptions(idempotency, routeOptions, getPolicy())
     const runtimeContext = context as unknown as RuntimeIdempotencyContext
-    if (runtime.authorization !== 'middleware') {
+    if (typeof runtime.authorization === 'function') {
       await runtime.authorization(runtimeContext)
     }
 
@@ -142,7 +145,7 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
 
     const storage = await runtime.storage(runtimeContext)
     assertIdempotencyStorage(storage)
-    const scope = await runtime.scope(runtimeContext)
+    const scope = runtime.scope === 'global' ? 'global' : await runtime.scope(runtimeContext)
     if (typeof scope !== 'string' || scope.length === 0) {
       throw createRuntimeError({
         statusCode: 500,
@@ -327,15 +330,17 @@ function resolveIdempotencyRuntimeOptions(
 
 function hasAllIdempotencyRuntimeOptions(resolved: {
   storage?: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope?: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  scope?: IdempotencyGlobalScope | ((context: RuntimeIdempotencyContext) => MaybePromise<string>)
   authorization?:
     | IdempotencyAuthorizationDelegation
+    | IdempotencyPublicAuthorization
     | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
 }): resolved is {
   storage: (context: RuntimeIdempotencyContext) => MaybePromise<IdempotencyStorage>
-  scope: (context: RuntimeIdempotencyContext) => MaybePromise<string>
+  scope: IdempotencyGlobalScope | ((context: RuntimeIdempotencyContext) => MaybePromise<string>)
   authorization:
     | IdempotencyAuthorizationDelegation
+    | IdempotencyPublicAuthorization
     | ((context: RuntimeIdempotencyContext) => MaybePromise<void>)
 } {
   return idempotencyRuntimeOptionKeys.every((key) => resolved[key] !== undefined)
