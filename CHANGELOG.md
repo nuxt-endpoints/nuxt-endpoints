@@ -18,6 +18,13 @@
   `{ enabled: true, headerName, required }` spelling is accepted temporarily as
   deprecated input, while `false` and `{ enabled: false }` are rejected.
 
+### Fixed
+
+- JavaScript authoring paths now reject unknown idempotency options and invalid
+  `scope` / `authorization` values instead of allowing authorization to be
+  bypassed. Normalized metadata also remains sound when authoring options are
+  supplied through a widened TypeScript variable.
+
 ## 0.10.0 - 2026-09-06
 
 ### Added
