@@ -230,10 +230,12 @@ but they do not by themselves guarantee a durable queue.
 
 NE intentionally does not implement lease heartbeat today. A safe heartbeat
 would require an atomic storage `renew()` operation guarded by storage key,
-fingerprint, and lease token; request-lifecycle cleanup; lease-loss behavior;
-and support from every storage adapter and deployment runtime. A timer or cron
-that blindly extends records can keep leases alive after their owners have
-died, so it is not a safe substitute.
+fingerprint, and lease token; stopping renewal when the request ends; explicit
+renew-failure and lease-loss behavior; handling process and event-loop stalls;
+and support from every storage adapter, including serverless and edge runtimes
+where background timers are constrained. A timer or cron that blindly extends
+records can keep leases alive after their owners have died, so it is not a safe
+substitute. Nitro Tasks and `scheduledTasks` are not request-scoped heartbeats.
 
 ## Storage responsibility
 
