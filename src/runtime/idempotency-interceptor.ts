@@ -128,6 +128,12 @@ export function createIdempotencyInterceptor<DEFINITION extends EndpointDefiniti
     const runtimeContext = context as unknown as RuntimeIdempotencyContext
     if (typeof runtime.authorization === 'function') {
       await runtime.authorization(runtimeContext)
+    } else if (runtime.authorization !== 'public' && runtime.authorization !== 'middleware') {
+      throw createRuntimeError({
+        statusCode: 500,
+        statusMessage: 'Idempotency Authorization Error',
+        data: { message: 'Idempotency authorization must be public, middleware, or a callback.' },
+      })
     }
 
     if (key.outcome === 'missing') {

@@ -3,6 +3,7 @@ import { defineRouteHandler } from '../../src/runtime'
 import type {
   EndpointDefinitionFromRoute,
   EndpointHandlerReturnFromRoute,
+  EndpointIdempotencyInput,
   StandardSchemaLike,
 } from '../../src/runtime'
 
@@ -319,6 +320,24 @@ describe('defineRouteHandler multi-method inference', () => {
     defineRouteHandler({ idempotency: false, handler: () => ({ ok: true }) })
     // @ts-expect-error enabled: false is not an authoring option.
     defineRouteHandler({ idempotency: { enabled: false }, handler: () => ({ ok: true }) })
+  })
+
+  it('keeps widened authoring options sound after normalization', () => {
+    const options: Exclude<EndpointIdempotencyInput, true> = {
+      headerName: 'X-Request-Key',
+      required: false,
+    }
+    const handler = defineRouteHandler({
+      idempotency: options,
+      handler: () => ({ ok: true }),
+    })
+
+    type Contract = EndpointDefinitionFromRoute<(typeof handler)['~routeDef']>
+    expectTypeOf<Contract['idempotency']>().toEqualTypeOf<{
+      enabled: true
+      headerName: string
+      required: boolean
+    }>()
   })
 
   it('uses the same one-argument shape as H3', () => {
