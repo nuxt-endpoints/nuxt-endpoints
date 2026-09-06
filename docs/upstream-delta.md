@@ -7,9 +7,12 @@ is not tracked here.
 The matching route-contract prototypes are published from the
 `nuxt-endpoints` organization: [H3](https://github.com/nuxt-endpoints/h3/tree/prototype/route-contracts),
 [Nitro](https://github.com/nuxt-endpoints/nitro/tree/prototype/route-contracts),
-and [fetchdts](https://github.com/nuxt-endpoints/fetchdts/tree/prototype/route-contracts).
-This repository links those three sibling worktrees; the Nuxt 5 workflow checks
-out and builds their pinned commits before checking Nuxt Endpoints.
+[Nuxt](https://github.com/nuxt-endpoints/nuxt/tree/prototype/route-metadata), and
+[fetchdts](https://github.com/nuxt-endpoints/fetchdts/tree/prototype/route-contracts).
+The Nuxt 5 workflow checks out all four forks at pinned commits, builds the H3,
+Nitro, and fetchdts packages, packs the required Nuxt packages from its source
+tree, and only then checks Nuxt Endpoints. Together with this repository's
+`nuxt5` branch, those five branches form the reproducible prototype.
 
 The branch is an integration experiment, not a port. The question it answers is
 not "does Nuxt Endpoints run on Nuxt 5" but "how much of Nuxt Endpoints does the
