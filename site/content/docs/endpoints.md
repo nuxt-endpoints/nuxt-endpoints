@@ -351,7 +351,7 @@ validated `params`, `query`, `headers`, and `body` are all available.
 that `nuxt.config.ts` cannot: module options reach the server as JSON, so they
 cannot carry functions or the connections those functions close over. Two more
 settings live in the same file under their own keys — the
-[central idempotency policy](/docs/idempotency#central-policy) and
+[central idempotency policy](/docs/idempotency#runtime-policy) and
 [OpenAPI document metadata](/docs/openapi#document-metadata).
 
 To use a different path, set
@@ -706,4 +706,4 @@ Nitro's contract macro reads the call at build time. It keeps the contract expre
 
 The module registers `**/*.endpoint-contract.*` in Nitro's `ignore` option, so these files never become Nitro routes even though they live inside `server/api`. (The same pattern also excludes matching filenames from Nitro's public-asset copying — avoid naming files under `public/` this way.)
 
-Schemas can live at any importable path; the `.endpoint-contract` suffix is only required inside route directories, where every ordinary file becomes a route. Note the ownership split: contracts are your application's code wherever they live, while `server/endpoints/` is where this module looks for its own convention files, such as the [central idempotency policy](/docs/idempotency#central-policy).
+Schemas can live at any importable path; the `.endpoint-contract` suffix is only required inside route directories, where every ordinary file becomes a route. Note the ownership split: contracts are your application's code wherever they live, while `server/endpoints/` is where this module looks for its own convention files, such as the [central idempotency policy](/docs/idempotency#runtime-policy).

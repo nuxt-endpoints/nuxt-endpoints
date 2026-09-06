@@ -1,9 +1,9 @@
 # See the contract: cursor pagination
 
-This walkthrough uses the source implementation of cursor pagination on both
-Nuxt 4 and Nuxt 5. It requires the function-based `#endpoints/colada` adapters;
-the earlier npm 0.8.0 release does not include this API. Nuxt 5 additionally
-requires the pinned prototype setup in the repository README.
+This walkthrough uses cursor pagination on both Nuxt 4 and the Nuxt 5
+prototype. The API is available in the published package from v0.9.0 and uses
+the function-based `#endpoints/colada` adapters. Nuxt 5 additionally requires
+the pinned prototype setup in this branch's README.
 
 ## Run the existing demo
 

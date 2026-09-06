@@ -26,11 +26,11 @@
 
 - **Breaking:** the idempotency authoring API now uses `idempotency: true` for
   the standard required `Idempotency-Key` contract. Object form is reserved for
-  exceptions such as `{ required: false }` or a custom `headerName`. Calling
-  `.idempotency()` and writing an empty object now default `required` to `true`
-  instead of `false`; optional mode must be explicit. The old normalized
-  `{ enabled: true, headerName, required }` spelling is accepted temporarily as
-  deprecated input, while `false` and `{ enabled: false }` are rejected.
+  exceptions such as `{ required: false }` or a custom `headerName`. An empty
+  object now defaults `required` to `true`; optional mode must be explicit. The
+  old normalized `{ enabled: true, headerName, required }` spelling is accepted
+  temporarily as deprecated input, while `false` and `{ enabled: false }` are
+  rejected.
 
 - Response body and declared-header schema validation now defaults to
   development builds instead of traversing every production response. Set
@@ -54,6 +54,12 @@
 - Runtime route entries are validated against discovered endpoints at startup,
   so renamed paths and unsupported method settings cannot be silently ignored.
 
+### Documentation
+
+- Replaced the obsolete builder-era idempotency design log with the current
+  `defineRouteHandler` contract, runtime-policy, lease, and storage model.
+- Corrected stale contributor, pagination, client, and public-guide wording.
+
 ## 0.7.2 - 2026-08-29
 
 ### Fixed
@@ -69,8 +75,6 @@
 
   `$endpoint` is unchanged and still does not forward, matching Nuxt's own
   asymmetry between `$fetch` and `useFetch`.
-
-### Documentation
 
 - The [client docs](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/client)
   gained a "Request forwarding during SSR" section: which client forwards the

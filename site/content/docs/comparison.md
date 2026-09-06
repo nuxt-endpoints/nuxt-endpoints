@@ -49,6 +49,8 @@ Nuxt Endpoints starts with a locally owned Nuxt route, executes its schemas at r
 
 ## When not to use it
 
-- Your API surface needs OpenAPI features that are not first-class yet (multiple media types, cookies, encodings) and the `document`/`extend` escape hatches are not enough — see [Limits](/docs/limits).
+- Your API surface needs OpenAPI features that are not first-class yet, such as
+  cookie parameters or fine-grained encoding controls, and the
+  `document`/`extend` escape hatches are not enough — see [Limits](/docs/limits).
 - Your handlers are mostly streams, redirects, or proxies. Those stay better as plain Nitro routes, with [Low-level HTTP](/docs/low-level-http) escape hatches for the few that need contracts.
 - You want RPC-style calls without HTTP semantics at all — tRPC fits that shape better.

@@ -107,15 +107,15 @@ export type EndpointIdempotencyContext<DEFINITION extends EndpointDefinition> = 
 >
 
 /**
- * Sentinel authorization value meaning "handled outside `.idempotency()`,
- * typically by server middleware that runs before this handler."
+ * Sentinel authorization value meaning "handled by server middleware before
+ * the endpoint idempotency interceptor."
  */
 export type IdempotencyAuthorizationDelegation = 'middleware'
 export type IdempotencyPublicAuthorization = 'public'
 export type IdempotencyGlobalScope = 'global'
 
 export type EndpointIdempotencyOptions<DEFINITION extends EndpointDefinition> = {
-  /** @deprecated Omit this field; calling `.idempotency()` enables the protocol. */
+  /** @deprecated Omit this field; declaring idempotency enables the protocol. */
   enabled?: true
   // storage/scope/authorization may instead be supplied by the central policy
   // in server/endpoints/runtime.ts, so they are optional here; build-time
@@ -192,15 +192,15 @@ export type NormalizedEndpointIdempotencyOptions = {
 }
 
 /**
- * Records, per `.idempotency()` call, which runtime options the endpoint
- * itself supplied. Nitro startup fills the rest from the central policy (if
- * any) and rejects endpoints that still have gaps afterward.
+ * Records which runtime options were supplied while normalizing an endpoint.
+ * Nitro startup fills the rest from the central policy (if any) and rejects
+ * endpoints that still have gaps afterward.
  */
 export type EndpointIdempotencyRuntimeMarker = Record<IdempotencyRuntimeOptionKey, boolean>
 
 // Shared by module.ts (build-time detection) and server-plugin.ts (startup
-// validation), which both reject hand-written idempotency metadata that
-// bypassed `.idempotency()` and therefore carries no runtime marker.
+// validation), which both reject hand-written normalized idempotency metadata
+// that bypassed authoring normalization and therefore carries no runtime marker.
 export function idempotencyMetadataWithoutRuntimeMessage(subject: string): string {
   return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Declare idempotency: true in defineRouteHandler() and configure server/endpoints/runtime.ts instead of writing normalized metadata directly.`
 }

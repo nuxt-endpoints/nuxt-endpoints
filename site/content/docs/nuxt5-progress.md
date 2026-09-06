@@ -8,7 +8,7 @@ fetchdts that carry route-contract work not yet released upstream — see
 [Compatibility](/docs/getting-started#compatibility) for the supported platform line. The
 Nuxt 4 / Nitro 2 / h3 v1 line lives on the `main` branch and is the published release line.
 
-Last updated: **2026-09-03**
+Last updated: **2026-09-07**
 
 ## Working branches
 
@@ -84,6 +84,13 @@ primitives:
 
 These checks prove the current pinned prototype as a unit. They are not a claim that the extension
 points have been accepted by the upstream projects.
+
+The endpoint and integration suites pass on the pinned stack. Static generation
+of this documentation site is still blocked on
+[`@nuxt/content` compatibility with Nitro 3's removed server `#imports`
+alias](https://github.com/nuxt/content/issues/3770). The published Nuxt 4 site
+generates normally; this is a Nuxt 5 prototype dependency issue rather than an
+endpoint runtime failure.
 
 ## What stays stable
 

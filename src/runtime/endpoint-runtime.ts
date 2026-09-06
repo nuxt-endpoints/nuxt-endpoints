@@ -2,8 +2,8 @@
 // `server/endpoints/runtime.ts`. This is the half of endpoint configuration
 // that `nuxt.config.ts` cannot hold: module options reach the server through
 // JSON serialization and so cannot carry functions, or the connections they
-// close over. The hook keys mirror the per-endpoint runtime options exactly,
-// so moving one between scopes is a move rather than a rewrite.
+// close over. Route entries hold only the safe endpoint-specific exceptions;
+// storage, scope, and authorization remain shared application policy.
 import type { EndpointDefinition } from './contract'
 import type { EndpointIdempotencyContext } from './endpoint'
 import { validateIdempotencyTtl } from './idempotency'
@@ -66,8 +66,8 @@ export type EndpointRuntime = {
     response?: EndpointResponseValidationMode
   }
   /**
-   * Shapes the response for any request that does not match its contract. An
-   * A route override wins; this runs when that override is absent or declines
+   * Shapes the response for any request that does not match its contract. A
+   * route override wins; this runs when that override is absent or declines
    * by returning nothing.
    */
   onValidationError?: EndpointValidationErrorHandler
@@ -76,8 +76,10 @@ export type EndpointRuntime = {
    */
   wrapHandler?: EndpointHandlerWrapper<EndpointDefinition>
   /**
-   * Shared wiring for contracts that opted into `Idempotency-Key` replay
-   * protection. A runtime route entry may override each part.
+   * Shared storage, scope, authorization, and TTL defaults for contracts that
+   * opted into `Idempotency-Key` replay protection. Runtime route entries may
+   * override fingerprint, replay statuses, and TTLs, but not storage, scope,
+   * or authorization.
    */
   idempotency?: EndpointIdempotencyPolicy
   /** Runtime-only overrides keyed by generated route template and HTTP method. */

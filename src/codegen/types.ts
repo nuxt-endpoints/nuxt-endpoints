@@ -8,11 +8,10 @@ import type { EndpointPaginationRouteMetadata } from '../runtime/pagination'
 // the module's own location rather than to whichever file calls the builder.
 export type ResolvePath = (path: string) => string
 
-// The composed handler shape build-time endpoint detection produces (a Nitro
-// route handler augmented with idempotency metadata
-// read from its `.idempotency()` call, once known). Every codegen builder
-// consumes this same shape, so it is the one export both module.ts and the
-// generators below share instead of redeclaring it.
+// The composed handler shape build-time endpoint detection produces: a Nitro
+// route handler augmented with normalized contract metadata. Every codegen
+// builder consumes this same shape, so it is the one export both module.ts and
+// the generators below share instead of redeclaring it.
 export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
   route: string
   method: string
