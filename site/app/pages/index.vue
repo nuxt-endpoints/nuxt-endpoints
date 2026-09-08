@@ -7,7 +7,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Route contracts for Nuxt 5, with runtime validation, typed clients, Pinia Colada, status-aware results, and OpenAPI. This is the Nuxt 5 integration branch.',
+        'HTTP-aware RPC, the Nuxt way. Define route contracts with runtime validation, status-aware clients, Pinia Colada integration, and OpenAPI.',
     },
   ],
 })
@@ -309,6 +309,7 @@ const stackItems = [
 
     <section class="section -hero">
       <div class="unit -copy">
+        <p class="p -positioning">HTTP-aware RPC, the Nuxt way.</p>
         <h1 class="title">
           <span class="value">Define the HTTP contract.</span><br />
           <span class="value">Validate at runtime.</span><br />
@@ -485,6 +486,18 @@ const stackItems = [
           max-width: 58rem;
           margin: 0 auto;
           text-align: center;
+
+          > .p.-positioning {
+            margin: 0 0 var(--space-200);
+            border: var(--stroke-default) solid color-mix(in srgb, var(--accent) 30%, var(--line));
+            border-radius: var(--radius-pill);
+            background: color-mix(in srgb, var(--accent-strong) 10%, var(--surface));
+            color: var(--accent-strong);
+            font-size: var(--text-sm);
+            font-weight: 800;
+            letter-spacing: var(--tracking-label);
+            padding: var(--space-075) var(--space-200);
+          }
 
           > .title {
             max-width: none;
