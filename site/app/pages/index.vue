@@ -7,7 +7,7 @@ useHead({
     {
       name: 'description',
       content:
-        'HTTP-aware RPC, the Nuxt way. Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, status-aware clients, Pinia Colada, and OpenAPI.',
+        'HTTP is the contract. Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, status-aware clients, Pinia Colada, and OpenAPI.',
     },
   ],
 })
@@ -304,13 +304,11 @@ const stackItems = [
 
     <section class="section -hero">
       <div class="unit -copy">
-        <p class="p -positioning">HTTP-aware RPC, the Nuxt way.</p>
         <h1 class="title">
-          <span class="value">Define the HTTP contract.</span><br />
-          <span class="value">Validate at runtime.</span><br />
-          <span class="value">Handle every status.</span><br />
-          <span class="value">Stay type-safe end to end.</span>
+          <span class="value">HTTP is the contract.</span><br />
+          <span class="value">Let it drive the whole stack.</span>
         </h1>
+        <p class="p -positioning">The Nuxt way.</p>
         <div class="seg -stack" aria-label="Nuxt Endpoints stack">
           <span class="value">Tech stack</span>
           <ul class="list">
@@ -483,15 +481,12 @@ const stackItems = [
           text-align: center;
 
           > .p.-positioning {
-            margin: 0 0 var(--space-200);
-            border: var(--stroke-default) solid color-mix(in srgb, var(--accent) 30%, var(--line));
-            border-radius: var(--radius-pill);
-            background: color-mix(in srgb, var(--accent-strong) 10%, var(--surface));
+            margin: var(--space-150) 0 var(--space-350);
             color: var(--accent-strong);
             font-size: var(--text-sm);
             font-weight: 800;
             letter-spacing: var(--tracking-label);
-            padding: var(--space-075) var(--space-200);
+            text-transform: uppercase;
           }
 
           > .title {
