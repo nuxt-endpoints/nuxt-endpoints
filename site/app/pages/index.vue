@@ -102,13 +102,11 @@ const pitches = [
         lang: 'ts',
         code: `import { z } from 'zod'
 
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: User,
-      404: z.object({ message: z.string() }),
-    },
+export default defineEndpoint({
+  request: { params: z.object({ id: z.coerce.number() }) },
+  responses: {
+    200: User,
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
@@ -151,8 +149,8 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
-        code: `export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
+        code: `export default defineEndpoint({
+  request: { params: z.object({ id: z.coerce.number() }) },
   handler: (event) => {
     return findUser(event.validated.params.id)
     // client types are inferred from this return value
@@ -162,9 +160,9 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 2 — tighten the contract',
         lang: 'ts',
-        code: `export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
-  validate: { response: { 200: User, 404: NotFound } },
+        code: `export default defineEndpoint({
+  request: { params: z.object({ id: z.coerce.number() }) },
+  responses: { 200: User, 404: NotFound },
   handler: async (event) => {
     const user = await findUser(event.validated.params.id)
     return user ?? event.respond(404, { message: 'Not found' })
@@ -184,7 +182,7 @@ if (result.status === 200) result.body.name // User`,
     points: [
       {
         icon: 'lucide:list-checks',
-        text: 'validate.response declares 200 and 404 — TypeScript checks handler returns',
+        text: 'responses declares 200 and 404 — TypeScript checks handler returns',
       },
       {
         icon: 'lucide:split',

@@ -1,14 +1,10 @@
 import { z } from 'zod'
-import { defineRouteHandler } from '../../../../../src/runtime'
-
+import { defineEndpoint } from '../../../../../src/runtime'
 let executionCount = 0
-
-export default defineRouteHandler({
-  validate: {
-    response: {
-      201: z.object({ executionCount: z.number() }),
-      409: z.object({ executionCount: z.number() }),
-    },
+export default defineEndpoint({
+  responses: {
+    201: z.object({ executionCount: z.number() }),
+    409: z.object({ executionCount: z.number() }),
   },
   idempotency: true,
   handler: (event) => {

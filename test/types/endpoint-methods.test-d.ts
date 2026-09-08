@@ -1,6 +1,6 @@
 import { assertType, describe, expectTypeOf, it } from 'vitest'
 import {
-  defineEndpoint,
+  defineEndpointContract,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
 } from '../internal-runtime'
@@ -14,7 +14,7 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 
 describe('defineEndpointMethods structural constraint', () => {
   it('accepts a concrete DefinedEndpoint as an EndpointMethodMember', () => {
-    const endpoint = defineEndpoint({ responses: { 200: schema<{ id: number }>() } })
+    const endpoint = defineEndpointContract({ responses: { 200: schema<{ id: number }>() } })
     assertType<EndpointMethodMember>(endpoint)
   })
 })
@@ -22,11 +22,11 @@ describe('defineEndpointMethods structural constraint', () => {
 describe('defineEndpointMethodHandlers handler context inference', () => {
   it('infers each handler context from its own member definition', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({
+      get: defineEndpointContract({
         params: schema<{ id: string }, { id: number }>(),
         responses: { 200: schema<{ id: number; name: string }>() },
       }),
-      put: defineEndpoint({
+      put: defineEndpointContract({
         params: schema<{ id: string }, { id: number }>(),
         body: schema<{ name: string }>(),
         responses: { 200: schema<{ id: number; name: string }>() },
@@ -49,7 +49,7 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
 
   it('rejects an undeclared response body for a member with declared responses', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({
+      get: defineEndpointContract({
         responses: {
           200: schema<{ id: number; name: string }>(),
           404: schema<{ message: string }>(),
@@ -66,7 +66,7 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
 
   it('accepts a declared non-200 response via respond', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({
+      get: defineEndpointContract({
         responses: {
           200: schema<{ id: number; name: string }>(),
           404: schema<{ message: string }>(),
@@ -81,8 +81,8 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
 
   it('requires a handler for every declared method', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ responses: { 200: schema<{ id: number }>() } }),
-      put: defineEndpoint({ body: schema<{ name: string }>() }),
+      get: defineEndpointContract({ responses: { 200: schema<{ id: number }>() } }),
+      put: defineEndpointContract({ body: schema<{ name: string }>() }),
     })
 
     // @ts-expect-error `put` has no handler.
@@ -93,8 +93,8 @@ describe('defineEndpointMethodHandlers handler context inference', () => {
 
   it('types __endpoint_method_handler_returns__ as the handler return map', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ params: schema<{ id: string }, { id: number }>() }),
-      put: defineEndpoint({ body: schema<{ name: string }>() }),
+      get: defineEndpointContract({ params: schema<{ id: string }, { id: number }>() }),
+      put: defineEndpointContract({ body: schema<{ name: string }>() }),
     })
 
     const handler = defineEndpointMethodHandlers(endpoints, {

@@ -8,6 +8,7 @@ Nuxt Endpoints lets you describe an HTTP endpoint once, next to its handler, wit
 - **Runtime validation** — `params`, `query`, `headers`, and `body` are validated before your handler runs. Handler code sees parsed schema output, so coercion and transforms are already applied.
 - **A fully typed client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses are all inferred. No codegen step, no types to import.
 - **OpenAPI 3.1** — a document generated from the same schemas, served at `/_endpoints/schema`. There is no separate spec to maintain, so it cannot go stale.
+- **Progressive forms** — `useEndpointForm` projects native GET and POST forms from the same contract, including no-JavaScript submissions and typed enhanced results.
 
 ## Show me
 
@@ -16,15 +17,14 @@ One route file declares the contract and the handler:
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-
-export default defineRouteHandler({
+export default defineEndpoint({
   summary: 'Get a user',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: z.object({ id: z.number(), name: z.string() }),
-      404: z.object({ message: z.string() }),
-    },
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const { params } = event.validated
@@ -56,7 +56,7 @@ document.
 
 ## Adopt at your own pace
 
-Adding the module changes nothing by itself. Only routes that directly default-export `defineRouteHandler({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
+Adding the module changes nothing by itself. Only routes that directly default-export `defineEndpoint({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
 > Nuxt Endpoints supports Nuxt 4.5+ today and is designed to adopt the
 > route-contract primitives being developed for the Nuxt 5 generation. The

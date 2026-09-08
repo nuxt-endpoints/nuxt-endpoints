@@ -2,6 +2,7 @@ import type {
   $EndpointClient,
   $EndpointPathResponse,
   $UseEndpoint,
+  $UseEndpointForm,
   EndpointMethod,
   EndpointPath,
 } from '#endpoints'
@@ -9,6 +10,35 @@ import { infiniteQueryOptions, mutationOptions, queryOptions } from '#endpoints/
 
 declare const client: $EndpointClient
 declare const useClient: $UseEndpoint
+declare const useForm: $UseEndpointForm
+
+function checkForm() {
+  const form = useForm('/api/notes', { method: 'post', body: { title: '' } })
+  form.attrs.action.startsWith('/')
+  form.attrs.enctype.toUpperCase()
+  form.fields.title.name.toUpperCase()
+  form.fields.title.maxlength?.toFixed()
+  form.fields.pinned.name.toUpperCase()
+  // @ts-expect-error `titel` is not a declared field
+  void form.fields.titel
+
+  form.submit(new URLSearchParams({ title: 'Ada' })).then((result) => {
+    if (result.status === 201) result.body.title.toUpperCase()
+    if (result.status === 400 && 'message' in result.body) result.body.message.toUpperCase()
+    if (result.status === 400 && 'statusCode' in result.body) {
+      result.body.data.body?.map((issue) => issue.message.toUpperCase())
+    }
+  })
+
+  form.values.value.title.toUpperCase()
+  form.status.value?.toFixed()
+  form.allIssues.value.map((issue) => issue.message.toUpperCase())
+  form.issues.value.title?.map((issue) => issue.path?.join('.').toUpperCase())
+
+  // @ts-expect-error `/api/users` declares no form projection
+  useForm('/api/users', { method: 'post', body: { name: '' } })
+}
+export type FormProjectionChecked = ReturnType<typeof checkForm>
 
 async function checkClient() {
   const user = await client('/api/users/:id', { method: 'get', params: { id: '1' } })

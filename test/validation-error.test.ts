@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   createMemoryIdempotencyStorage,
-  defineEndpoint,
+  defineEndpointContract,
   defineEndpointRuntime,
 } from './internal-runtime'
 import type { EndpointRuntime } from './internal-runtime'
@@ -18,7 +18,7 @@ const query = z.object({ page: z.coerce.number() })
 
 describe('endpoint-level onValidationError', () => {
   it('shapes a schema failure', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       { query },
       {
         onValidationError: ({ kind, source }) => ({
@@ -42,7 +42,7 @@ describe('endpoint-level onValidationError', () => {
   })
 
   it('shapes a media-type failure with the declared members', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       { body: { 'application/json': z.object({ a: z.string() }) } },
       {
         onValidationError: (failure) =>
@@ -70,7 +70,7 @@ describe('endpoint-level onValidationError', () => {
   })
 
   it('falls back to the default shape when the handler returns nothing', async () => {
-    const endpoint = defineEndpoint({ query }, { onValidationError: () => undefined })
+    const endpoint = defineEndpointContract({ query }, { onValidationError: () => undefined })
 
     const response = await request(
       endpoint.handler(() => ({ ok: true })),
@@ -88,7 +88,7 @@ describe('application-level validation error handler', () => {
   })
 
   it('applies to an endpoint that declares none', async () => {
-    const endpoint = defineEndpoint({ query })
+    const endpoint = defineEndpointContract({ query })
     const handler = endpoint.handler(() => ({ ok: true }))
     handler.__set_endpoint_runtime__(appRuntime)
 
@@ -99,7 +99,7 @@ describe('application-level validation error handler', () => {
   })
 
   it('loses to the endpoint handler, and takes over when it declines', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       { query, headers: z.object({ 'x-tenant': z.string() }) },
       {
         onValidationError: ({ source }) =>
@@ -119,7 +119,10 @@ describe('application-level validation error handler', () => {
   })
 
   it('falls back from the matching route hook to the application hook', async () => {
-    const endpoint = defineEndpoint({ query, headers: z.object({ 'x-tenant': z.string() }) })
+    const endpoint = defineEndpointContract({
+      query,
+      headers: z.object({ 'x-tenant': z.string() }),
+    })
     const handler = endpoint.handler(() => ({ ok: true }))
     handler.__set_endpoint_runtime__(appRuntime, {
       onValidationError: ({ source }) =>
@@ -229,7 +232,7 @@ describe('defineEndpointRuntime', () => {
 describe('wrapHandler', () => {
   it('wraps the handler and can answer without running it', async () => {
     const calls: string[] = []
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {},
       {
         wrapHandler: async (_context, next) => {
@@ -255,7 +258,7 @@ describe('wrapHandler', () => {
 
   it('skips the handler when the wrapper does not call next', async () => {
     let ran = false
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {},
       {
         wrapHandler: async () => ({
@@ -281,7 +284,7 @@ describe('wrapHandler', () => {
 
   it('runs the application wrapper outside the endpoint one', async () => {
     const order: string[] = []
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {},
       {
         wrapHandler: async (_context, next) => {
@@ -314,7 +317,7 @@ describe('wrapHandler', () => {
 
   it('sees a thrown handler through try/finally', async () => {
     const cleanup: string[] = []
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {},
       {
         wrapHandler: async (_context, next) => {

@@ -106,7 +106,7 @@ the optional `cursor` and `limit` query, the typed page response, runtime
 validation, and OpenAPI from it:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   pagination: {
     kind: 'cursor',
     item: Article,

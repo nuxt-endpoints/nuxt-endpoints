@@ -27,16 +27,15 @@ Describe the HTTP contract once, next to the handler, with the schema library yo
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-
-export default defineRouteHandler({
+export default defineEndpoint({
   name: 'getUser',
   summary: 'Get a user',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: z.object({ id: z.number(), name: z.string() }),
-      404: z.object({ message: z.string() }),
-    },
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const { params } = event.validated
@@ -90,6 +89,7 @@ does not replace the route with a remote function.
 - ✅ Typed Pinia Colada adapters for queries, mutations, and cursor pagination, with its official Nuxt SSR module
 - ✅ Cursor pagination from one item contract through validation, OpenAPI, and `useInfiniteQuery`
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
+- ✅ Progressive enhancement: `useEndpointForm` projects GET query forms and POST mutation forms that work before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md))
 
 ## Quick Start
 
@@ -107,7 +107,7 @@ npm install zod
 # or: npm install effect
 ```
 
-That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+That's it. Adding the module changes nothing by itself: only routes whose default export is a direct `defineEndpoint({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
 
 ## Nuxt 4 now, ready to follow upstream
 

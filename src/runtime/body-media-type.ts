@@ -152,3 +152,27 @@ export function formDataToPlainObject(
 
   return result
 }
+
+/**
+ * The media type a native `<form>` would send for this body contract, and the
+ * member that describes it.
+ *
+ * A form can only submit url-encoded or multipart, so a contract that declares
+ * neither cannot be reached by one - which is a declaration error rather than
+ * something to discover at request time.
+ */
+export function findFormBodyMember(
+  body: ValidatorSchema | EndpointBodyMediaTypeMap | undefined,
+): { mediaType: string; schema: ValidatorSchema } | undefined {
+  if (body === undefined || !isBodyMediaTypeMap(body)) {
+    return undefined
+  }
+  const map = body as Record<string, unknown>
+  for (const mediaType of [multipartMediaType, urlEncodedMediaType]) {
+    const member = map[mediaType]
+    if (isValidatorSchemaMarker(member)) {
+      return { mediaType, schema: member }
+    }
+  }
+  return undefined
+}

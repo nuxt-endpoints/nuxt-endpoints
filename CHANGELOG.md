@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Progressive enhancement is now available on the Nuxt 4 line. A route-level
+  `form` projection drives `useEndpointForm`, native GET/POST submissions,
+  schema-derived HTML attributes, `303` success redirects, and same-page
+  validation failures without JavaScript.
+
+### Changed
+
+- **Breaking:** endpoint authoring is now
+  `defineEndpoint({ request, responses, handler })`. The public
+  `defineRouteHandler` name and the former root `params` / `validate.response`
+  shape have been removed without aliases. Request schemas belong under
+  `request`; status-correlated response schemas belong under `responses`.
+- h3/Nitro-specific middleware and plugin registration now live behind the
+  platform seam. The form contract, bridge, code generation, and client API are
+  shared with the Nuxt 5 line.
+
 ## 0.11.1 - 2026-09-06
 
 ### Documentation

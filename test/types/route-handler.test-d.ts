@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { defineRouteHandler } from '../../src/runtime'
+import { defineEndpoint } from '../../src/runtime'
 import type {
   EndpointDefinitionFromRoute,
   EndpointHandlerReturnFromRoute,
@@ -13,10 +13,10 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
   throw new Error('type-only schema')
 }
 
-describe('defineRouteHandler multi-method inference', () => {
+describe('defineEndpoint multi-method inference', () => {
   it('constructs one cursor-pagination contract for the handler', () => {
     const Article = schema<{ id: number; title: string }>()
-    const handler = defineRouteHandler({
+    const handler = defineEndpoint({
       pagination: { kind: 'cursor', item: Article },
       handler: (event) => {
         expectTypeOf(event.validated.query).toMatchTypeOf<{
@@ -34,27 +34,27 @@ describe('defineRouteHandler multi-method inference', () => {
     const Article = schema<{ id: number }>()
     const duplicateQuery = {
       pagination: { kind: 'cursor' as const, item: Article },
-      validate: { query: schema<{ cursor?: string }>() },
+      request: { query: schema<{ cursor?: string }>() },
       handler: () => ({ items: [{ id: 1 }] }),
     }
     // @ts-expect-error pagination is the sole owner of query.cursor
-    defineRouteHandler(duplicateQuery)
+    defineEndpoint(duplicateQuery)
 
     const duplicateResponse = {
       pagination: { kind: 'cursor' as const, item: Article },
-      validate: { response: { 200: schema<{ items: { id: number }[] }>() } },
+      responses: { 200: schema<{ items: { id: number }[] }>() },
       handler: () => ({ items: [{ id: 1 }] }),
     }
     // @ts-expect-error pagination is the sole owner of response status 200
-    defineRouteHandler(duplicateResponse)
+    defineEndpoint(duplicateResponse)
 
-    defineRouteHandler({
+    defineEndpoint({
       pagination: { kind: 'cursor', item: Article },
       // @ts-expect-error the generated successful response requires items
       handler: (event) => event.respond(200, { nextCursor: 'next' }),
     })
 
-    defineRouteHandler({
+    defineEndpoint({
       // @ts-expect-error a direct successful return must use the generated envelope too
       pagination: { kind: 'cursor', item: Article },
       // @ts-expect-error overload resolution also rejects the incompatible handler
@@ -63,12 +63,12 @@ describe('defineRouteHandler multi-method inference', () => {
   })
 
   it('combines non-pagination query fields and response statuses', () => {
-    defineRouteHandler({
+    defineEndpoint({
       pagination: { kind: 'cursor', item: schema<{ id: number }>() },
-      validate: {
+      request: {
         query: schema<{ category?: string }>(),
-        response: { 404: schema<{ message: string }>() },
       },
+      responses: { 404: schema<{ message: string }>() },
       handler: (event) => {
         expectTypeOf(event.validated.query).toMatchTypeOf<{
           category?: string
@@ -81,7 +81,7 @@ describe('defineRouteHandler multi-method inference', () => {
   })
 
   it('supports pagination only on the GET member of a method group', () => {
-    defineRouteHandler({
+    defineEndpoint({
       get: {
         pagination: { kind: 'cursor', item: schema<{ id: number }>() },
         handler: (event) => {
@@ -101,17 +101,17 @@ describe('defineRouteHandler multi-method inference', () => {
       },
     }
     // @ts-expect-error cursor pagination only belongs to GET
-    defineRouteHandler(invalidMethod)
+    defineEndpoint(invalidMethod)
 
     const duplicate = {
       get: {
         pagination: { kind: 'cursor' as const, item: schema<{ id: number }>() },
-        validate: { query: schema<{ limit?: number }>() },
+        request: { query: schema<{ limit?: number }>() },
         handler: () => ({ items: [{ id: 1 }] }),
       },
     }
     // @ts-expect-error pagination owns the GET member's query.limit
-    defineRouteHandler(duplicate)
+    defineEndpoint(duplicate)
   })
 
   it('requires method-group names to identify one method', () => {
@@ -121,17 +121,17 @@ describe('defineRouteHandler multi-method inference', () => {
       post: { handler: () => ({ ok: true }) },
     }
     // @ts-expect-error a group-level name cannot identify one HTTP method
-    defineRouteHandler(invalidGroupName)
+    defineEndpoint(invalidGroupName)
 
-    defineRouteHandler({
+    defineEndpoint({
       get: { name: 'getUsers', handler: () => ({ ok: true }) },
       post: { name: 'createUser', handler: () => ({ ok: true }) },
     })
   })
 
   it('types a direct handler as a validated H3 event', () => {
-    defineRouteHandler({
-      params: schema<{ id: string }, { id: number }>(),
+    defineEndpoint({
+      request: { params: schema<{ id: string }, { id: number }>() },
       handler: (event) => {
         expectTypeOf(event.validated.params).toEqualTypeOf<{ id: number }>()
         expectTypeOf(event.routeDef.params).toEqualTypeOf<Schema<{ id: string }, { id: number }>>()
@@ -142,13 +142,13 @@ describe('defineRouteHandler multi-method inference', () => {
   })
 
   it('infers every handler from its own contract', () => {
-    const handler = defineRouteHandler({
-      params: schema<{ id: string }, { id: number }>(),
+    const handler = defineEndpoint({
+      request: { params: schema<{ id: string }, { id: number }>() },
       get: {
-        validate: {
+        request: {
           query: schema<{ search: string }, { search: string; limit: number }>(),
-          response: { 200: schema<{ id: number; name: string }>() },
         },
+        responses: { 200: schema<{ id: number; name: string }>() },
         handler: (event) => {
           const { params, query, body } = event.validated
           expectTypeOf(params).not.toBeAny()
@@ -161,12 +161,12 @@ describe('defineRouteHandler multi-method inference', () => {
         },
       },
       put: {
-        validate: {
+        request: {
           body: schema<{ name: string }>(),
-          response: {
-            200: schema<{ id: number; name: string }>(),
-            404: schema<{ message: string }>(),
-          },
+        },
+        responses: {
+          200: schema<{ id: number; name: string }>(),
+          404: schema<{ message: string }>(),
         },
         handler: (event) => {
           const { params, body } = event.validated
@@ -197,13 +197,11 @@ describe('defineRouteHandler multi-method inference', () => {
   })
 
   it('rejects a response outside the method contract', () => {
-    defineRouteHandler({
+    defineEndpoint({
       get: {
-        validate: {
-          response: {
-            200: schema<{ id: number }>(),
-            404: schema<{ message: string }>(),
-          },
+        responses: {
+          200: schema<{ id: number }>(),
+          404: schema<{ message: string }>(),
         },
         // @ts-expect-error this body matches neither declared response.
         handler: () => ({ wrong: true }),
@@ -211,11 +209,13 @@ describe('defineRouteHandler multi-method inference', () => {
     })
   })
 
-  it('rejects a root validate in the method group form', () => {
-    defineRouteHandler({
-      params: schema<{ id: string }, { id: number }>(),
-      // @ts-expect-error request validation is per method, so a root validate never applies.
-      validate: { headers: schema<{ authorization: string }>() },
+  it('allows only shared params in the method group request', () => {
+    defineEndpoint({
+      request: {
+        params: schema<{ id: string }, { id: number }>(),
+        // @ts-expect-error headers belong to a method request, not the shared route request.
+        headers: schema<{ authorization: string }>(),
+      },
       get: { handler: (event) => ({ id: event.validated.params.id }) },
     })
   })
@@ -227,19 +227,19 @@ describe('defineRouteHandler multi-method inference', () => {
     const withAuthorization = { ...metadata, authorization: 'middleware' as const }
     const withRuntimeMethod = { idempotency: withStorage, handler: () => ({ ok: true }) }
 
-    defineRouteHandler({ idempotency: metadata, handler: () => ({ ok: true }) })
-    defineRouteHandler({ post: { idempotency: metadata, handler: () => ({ ok: true }) } })
+    defineEndpoint({ idempotency: metadata, handler: () => ({ ok: true }) })
+    defineEndpoint({ post: { idempotency: metadata, handler: () => ({ ok: true }) } })
 
     // @ts-expect-error storage belongs to the runtime implementation, not the route contract.
-    defineRouteHandler({ idempotency: withStorage, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withStorage, handler: () => ({ ok: true }) })
 
     // @ts-expect-error scope belongs to the runtime implementation, not the route contract.
-    defineRouteHandler({ idempotency: withScope, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withScope, handler: () => ({ ok: true }) })
 
     // @ts-expect-error authorization belongs to the runtime implementation, not the route contract.
-    defineRouteHandler({ idempotency: withAuthorization, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withAuthorization, handler: () => ({ ok: true }) })
 
-    defineRouteHandler({
+    defineEndpoint({
       // @ts-expect-error method entries are route contracts too.
       post: withRuntimeMethod,
     })
@@ -250,27 +250,27 @@ describe('defineRouteHandler multi-method inference', () => {
     const withReplayTtl = { ...metadata, replayTtlMs: 1000 }
 
     // @ts-expect-error fingerprint is resolved by the runtime, not declared in the contract.
-    defineRouteHandler({ idempotency: withFingerprint, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withFingerprint, handler: () => ({ ok: true }) })
 
     // @ts-expect-error replayStatuses is resolved by the runtime, not declared in the contract.
-    defineRouteHandler({ idempotency: withReplayStatuses, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withReplayStatuses, handler: () => ({ ok: true }) })
 
     // @ts-expect-error leaseTtlMs is resolved by the runtime, not declared in the contract.
-    defineRouteHandler({ idempotency: withLeaseTtl, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withLeaseTtl, handler: () => ({ ok: true }) })
 
     // @ts-expect-error replayTtlMs is resolved by the runtime, not declared in the contract.
-    defineRouteHandler({ idempotency: withReplayTtl, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: withReplayTtl, handler: () => ({ ok: true }) })
   })
 
   it('accepts shorthand authoring and normalizes inferred route metadata', () => {
-    const direct = defineRouteHandler({
-      validate: { body: schema<{ text: string }>() },
+    const direct = defineEndpoint({
+      request: { body: schema<{ text: string }>() },
       idempotency: true,
       handler: () => ({ ok: true }),
     })
-    const grouped = defineRouteHandler({
+    const grouped = defineEndpoint({
       post: {
-        validate: { body: schema<{ text: string }>() },
+        request: { body: schema<{ text: string }>() },
         idempotency: true,
         handler: () => ({ ok: true }),
       },
@@ -285,12 +285,12 @@ describe('defineRouteHandler multi-method inference', () => {
     }>()
     expectTypeOf<GroupedContract['idempotency']>().toEqualTypeOf<DirectContract['idempotency']>()
 
-    const empty = defineRouteHandler({ idempotency: {}, handler: () => ({ ok: true }) })
-    const optional = defineRouteHandler({
+    const empty = defineEndpoint({ idempotency: {}, handler: () => ({ ok: true }) })
+    const optional = defineEndpoint({
       idempotency: { required: false },
       handler: () => ({ ok: true }),
     })
-    const custom = defineRouteHandler({
+    const custom = defineEndpoint({
       idempotency: { headerName: 'X-Request-Key' },
       handler: () => ({ ok: true }),
     })
@@ -317,9 +317,9 @@ describe('defineRouteHandler multi-method inference', () => {
     }>()
 
     // @ts-expect-error omit idempotency to disable it.
-    defineRouteHandler({ idempotency: false, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: false, handler: () => ({ ok: true }) })
     // @ts-expect-error enabled: false is not an authoring option.
-    defineRouteHandler({ idempotency: { enabled: false }, handler: () => ({ ok: true }) })
+    defineEndpoint({ idempotency: { enabled: false }, handler: () => ({ ok: true }) })
   })
 
   it('keeps widened authoring options sound after normalization', () => {
@@ -327,7 +327,7 @@ describe('defineRouteHandler multi-method inference', () => {
       headerName: 'X-Request-Key',
       required: false,
     }
-    const handler = defineRouteHandler({
+    const handler = defineEndpoint({
       idempotency: options,
       handler: () => ({ ok: true }),
     })
@@ -340,9 +340,30 @@ describe('defineRouteHandler multi-method inference', () => {
     }>()
   })
 
-  it('uses the same one-argument shape as H3', () => {
-    // @ts-expect-error defineRouteHandler has the same one-argument shape as H3.
-    defineRouteHandler({ handler: () => ({ ok: true }) }, {})
+  it('accepts exactly one definition argument', () => {
+    // @ts-expect-error runtime policy belongs in defineEndpointRuntime.
+    defineEndpoint({ handler: () => ({ ok: true }) }, {})
+  })
+
+  it('rejects the removed authoring shape', () => {
+    const legacyParams = {
+      params: schema<{ id: string }>(),
+      handler: () => ({ ok: true }),
+    }
+    // @ts-expect-error params moved under request.
+    defineEndpoint(legacyParams)
+    const legacyValidate = {
+      validate: { query: schema<{ q: string }>() },
+      handler: () => ({ ok: true }),
+    }
+    // @ts-expect-error validate was replaced by request and responses.
+    defineEndpoint(legacyValidate)
+    const legacyResponse = {
+      response: { 200: schema<{ ok: true }>() },
+      handler: () => ({ ok: true }),
+    }
+    // @ts-expect-error response was replaced by responses.
+    defineEndpoint(legacyResponse)
   })
 
   it('rejects the methods this line derives or does not route', () => {
@@ -350,12 +371,12 @@ describe('defineRouteHandler multi-method inference', () => {
     const derived = { handler: () => null }
 
     // @ts-expect-error HEAD is derived from the get entry.
-    defineRouteHandler({ get, head: derived })
+    defineEndpoint({ get, head: derived })
     // @ts-expect-error OPTIONS is answered from the declared methods.
-    defineRouteHandler({ get, options: derived })
+    defineEndpoint({ get, options: derived })
     // @ts-expect-error CONNECT is not routed on this support line.
-    defineRouteHandler({ get, connect: derived })
+    defineEndpoint({ get, connect: derived })
     // @ts-expect-error TRACE is not routed on this support line.
-    defineRouteHandler({ get, trace: derived })
+    defineEndpoint({ get, trace: derived })
   })
 })

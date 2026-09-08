@@ -1,7 +1,7 @@
 import { createApp, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from './internal-runtime'
+import { defineEndpointContract, defineEndpointHandler } from './internal-runtime'
 import {
   defineRuntimeHandler,
   getRuntimeQuery,
@@ -54,7 +54,7 @@ describe('h3 adapter request parsing', () => {
 
 describe('endpoint query contracts over real requests', () => {
   it('validates repeated query parameters against an array schema', async () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       query: z.object({
         tag: z.array(z.string()),
         limit: z.coerce.number(),
@@ -77,7 +77,7 @@ describe('endpoint query contracts over real requests', () => {
 
 describe('media-type-map body contracts over real requests', () => {
   function uploadEndpoint() {
-    return defineEndpoint({
+    return defineEndpointContract({
       body: {
         'application/json': z.object({ name: z.string() }),
         'application/x-www-form-urlencoded': z.object({ name: z.string() }),

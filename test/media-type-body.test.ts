@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type {
-  defineEndpoint as DefineEndpoint,
+  defineEndpointContract as DefineEndpoint,
   defineEndpointHandler as DefineEndpointHandler,
 } from './internal-runtime'
 
@@ -15,11 +15,11 @@ const setHeaders = vi.fn()
 // before `setResponseStatus`/`setHeaders` above are assigned — tripping
 // Vitest's hoisted `vi.mock` factory into a temporal-dead-zone
 // ReferenceError.
-let defineEndpoint: typeof DefineEndpoint
+let defineEndpointContract: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
 beforeAll(async () => {
-  ;({ defineEndpoint, defineEndpointHandler } = await import('./internal-runtime'))
+  ;({ defineEndpointContract, defineEndpointHandler } = await import('./internal-runtime'))
 })
 
 vi.mock('h3', () => {
@@ -72,7 +72,7 @@ describe('single-schema body (regression: unchanged behavior)', () => {
   })
 
   it('validates the body through the original readRuntimeBody path and leaves bodyMediaType undefined', async () => {
-    const endpoint = defineEndpoint({ body: UserJson })
+    const endpoint = defineEndpointContract({ body: UserJson })
     const handler = defineEndpointHandler(endpoint, ({ body, bodyMediaType }) => {
       expect(bodyMediaType).toBeUndefined()
       return { id: 1, name: body.name }
@@ -85,7 +85,7 @@ describe('single-schema body (regression: unchanged behavior)', () => {
   })
 
   it('still returns a 400 validation failure shaped like before', async () => {
-    const endpoint = defineEndpoint({ body: UserJson })
+    const endpoint = defineEndpointContract({ body: UserJson })
     const handler = defineEndpointHandler(endpoint, ({ body }) => ({ id: 1, name: body.name }))
 
     await expect(handler(createEvent({ body: { name: 42 } }))).resolves.toMatchObject({
@@ -106,7 +106,7 @@ describe('media-type-map body: request-time dispatch', () => {
   const Text = z.string()
 
   function mapEndpoint() {
-    return defineEndpoint({
+    return defineEndpointContract({
       body: {
         'application/json': UserJson,
         'application/x-www-form-urlencoded': UserJson,
@@ -130,7 +130,7 @@ describe('media-type-map body: request-time dispatch', () => {
   })
 
   it('hands an unparsed member to the handler as bytes, unvalidated', async () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       body: {
         'application/json': UserJson,
         'application/pdf': true,
@@ -205,48 +205,50 @@ describe('media-type-map body: request-time dispatch', () => {
 
 describe('media-type-map body: definition-time validation', () => {
   it('rejects an empty media-type map', () => {
-    expect(() => defineEndpoint({ body: {} })).toThrow(/must declare at least one media type/)
+    expect(() => defineEndpointContract({ body: {} })).toThrow(
+      /must declare at least one media type/,
+    )
   })
 
   it('rejects an uppercase media type key', () => {
-    expect(() => defineEndpoint({ body: { 'Application/JSON': UserJson } })).toThrow(
+    expect(() => defineEndpointContract({ body: { 'Application/JSON': UserJson } })).toThrow(
       /must be lowercase/,
     )
   })
 
   it('rejects a media type key with leading or trailing whitespace', () => {
-    expect(() => defineEndpoint({ body: { ' application/json': UserJson } })).toThrow(
+    expect(() => defineEndpointContract({ body: { ' application/json': UserJson } })).toThrow(
       /must not have leading or trailing whitespace/,
     )
   })
 
   it('rejects a schema on a media type the runtime cannot parse, naming the way out', () => {
-    expect(() => defineEndpoint({ body: { 'application/xml': UserJson } })).toThrow(
+    expect(() => defineEndpointContract({ body: { 'application/xml': UserJson } })).toThrow(
       /application\/xml.*cannot be validated by a schema.*`true`.*application\/json/s,
     )
   })
 
   it('accepts any well-formed media type when the member is declared unparsed', () => {
-    expect(() => defineEndpoint({ body: { 'application/xml': true } })).not.toThrow()
-    expect(() => defineEndpoint({ body: { 'application/pdf': true } })).not.toThrow()
+    expect(() => defineEndpointContract({ body: { 'application/xml': true } })).not.toThrow()
+    expect(() => defineEndpointContract({ body: { 'application/pdf': true } })).not.toThrow()
     // The shape check still applies. A key with no `/` at all does not even
     // read as a media-type map, and is rejected by that discrimination first.
-    expect(() => defineEndpoint({ body: { 'application/': true } })).toThrow(
+    expect(() => defineEndpointContract({ body: { 'application/': true } })).toThrow(
       /not a single type\/subtype media type/,
     )
-    expect(() => defineEndpoint({ body: { xml: true } })).toThrow(
+    expect(() => defineEndpointContract({ body: { xml: true } })).toThrow(
       /must be either a validator schema or an object mapping media types/,
     )
   })
 
   it('rejects a map member that is not a validator schema', () => {
     expect(() =>
-      defineEndpoint({ body: { 'application/json': { not: 'a schema' } as never } }),
+      defineEndpointContract({ body: { 'application/json': { not: 'a schema' } as never } }),
     ).toThrow(/must be a validator schema/)
   })
 
   it('rejects an ambiguous body value that is neither a schema nor a media-type map', () => {
-    expect(() => defineEndpoint({ body: 'oops' as never })).toThrow(
+    expect(() => defineEndpointContract({ body: 'oops' as never })).toThrow(
       /must be either a validator schema or an object mapping media types/,
     )
   })

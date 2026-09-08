@@ -1,8 +1,7 @@
 import { z } from 'zod'
-import { defineRouteHandler } from '../../../../../src/runtime'
-
-export default defineRouteHandler({
-  validate: {
+import { defineEndpoint } from '../../../../../src/runtime'
+export default defineEndpoint({
+  request: {
     body: {
       'application/json': z.object({ name: z.string() }),
       'application/x-www-form-urlencoded': z.object({ name: z.string() }),
@@ -11,9 +10,9 @@ export default defineRouteHandler({
         file: z.file().max(5000).mime('text/plain'),
       }),
     },
-    response: {
-      201: z.object({ name: z.string(), bodyMediaType: z.string() }),
-    },
+  },
+  responses: {
+    201: z.object({ name: z.string(), bodyMediaType: z.string() }),
   },
   handler: (event) => {
     return event.respond(201, {

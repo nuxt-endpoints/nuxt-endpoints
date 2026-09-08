@@ -16,6 +16,7 @@ import { createJiti } from 'jiti'
 import { camelCase } from 'scule'
 import {
   generateEndpointClient,
+  generateEndpointFormRoutes,
   generateEndpointHandlerManifest,
   generateEndpointTypes,
   toImportPath,
@@ -26,12 +27,19 @@ import type { ContractModuleLoaders } from './discovery'
 import { collectNitroRouteHandlers } from './nitro-route-handlers'
 import type { NitroRouteHandlerDescriptor, NitroRouteHandlerSource } from './nitro-route-handlers'
 import { idempotencyMetadataWithoutRuntimeMessage } from './runtime/endpoint'
-import { defineRouteHandler } from './runtime/route-handler'
+import { defineEndpoint } from './runtime/route-handler'
 import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import { isMediaResponseContract } from './runtime/response'
+import { findFormBodyMember } from './runtime/body-media-type'
+import { formFieldAttributes } from './runtime/form-schema'
+import type { EndpointFormRouteMetadata } from './codegen/types'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
-import type { EndpointDefinition, EndpointIdempotencyMetadata } from './runtime/contract'
-import { inspectValidatorInputObject } from './runtime/validator'
+import type {
+  EndpointDefinition,
+  EndpointIdempotencyMetadata,
+  ResponseContract,
+} from './runtime/contract'
+import { inspectValidatorInputObject, inspectValidatorOutputObject } from './runtime/validator'
 import { cursorPaginationRouteMetadata } from './runtime/pagination'
 import type { EndpointPaginationRouteMetadata } from './runtime/pagination'
 import { isReservedEndpointName, isValidEndpointName } from './runtime/endpoint-name'
@@ -65,9 +73,7 @@ const idempotencyPolicyExtensions = ['.ts', '.mts', '.js', '.mjs']
 // Helpers that discovery-evaluated route modules may use through Nuxt
 // auto-imports. Each needs a matching global shim while jiti evaluates those
 // modules, where Nuxt auto-imports do not exist.
-const discoveryEvaluatedServerHelpers = [
-  { name: 'defineRouteHandler', value: defineRouteHandler },
-] as const
+const discoveryEvaluatedServerHelpers = [{ name: 'defineEndpoint', value: defineEndpoint }] as const
 
 export type EndpointsOpenApiModuleOptions = {
   enabled?: boolean
@@ -98,7 +104,7 @@ type ResolvedEndpointsModuleOptions = {
 // surfaces here as a compile error instead of silently going unread.
 type EndpointCarrierDefinition = Pick<
   EndpointDefinition,
-  'name' | 'idempotency' | 'headers' | 'responses' | 'pagination'
+  'name' | 'idempotency' | 'headers' | 'body' | 'query' | 'responses' | 'form' | 'pagination'
 >
 
 // `__idempotency_runtime_marker__` stays optional here: hand-written endpoint exports
@@ -121,7 +127,7 @@ type EndpointRouteModule = {
 }
 
 // Detection result for one declared method (a single-method route, or one
-// member of a multi-method `defineRouteHandler()` definition).
+// member of a multi-method `defineEndpoint()` definition).
 type EndpointMethodDetection = {
   name?: string
   idempotency?: EndpointIdempotencyMetadata
@@ -129,6 +135,8 @@ type EndpointMethodDetection = {
   idempotencyRuntimeGaps?: readonly string[]
   /** Set when any declared status is a media response, so it is never parsed. */
   mediaResponse?: true
+  /** Set when the route declares `form`, with its field attributes resolved. */
+  form?: EndpointFormRouteMetadata
   pagination?: EndpointPaginationRouteMetadata
 }
 
@@ -231,6 +239,13 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         return generateEndpointHandlerManifest(endpointHandlerManifest)
       },
     })
+    addServerTemplate({
+      filename: `#nuxt-${moduleName}/form-routes`,
+      getContents: () =>
+        endpointHandlerManifest
+          ? generateEndpointFormRoutes(endpointHandlerManifest)
+          : 'export const formRoutes = {}\n',
+    })
 
     addServerTemplate({
       filename: `#nuxt-${moduleName}/runtime`,
@@ -308,6 +323,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     nuxt.options.build.transpile.push(resolve('./runtime'))
     addServerPlugin(resolve('./runtime/server-plugin'))
+    addServerPlugin(resolve('./runtime/form-plugin'))
+    // With no route declaring `form`, the generated map is empty and this
+    // middleware returns after one pathname lookup.
+    addServerHandler({ middleware: true, handler: resolve('./runtime/form-bridge') })
     if (resolvedOptions.openApi.enabled) {
       addServerHandler({
         route: resolvedOptions.openApi.path,
@@ -326,10 +345,12 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     addImports([
       { from: runtimeFile, name: '$endpoint' },
       { from: runtimeFile, name: 'useEndpoint' },
+      { from: runtimeFile, name: 'useEndpointForm' },
       { from: typeFile, type: true, name: '$EndpointPathResponse' },
       { from: typeFile, type: true, name: '$EndpointPathCall' },
       { from: typeFile, type: true, name: '$EndpointPathRawResponse' },
       { from: typeFile, type: true, name: '$UseEndpoint' },
+      { from: typeFile, type: true, name: '$UseEndpointForm' },
       { from: typeFile, type: true, name: '$UseEndpointPathCall' },
       { from: typeFile, type: true, name: 'EndpointPath' },
       { from: typeFile, type: true, name: 'EndpointMethod' },
@@ -374,7 +395,7 @@ async function composeHandlers(
       )
     }
 
-    const { name, idempotency, idempotencyRuntimeGaps, mediaResponse, pagination } = detection
+    const { name, idempotency, idempotencyRuntimeGaps, mediaResponse, form, pagination } = detection
     if (name !== undefined) {
       if (!isValidEndpointName(name)) {
         throw new Error(
@@ -399,6 +420,16 @@ async function composeHandlers(
         `[nuxt-endpoints] Idempotent endpoint route ${handler.handler} needs ${idempotencyRuntimeGaps.join(', ')}, but no endpoint runtime file was found. Declare an application policy or route override in server/endpoints/runtime.ts.`,
       )
     }
+    if (form && /[:*]/.test(route)) {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form\`, but a native <form> submission cannot fill in a path parameter. Project a route with no parameters, or carry the value in the body.`,
+      )
+    }
+    if (form && method.toLowerCase() !== form.method) {
+      throw new Error(
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares \`form.method: '${form.method}'\`, but the endpoint method is ${method.toUpperCase()}. The native form method and endpoint method must match; PUT, PATCH, and DELETE are not emulated over POST.`,
+      )
+    }
     if (pagination && method.toLowerCase() !== 'get') {
       throw new Error(
         `[nuxt-endpoints] Route ${handler.handler} (${route}) declares cursor pagination, but its method is ${method.toUpperCase()}. Cursor pagination is only supported on GET routes.`,
@@ -411,6 +442,7 @@ async function composeHandlers(
       ...(name !== undefined ? { name } : {}),
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
       ...(idempotency ? { idempotency } : {}),
+      ...(form ? { form } : {}),
       ...(pagination ? { pagination } : {}),
       ...(methodGroup ? { methodGroup: true as const } : {}),
     })
@@ -430,7 +462,7 @@ async function composeHandlers(
     if (isEndpointGroupDetection(detection)) {
       if (handler.method) {
         throw new Error(
-          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineRouteHandler() on a method-suffixed file (.${handler.method}.ts). Multi-method handlers belong on a method-suffix-free route file — their other methods would otherwise be unreachable. Move the definition to a bare route file, or keep only one root handler.`,
+          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineEndpoint() on a method-suffixed file (.${handler.method}.ts). Multi-method handlers belong on a method-suffix-free route file — their other methods would otherwise be unreachable. Move the definition to a bare route file, or keep only one root handler.`,
         )
       }
       for (const [method, memberDetection] of Object.entries(detection.methods)) {
@@ -441,7 +473,7 @@ async function composeHandlers(
 
     if (!handler.method) {
       throw new Error(
-        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineRouteHandler() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineEndpoint() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
       )
     }
 
@@ -564,6 +596,7 @@ export function getEndpointFromCarrier(
 
   const mediaResponse = hasMediaResponse(definition)
   const idempotency = parseEndpointIdempotencyMetadata(definition.idempotency)
+  const form = resolveFormMetadata(definition)
   const pagination = definition.pagination
     ? cursorPaginationRouteMetadata(definition.pagination)
     : undefined
@@ -582,8 +615,158 @@ export function getEndpointFromCarrier(
     ...(definition.name !== undefined ? { name: definition.name } : {}),
     ...(mediaResponse ? { mediaResponse: true as const } : {}),
     ...(idempotency ? { idempotency } : {}),
+    ...(form ? { form } : {}),
     ...(pagination ? { pagination } : {}),
     ...(idempotencyRuntimeGaps?.length ? { idempotencyRuntimeGaps } : {}),
+  }
+}
+
+/** Runtime/build-time counterpart of NativeFormProjectionConstraint. */
+function assertNativeFormCanSatisfy(
+  schema: unknown,
+  slot: 'headers' | 'query',
+  reason: string,
+): void {
+  if (schema === undefined) return
+  const { inspectable, required } = inspectValidatorInputObject(schema)
+  if (!inspectable) {
+    throw new Error(
+      `[nuxt-endpoints] ${reason}, and request.${slot} on a route declaring \`form\` could not be inspected to prove it requires none.`,
+    )
+  }
+  if (required.length > 0) {
+    throw new Error(
+      `[nuxt-endpoints] ${reason}, so request.${slot} on a route declaring \`form\` cannot require any. Required: ${required.join(', ')}.`,
+    )
+  }
+}
+
+function resolveFormMetadata(
+  definition: EndpointCarrierDefinition,
+): EndpointFormRouteMetadata | undefined {
+  const form = definition.form
+  if (!form) return undefined
+  if ('from' in form) {
+    throw new Error(
+      '[nuxt-endpoints] form.from was renamed to form.action (the native form submission URL).',
+    )
+  }
+  if (typeof form.action !== 'string' || !form.action.startsWith('/')) {
+    throw new Error(
+      `[nuxt-endpoints] form.action must be an absolute page path, e.g. '/todos/new'. Received ${JSON.stringify(form.action)}.`,
+    )
+  }
+  if (/[?#]/.test(form.action)) {
+    throw new Error(
+      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in request.query for GET, or in the form-encoded body for POST.`,
+    )
+  }
+  const method = form.method ?? 'post'
+  if (method !== 'get' && method !== 'post') {
+    throw new Error(
+      `[nuxt-endpoints] form.method must be 'get' or 'post'. Received ${JSON.stringify(method)}.`,
+    )
+  }
+  if (definition.idempotency) {
+    throw new Error(
+      '[nuxt-endpoints] A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare `form`.',
+    )
+  }
+  assertNativeFormCanSatisfy(
+    definition.headers,
+    'headers',
+    'A native <form> cannot send request headers',
+  )
+
+  if (method === 'get') {
+    if (definition.body !== undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `request.body`.',
+      )
+    }
+    if (definition.query === undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form needs `request.query` to declare the fields the browser places in the URL.',
+      )
+    }
+    if ('redirect' in form && form.redirect !== undefined) {
+      throw new Error(
+        '[nuxt-endpoints] A GET form submission is already a navigation, so it cannot declare `form.redirect`.',
+      )
+    }
+    return {
+      action: form.action,
+      method,
+      enctype: 'application/x-www-form-urlencoded',
+      fields: formFieldAttributes(definition.query),
+    }
+  }
+
+  const member = findFormBodyMember(definition.body)
+  if (!member) {
+    throw new Error(
+      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`request.body\` - \`formOf()\` derives one from the JSON member.`,
+    )
+  }
+  assertNativeFormCanSatisfy(
+    definition.query,
+    'query',
+    'A native <form> submission reaches the endpoint with no query string',
+  )
+  if (form.redirect !== undefined) {
+    if (typeof form.redirect !== 'string' || !form.redirect.startsWith('/')) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect must be an absolute application path, e.g. '/todos/{id}'. Received ${JSON.stringify(form.redirect)}.`,
+      )
+    }
+    assertFormRedirectCanBeResolved(form.redirect, definition.responses)
+  }
+  return {
+    action: form.action,
+    method,
+    ...(form.redirect ? { redirect: form.redirect } : {}),
+    enctype: member.mediaType,
+    fields: formFieldAttributes(member.schema),
+  }
+}
+
+function assertFormRedirectCanBeResolved(
+  redirect: string,
+  responses: EndpointCarrierDefinition['responses'],
+): void {
+  const placeholders = [...redirect.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]!)
+  if (placeholders.length === 0) return
+  const successful = Object.entries(responses ?? {}).filter(([status]) => {
+    const parsed = Number(status)
+    return Number.isInteger(parsed) && parsed >= 200 && parsed < 300
+  }) as [string, ResponseContract][]
+  if (successful.length === 0) {
+    throw new Error(
+      `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but the route declares no successful response body.`,
+    )
+  }
+  for (const [status, response] of successful) {
+    if (isMediaResponseContract(response)) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but successful response ${status} is media and has no JSON body to resolve them from.`,
+      )
+    }
+    const schema =
+      typeof response === 'object' && response !== null && 'body' in response
+        ? response.body
+        : response
+    const { inspectable, properties } = inspectValidatorOutputObject(schema)
+    if (!inspectable) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect uses response placeholder(s) ${placeholders.join(', ')}, but successful response ${status} could not be inspected as an object.`,
+      )
+    }
+    const missing = placeholders.filter((name) => !(name in properties))
+    if (missing.length > 0) {
+      throw new Error(
+        `[nuxt-endpoints] form.redirect cannot resolve ${missing.join(', ')} from successful response ${status}; declare those response body properties or use a literal redirect.`,
+      )
+    }
   }
 }
 

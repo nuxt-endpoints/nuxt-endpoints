@@ -2,7 +2,7 @@ import { createApp, createRouter, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import * as publicRuntime from '../src/runtime'
-import { defineRouteHandler } from '../src/runtime'
+import { defineEndpoint } from '../src/runtime'
 import type { EndpointRouteEvent } from '../src/runtime'
 
 async function requestRoute(
@@ -18,18 +18,16 @@ async function requestRoute(
   return toWebHandler(app)(new Request(url, init))
 }
 
-describe('canonical defineRouteHandler compatibility adapter', () => {
+describe('canonical defineEndpoint compatibility adapter', () => {
   it('validates a single-method route and exposes the public route definition', async () => {
     const definition = {
-      params: z.object({ id: z.coerce.number() }),
-      validate: {
-        response: { 200: z.object({ id: z.number() }) },
-      },
+      request: { params: z.object({ id: z.coerce.number() }) },
+      responses: { 200: z.object({ id: z.number() }) },
       handler: (event: EndpointRouteEvent<any>) => ({
         id: (event.validated.params as { id: number }).id,
       }),
     }
-    const handler = defineRouteHandler(definition)
+    const handler = defineEndpoint(definition)
 
     expect(handler['~routeDef']).toBe(definition)
     const response = await requestRoute(handler as never, '/users/:id', 'http://test/users/7')
@@ -37,16 +35,14 @@ describe('canonical defineRouteHandler compatibility adapter', () => {
   })
 
   it('dispatches the multi-method form through the same public API', async () => {
-    const handler = defineRouteHandler({
+    const handler = defineEndpoint({
       get: {
-        validate: { response: { 200: z.object({ method: z.literal('get') }) } },
+        responses: { 200: z.object({ method: z.literal('get') }) },
         handler: () => ({ method: 'get' as const }),
       },
       post: {
-        validate: {
-          body: z.object({ value: z.string() }),
-          response: { 201: z.object({ value: z.string() }) },
-        },
+        request: { body: z.object({ value: z.string() }) },
+        responses: { 201: z.object({ value: z.string() }) },
         handler: (event) => event.respond(201, { value: event.validated.body.value }),
       },
     })
@@ -64,9 +60,24 @@ describe('canonical defineRouteHandler compatibility adapter', () => {
   })
 
   it('does not publish the legacy authoring functions', () => {
-    expect(publicRuntime).not.toHaveProperty('defineEndpoint')
+    expect(publicRuntime).not.toHaveProperty('defineEndpointContract')
     expect(publicRuntime).not.toHaveProperty('defineEndpointHandler')
     expect(publicRuntime).not.toHaveProperty('defineEndpointMethods')
     expect(publicRuntime).not.toHaveProperty('defineEndpointMethodHandlers')
+  })
+
+  it('rejects the removed authoring shape for JavaScript callers', () => {
+    expect(() =>
+      defineEndpoint({ params: z.object({ id: z.string() }), handler: () => null } as never),
+    ).toThrow(/`params` is not supported/)
+    expect(() =>
+      defineEndpoint({
+        validate: { query: z.object({ q: z.string() }) },
+        handler: () => null,
+      } as never),
+    ).toThrow(/`validate` is not supported/)
+    expect(() =>
+      defineEndpoint({ response: { 200: z.string() }, handler: () => null } as never),
+    ).toThrow(/`response` is not supported/)
   })
 })

@@ -18,8 +18,8 @@ shared claim.
 The normal route API is one line:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: z.object({ text: z.string() }),
   },
   idempotency: true,
@@ -36,9 +36,11 @@ does not write that metadata itself.
 Method groups use the same declaration inside the relevant method:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   post: {
-    validate: { body: z.object({ text: z.string() }) },
+    request: {
+      body: z.object({ text: z.string() }),
+    },
     idempotency: true,
     handler: (event) => saveComment(event.validated.body),
   },
@@ -90,7 +92,6 @@ namespace explicitly:
 // server/endpoints/runtime.ts
 import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
 import { storage } from '../utils/idempotency-storage'
-
 export default defineEndpointRuntime({
   idempotency: {
     storage: () => storage,
@@ -145,14 +146,13 @@ export default defineEndpointRuntime({
     storage: () => storage,
     scope: 'global',
     authorization: 'public',
-    leaseTtlMs: 5 * 60_000,
+    leaseTtlMs: 5 * 60000,
   },
-
   routes: {
     '/api/slow-operation': {
       post: {
         idempotency: {
-          leaseTtlMs: 15 * 60_000,
+          leaseTtlMs: 15 * 60000,
         },
       },
     },

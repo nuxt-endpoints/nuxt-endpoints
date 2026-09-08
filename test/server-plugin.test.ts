@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   createMemoryIdempotencyStorage,
-  defineEndpoint,
+  defineEndpointContract,
   defineEndpointRuntime,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
-  defineRouteHandler,
+  defineEndpoint,
 } from './internal-runtime'
 import type { EndpointRuntime } from './internal-runtime'
 
@@ -30,7 +30,7 @@ const disabledOpenApiOptions = {
 describe('idempotency route metadata startup', () => {
   it('attaches route identity even when OpenAPI is disabled', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
         storage: () => storage,
@@ -50,7 +50,7 @@ describe('idempotency route metadata startup', () => {
 
   it('fails startup when one idempotent handler is registered for multiple routes', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
         storage: () => storage,
@@ -68,7 +68,7 @@ describe('idempotency route metadata startup', () => {
   })
 
   it('allows one non-idempotent handler to be registered for multiple routes', async () => {
-    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const handler = defineEndpointContract({}).handler(() => ({ ok: true }))
 
     await expect(
       extractEndpoints([
@@ -116,7 +116,7 @@ describe('idempotency runtime option resolution at startup', () => {
     const runtime = defineEndpointRuntime({
       routes: { '/api/items': { post: endpointRuntime } },
     } as never)
-    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const handler = defineEndpointContract({}).handler(() => ({ ok: true }))
     const setRuntime = vi.spyOn(handler, '__set_endpoint_runtime__')
 
     await expect(
@@ -134,8 +134,8 @@ describe('idempotency runtime option resolution at startup', () => {
   })
 
   it('resolves the default response-validation mode from Nuxt dev state', async () => {
-    const developmentHandler = defineEndpoint({}).handler(() => ({ ok: true }))
-    const productionHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const developmentHandler = defineEndpointContract({}).handler(() => ({ ok: true }))
+    const productionHandler = defineEndpointContract({}).handler(() => ({ ok: true }))
     const developmentRuntime = vi.spyOn(developmentHandler, '__set_endpoint_runtime__')
     const productionRuntime = vi.spyOn(productionHandler, '__set_endpoint_runtime__')
 
@@ -169,8 +169,8 @@ describe('idempotency runtime option resolution at startup', () => {
   it('lets an explicit response-validation mode override Nuxt dev state', async () => {
     const always = defineEndpointRuntime({ validation: { response: 'always' } })
     const never = defineEndpointRuntime({ validation: { response: 'never' } })
-    const alwaysHandler = defineEndpoint({}).handler(() => ({ ok: true }))
-    const neverHandler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const alwaysHandler = defineEndpointContract({}).handler(() => ({ ok: true }))
+    const neverHandler = defineEndpointContract({}).handler(() => ({ ok: true }))
     const alwaysRuntime = vi.spyOn(alwaysHandler, '__set_endpoint_runtime__')
     const neverRuntime = vi.spyOn(neverHandler, '__set_endpoint_runtime__')
 
@@ -185,7 +185,7 @@ describe('idempotency runtime option resolution at startup', () => {
     const runtime = defineEndpointRuntime({
       routes: { '/api/missing': { post: { onValidationError: () => undefined } } },
     })
-    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const handler = defineEndpointContract({}).handler(() => ({ ok: true }))
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)], runtime)).rejects.toThrow(
       /Runtime entry post \/api\/missing does not match a discovered endpoint route/,
@@ -196,7 +196,7 @@ describe('idempotency runtime option resolution at startup', () => {
     const runtime = defineEndpointRuntime({
       routes: { '/api/items': { post: { onValidationError: () => undefined } } },
     })
-    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const handler = defineEndpointContract({}).handler(() => ({ ok: true }))
 
     await expect(
       extractEndpoints(
@@ -210,7 +210,7 @@ describe('idempotency runtime option resolution at startup', () => {
     const runtime = defineEndpointRuntime({
       routes: { '/api/items': { post: { idempotency: { fingerprint: () => ({}) } } } },
     })
-    const handler = defineEndpoint({}).handler(() => ({ ok: true }))
+    const handler = defineEndpointContract({}).handler(() => ({ ok: true }))
 
     await expect(extractEndpoints([route('/api/items', 'post', handler)], runtime)).rejects.toThrow(
       /configures idempotency.*route contract does not enable it/i,
@@ -219,7 +219,7 @@ describe('idempotency runtime option resolution at startup', () => {
 
   it('accepts a bodyless idempotent route when its runtime entry supplies a fingerprint', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const handler = defineRouteHandler({
+    const handler = defineEndpoint({
       idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
       handler: () => ({ ok: true }),
     })
@@ -241,7 +241,7 @@ describe('idempotency runtime option resolution at startup', () => {
 
   it('gives a bodyless idempotent route an actionable runtime fingerprint error', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const handler = defineRouteHandler({
+    const handler = defineEndpoint({
       idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
       handler: () => ({ ok: true }),
     })
@@ -262,7 +262,7 @@ describe('idempotency runtime option resolution at startup', () => {
 
   it('injects the central policy (or its absence) into every idempotent handler', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
         storage: () => storage,
@@ -291,7 +291,7 @@ describe('idempotency runtime option resolution at startup', () => {
         authorization: 'middleware',
       },
     }
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
         required: true,
@@ -312,7 +312,7 @@ describe('idempotency runtime option resolution at startup', () => {
   })
 
   it('fails startup listing the runtime options missing without any central policy', async () => {
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
         scope: () => 'public',
@@ -327,7 +327,7 @@ describe('idempotency runtime option resolution at startup', () => {
   it('fails startup when the central policy does not cover the remaining gap', async () => {
     const storage = createMemoryIdempotencyStorage()
     const partialRuntime = { idempotency: { storage: () => storage } } as unknown as EndpointRuntime
-    const handler = defineEndpoint({})
+    const handler = defineEndpointContract({})
       .idempotency({
         fingerprint: () => ({}),
       })
@@ -346,7 +346,7 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
   }
 
   it('merges the runtime file document patch and runs extend last', async () => {
-    const endpoint = defineEndpoint({}).handler(() => ({ ok: true }))
+    const endpoint = defineEndpointContract({}).handler(() => ({ ok: true }))
     const runtime: EndpointRuntime = {
       openApi: {
         document: { servers: [{ url: 'https://api.example.test' }] },
@@ -369,7 +369,7 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
   })
 
   it('generates the document unchanged when the runtime file declares no openApi', async () => {
-    const endpoint = defineEndpoint({}).handler(() => ({ ok: true }))
+    const endpoint = defineEndpointContract({}).handler(() => ({ ok: true }))
 
     const document = await initializeEndpointHandlers(
       [route('/api/items', 'get', endpoint)],
@@ -381,12 +381,10 @@ describe('OpenAPI document layering from the endpoint runtime file', () => {
   })
 
   it('adds matching global, path, and method response contracts to OpenAPI', async () => {
-    const endpoint = defineRouteHandler({
-      validate: {
-        response: {
-          200: z.object({ ok: z.literal(true) }),
-          401: z.object({ source: z.literal('endpoint') }),
-        },
+    const endpoint = defineEndpoint({
+      responses: {
+        200: z.object({ ok: z.literal(true) }),
+        401: z.object({ source: z.literal('endpoint') }),
       },
       handler: () => ({ ok: true as const }),
     })
@@ -470,8 +468,8 @@ function route(path: string, method: string, handler: object) {
 describe('method-group startup handling', () => {
   it('collects every declared method of a defineEndpointMethods() group', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({}),
-      put: defineEndpoint({}),
+      get: defineEndpointContract({}),
+      put: defineEndpointContract({}),
     })
     const dispatcher = defineEndpointMethodHandlers(endpoints, {
       get: () => ({ ok: true }),
@@ -489,8 +487,8 @@ describe('method-group startup handling', () => {
   it('applies idempotency runtime-gap validation per group member independently', async () => {
     const storage = createMemoryIdempotencyStorage()
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({}),
-      post: defineEndpoint({}).idempotency({
+      get: defineEndpointContract({}),
+      post: defineEndpointContract({}).idempotency({
         fingerprint: () => ({}),
         storage: () => storage,
         scope: () => 'public',
@@ -512,8 +510,8 @@ describe('method-group startup handling', () => {
 
   it('fails startup when an idempotent group member is missing runtime options', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({}),
-      post: defineEndpoint({}).idempotency({
+      get: defineEndpointContract({}),
+      post: defineEndpointContract({}).idempotency({
         fingerprint: () => ({}),
         scope: () => 'public',
       }),
@@ -533,14 +531,14 @@ describe('method-group startup handling', () => {
 
   it('fails startup when a manifest entry declares a method absent from its group', async () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({}),
+      get: defineEndpointContract({}),
     })
     const dispatcher = defineEndpointMethodHandlers(endpoints, {
       get: () => ({ ok: true }),
     })
 
     await expect(extractEndpoints([route('/api/multi', 'delete', dispatcher)])).rejects.toThrow(
-      /has no matching member in its multi-method defineRouteHandler\(\)/,
+      /has no matching member in its multi-method defineEndpoint\(\)/,
     )
   })
 })

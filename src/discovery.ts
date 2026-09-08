@@ -9,7 +9,7 @@ export type EndpointCarrierSource = { kind: 'skip' } | { kind: 'route-module' }
 /**
  * Nitro 2 has no route-contract provider, so the compatibility implementation
  * evaluates canonical route modules with jiti. Only the future-facing direct
- * `defineRouteHandler()` form participates in discovery.
+ * `defineEndpoint()` form participates in discovery.
  */
 export function analyzeEndpointContractSource(fileContent: string): EndpointContractAnalysis {
   return hasEndpointDefinition(fileContent) ? { kind: 'co-located' } : { kind: 'none' }
@@ -49,7 +49,7 @@ export function hasEndpointDefinition(fileContent: string): boolean {
     while (index < fileContent.length && isIdentifierPart(fileContent[index])) {
       index += 1
     }
-    if (fileContent.slice(identifierStart, index) !== 'defineRouteHandler') {
+    if (fileContent.slice(identifierStart, index) !== 'defineEndpoint') {
       continue
     }
 
@@ -85,7 +85,7 @@ export function assertEndpointModuleEvaluated(
     )
   }
   throw new Error(
-    `[nuxt-endpoints] Route ${handlerPath} calls defineRouteHandler(), but its evaluated default export did not expose route contract metadata. Keep the canonical direct default-export form.`,
+    `[nuxt-endpoints] Route ${handlerPath} calls defineEndpoint(), but its evaluated default export did not expose route contract metadata. Keep the canonical direct default-export form.`,
   )
 }
 

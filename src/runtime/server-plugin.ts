@@ -1,4 +1,3 @@
-import { defineNitroPlugin } from 'nitropack/runtime/plugin'
 import endpointsOptions from '#nuxt-endpoints/options'
 import endpointRuntimeModule from '#nuxt-endpoints/runtime'
 import serverRouteConfigModule from '#nuxt-endpoints/server-route-config'
@@ -25,6 +24,7 @@ import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 import { resolveServerRouteResponseMaps, validateServerRouteConfig } from './server-route-config'
 import type { ServerRouteConfig } from './server-route-config'
+import { defineRuntimePlugin } from './platform'
 
 type EndpointsRuntimeOptions = {
   dev: boolean
@@ -54,7 +54,7 @@ type HandlerDefinition = {
   load: () => Promise<HandlerFunction>
 }
 
-export default defineNitroPlugin(async () => {
+export default defineRuntimePlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
@@ -210,7 +210,7 @@ function assertRouteRuntimeIsNotShared(
   const previous = registrations.get(handler)
   if (previous && (previous.hasOverride || routeRuntime !== undefined)) {
     throw new Error(
-      `[nuxt-endpoints] Route-specific runtime settings cannot be attached to a handler shared by ${previous.identity} and ${current}. Export a distinct defineRouteHandler() instance for each route.`,
+      `[nuxt-endpoints] Route-specific runtime settings cannot be attached to a handler shared by ${previous.identity} and ${current}. Export a distinct defineEndpoint() instance for each route.`,
     )
   }
   registrations.set(handler, {
@@ -238,7 +238,7 @@ function resolveEndpointContract(
   const member = handler.__endpoint_contracts__[definition.method]
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching member in its multi-method defineRouteHandler(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
+      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching member in its multi-method defineEndpoint(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
     )
   }
   return member

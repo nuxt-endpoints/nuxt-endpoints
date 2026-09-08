@@ -22,7 +22,7 @@ the canonical endpoint authoring form are skipped.
 
 ### Endpoint discovery fails closed
 
-On the Nitro 2 compatibility line, canonical `defineRouteHandler` modules are evaluated with Jiti. If evaluation fails or the default export does not expose route metadata, generation stops with an actionable error. Partial contracts are not reconstructed from source parsing because that could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes remain unaffected.
+On the Nitro 2 compatibility line, canonical `defineEndpoint` modules are evaluated with Jiti. If evaluation fails or the default export does not expose route metadata, generation stops with an actionable error. Partial contracts are not reconstructed from source parsing because that could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes remain unaffected.
 
 ### Catch-all and optional-parameter routes cannot declare endpoints
 

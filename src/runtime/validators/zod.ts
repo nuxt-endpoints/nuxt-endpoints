@@ -21,6 +21,8 @@ export type ZodV4SchemaLike = ZodLike & {
   isOptional?: () => boolean
   meta?: () => unknown
   toJSONSchema?: (options: {
+    /** Which direction to describe. Absent means Zod's own default, `'output'`. */
+    io?: 'input' | 'output'
     unrepresentable: 'any'
     override: (context: { zodSchema: ZodV4SchemaLike; jsonSchema: Record<string, unknown> }) => void
   }) => unknown
@@ -80,6 +82,7 @@ export async function parseZodLike<SCHEMA extends ZodLike>(
 export function zodV4ToOpenApiSchema(
   schema: ZodV4SchemaLike,
   context: JsonSchemaConversionContext,
+  io: 'input' | 'output' = 'output',
 ): JsonSchema {
   if (typeof schema.toJSONSchema !== 'function') {
     throw new Error(
@@ -88,6 +91,7 @@ export function zodV4ToOpenApiSchema(
   }
 
   const converted = schema.toJSONSchema({
+    io,
     unrepresentable: 'any',
     override({ zodSchema, jsonSchema }) {
       if (zodSchema._zod?.def?.type === 'date') {

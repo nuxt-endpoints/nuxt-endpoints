@@ -217,6 +217,39 @@ export type NormalizeEndpointIdempotencyInput<INPUT> = INPUT extends undefined
       >
     : never
 
+/**
+ * Declares that this endpoint can also be reached by a native `<form>`.
+ *
+ * Deliberately static, so the whole thing survives the build-time contract
+ * extraction and reaches both the client and the server bridge. A callback
+ * would have to live in a runtime slot instead, and then the client could not
+ * see it - the macro strips runtime-only properties from the contract.
+ *
+ * See docs/progressive-enhancement.md.
+ */
+type EndpointFormContractBase = {
+  /**
+   * The page URL the form submits to. A GET remains ordinary navigation; a
+   * POST is translated into a call to this endpoint and its response is
+   * translated back into what a browser can act on.
+   */
+  action: string
+}
+
+export type EndpointFormContract =
+  | (EndpointFormContractBase & {
+      /** POST is the mutation form default. */
+      method?: 'post'
+      /** Success target template over the response body. */
+      redirect?: string
+    })
+  | (EndpointFormContractBase & {
+      /** GET projects `request.query` into a URL-backed search/filter form. */
+      method: 'get'
+      /** A GET submission already navigates to its destination. */
+      redirect?: never
+    })
+
 export type EndpointDefinition = EndpointRequestContract & {
   /** Optional stable property name for the generated `$endpoint` client. */
   name?: string
@@ -225,6 +258,7 @@ export type EndpointDefinition = EndpointRequestContract & {
   description?: string
   tags?: string[]
   idempotency?: EndpointIdempotencyMetadata
+  form?: EndpointFormContract
   pagination?: EndpointPaginationContract
 }
 

@@ -8,12 +8,14 @@ keeps native HTTP escape hatches.
 
 ## Native responses
 
-Omit `validate.response` when the response should not be modelled as a typed
+Omit `responses` when the response should not be modelled as a typed
 body. Request validation still applies; callers should use `.raw()`.
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ id: z.string() }),
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.string() }),
+  },
   handler: (event) => new Response(`raw response for ${event.validated.params.id}`),
 })
 ```
@@ -34,12 +36,12 @@ and streams do not serialize into Nuxt async-data payloads.
 Use a media response when the representation is known:
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ id: z.string() }),
-  validate: {
-    response: {
-      200: { media: 'application/pdf', description: 'Invoice PDF' },
-    },
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.string() }),
+  },
+  responses: {
+    200: { media: 'application/pdf', description: 'Invoice PDF' },
   },
   handler: async (event) => {
     const file = await loadFile(event.validated.params.id)
@@ -67,14 +69,14 @@ A media-type body map validates parsed representations and can expose raw
 bytes for selected members:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: {
       'multipart/form-data': z.object({ name: z.string() }),
       'application/pdf': true,
     },
-    response: { 201: z.object({ ok: z.literal(true) }) },
   },
+  responses: { 201: z.object({ ok: z.literal(true) }) },
   handler: (event) => {
     if (event.bodyMediaType === 'application/pdf') {
       return event.respond(201, { ok: savePdf(event.validated.body) })
@@ -92,8 +94,8 @@ processing rather than a parsed contract value.
 Redirect semantics belong to HTTP rather than a JSON response schema:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     query: z.object({ to: z.string().startsWith('/') }),
   },
   handler: (event) =>
@@ -112,8 +114,10 @@ Return the upstream `Response` directly. Do not declare a schema unless the
 route actually reads and validates the upstream body:
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ path: z.string() }),
+export default defineEndpoint({
+  request: {
+    params: z.object({ path: z.string() }),
+  },
   handler: (event) => {
     return fetch(new URL(event.validated.params.path, 'https://upstream.example'), {
       method: event.req.method,
@@ -130,11 +134,9 @@ An explicit 204 can be declared as a media response and returned with
 `respond`:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: {
-      204: { media: 'application/octet-stream', description: 'Deleted' },
-    },
+export default defineEndpoint({
+  responses: {
+    204: { media: 'application/octet-stream', description: 'Deleted' },
   },
   handler: (event) => event.respond(204, new Uint8Array()),
 })

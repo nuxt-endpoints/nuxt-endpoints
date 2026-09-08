@@ -3,7 +3,7 @@
 // `vp run test:typecheck` deliberately excludes `test/fixtures/**`, and the
 // fixture's own `tsconfig` is Nuxt's. So the one place the library is consumed
 // the way an application consumes it - a route file calling
-// `defineRouteHandler` and a page calling the generated client - went
+// `defineEndpoint` and a page calling the generated client - went
 // unchecked, and a contract shape that did not type-check for a handler could
 // pass every check. This closes that hole without needing a server: `nuxi
 // prepare` writes the generated types, then tsc reads them plus `typecheck.ts`.

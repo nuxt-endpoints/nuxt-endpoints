@@ -117,7 +117,9 @@ describe('generateEndpointClient', () => {
       client: { raw: true },
     })
 
-    expect(content).toContain("import { useRequestFetch, useRequestHeaders } from 'nuxt/app'")
+    expect(content).toContain('useRequestFetch')
+    expect(content).toContain('useRequestHeaders')
+    expect(content).toContain("from 'nuxt/app'")
     expect(content).toContain('const captureFetcher = () => {')
     expect(content).toContain('$fetch.create({ headers: useRequestHeaders() })')
     expect(content).toContain(
@@ -125,6 +127,20 @@ describe('generateEndpointClient', () => {
     )
     expect(content).toContain(
       'export const $endpoint = createEndpointClient(routes, { features: {"raw":true}, captureFetcher })',
+    )
+  })
+
+  it('injects the reactivity and navigation primitives useEndpointForm needs', () => {
+    const content = generateEndpointClient(resolve, [healthHandler], {
+      client: { raw: true },
+    })
+
+    expect(content).toContain(
+      'const formBindings = { ref, computed, useState, useRequestEvent, navigateTo }',
+    )
+    expect(content).toContain("import { computed, ref } from 'vue'")
+    expect(content).toContain(
+      'export const useEndpointForm = createUseEndpointForm(routes, { ...formBindings, useEndpoint: useEndpoint as unknown as UseEndpointClientRuntimeValue }, { captureFetcher })',
     )
   })
 

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   createMemoryIdempotencyStorage,
-  defineEndpoint,
+  defineEndpointContract,
   defineEndpointMethodHandlers,
   defineEndpointMethods,
 } from './internal-runtime'
@@ -31,11 +31,11 @@ async function requestThroughH3(
 
 function userEndpoints() {
   return defineEndpointMethods({
-    get: defineEndpoint({
+    get: defineEndpointContract({
       params: z.object({ id: z.coerce.number() }),
       responses: { 200: z.object({ id: z.number(), name: z.string() }) },
     }),
-    put: defineEndpoint({
+    put: defineEndpointContract({
       params: z.object({ id: z.coerce.number() }),
       body: z.object({ name: z.string() }),
       responses: {
@@ -145,7 +145,7 @@ describe('defineEndpointMethods dispatch over real requests', () => {
 
   it('responds 405 to HEAD when the group has no GET member', async () => {
     const endpoints = defineEndpointMethods({
-      post: defineEndpoint({ body: z.object({ name: z.string() }) }),
+      post: defineEndpointContract({ body: z.object({ name: z.string() }) }),
     })
     const handler = defineEndpointMethodHandlers(endpoints, {
       post: ({ body }) => ({ created: body.name }),
@@ -185,7 +185,7 @@ describe('defineEndpointMethods dispatch over real requests', () => {
 describe('defineEndpointMethods route identity and idempotency policy forwarding', () => {
   it('throws when a route identity is attached for a method the group does not declare', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),
+      get: defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } }),
     })
     const handler = defineEndpointMethodHandlers(endpoints, { get: () => ({ id: 1 }) })
 
@@ -201,7 +201,7 @@ describe('defineEndpointMethods route identity and idempotency policy forwarding
 
   it('throws when the same method is attached to two different route templates', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),
+      get: defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } }),
     })
     const handler = defineEndpointMethodHandlers(endpoints, { get: () => ({ id: 1 }) })
     const attach = (handler as never as { __set_endpoint_route__: (identity: unknown) => void })
@@ -217,7 +217,9 @@ describe('defineEndpointMethods route identity and idempotency policy forwarding
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn()
     const endpoints = defineEndpointMethods({
-      put: defineEndpoint({ body: z.object({ name: z.string() }) }).idempotency({ required: true }),
+      put: defineEndpointContract({ body: z.object({ name: z.string() }) }).idempotency({
+        required: true,
+      }),
     })
     const handler = defineEndpointMethodHandlers(endpoints, {
       put: ({ body }) => {
@@ -267,13 +269,13 @@ describe('defineEndpointMethods definition-time validation', () => {
   })
 
   it('rejects head/options as declared methods', () => {
-    const endpoint = defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } })
+    const endpoint = defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } })
     expect(() => defineEndpointMethods({ head: endpoint } as never)).toThrow(TypeError)
     expect(() => defineEndpointMethods({ options: endpoint } as never)).toThrow(TypeError)
   })
 
   it('rejects connect/trace and other unsupported method keys', () => {
-    const endpoint = defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } })
+    const endpoint = defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } })
     expect(() => defineEndpointMethods({ connect: endpoint } as never)).toThrow(TypeError)
     expect(() => defineEndpointMethods({ trace: endpoint } as never)).toThrow(TypeError)
     expect(() => defineEndpointMethods({ fetch: endpoint } as never)).toThrow(TypeError)
@@ -285,8 +287,8 @@ describe('defineEndpointMethods definition-time validation', () => {
 
   it('rejects a missing handler', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),
-      put: defineEndpoint({ body: z.object({ name: z.string() }) }),
+      get: defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } }),
+      put: defineEndpointContract({ body: z.object({ name: z.string() }) }),
     })
     expect(() =>
       defineEndpointMethodHandlers(endpoints, { get: () => ({ id: 1 }) } as never),
@@ -295,7 +297,7 @@ describe('defineEndpointMethods definition-time validation', () => {
 
   it('rejects an extra handler not present in the declared methods', () => {
     const endpoints = defineEndpointMethods({
-      get: defineEndpoint({ responses: { 200: z.object({ id: z.number() }) } }),
+      get: defineEndpointContract({ responses: { 200: z.object({ id: z.number() }) } }),
     })
     expect(() =>
       defineEndpointMethodHandlers(endpoints, {

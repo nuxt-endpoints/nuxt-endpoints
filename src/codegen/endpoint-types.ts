@@ -69,12 +69,13 @@ export function generateEndpointTypes(
     : ''
 
   return `
-import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointMappedClient, EndpointMappedPathCall, EndpointMappedUseClient, EndpointPathCall, EndpointRouteMapEntry, HttpMethod, UseEndpointClient, UseEndpointClientMethod } from '${toImportPath(resolve('./runtime'))}'
+import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointMappedClient, EndpointMappedPathCall, EndpointMappedUseClient, EndpointPathCall, EndpointRouteMapEntry, EndpointRouteMapValue, HttpMethod, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient } from '${toImportPath(resolve('./runtime'))}'
 ${serverRouteConfigImport}
 
 type EndpointRouteMap = {
 ${endpointMap}
 }
+type EndpointRouteEntry = EndpointRouteMapValue<EndpointRouteMap>
 
 type EndpointClientFeatures = ${clientFeatures}
 type EndpointRouteForPathMethod<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = EndpointRouteMapEntry<EndpointRouteMap, PATH, METHOD>
@@ -85,8 +86,9 @@ export type EndpointMethod<PATH extends EndpointPath> = keyof EndpointRouteMap[P
 export type $EndpointPathResponse<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = Awaited<$EndpointPathCall<PATH, METHOD>>
 export type $EndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = EndpointMappedPathCall<EndpointRouteMap, PATH, METHOD, EndpointClientFeatures>
 export type $UseEndpoint = EndpointMappedUseClient<EndpointRouteMap>
+export type $UseEndpointForm = UseEndpointFormClient<EndpointRouteEntry>
 export type $UseEndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>
 ${rawResponseType}
-export type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod }
+export type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient }
 `.trimStart()
 }

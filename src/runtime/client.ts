@@ -2,6 +2,7 @@ import type {
   EndpointClientOptions,
   EndpointClientOptionsAreOptional,
   EndpointDefinition,
+  EndpointFormContract,
   EndpointResponsesContract,
   EndpointMediaResponseStream,
   EndpointSuccessBody,
@@ -18,10 +19,19 @@ import type {
 } from './contract'
 import type { ReservedEndpointName } from './endpoint-name'
 import { isReservedEndpointName, isValidEndpointName } from './endpoint-name'
+import type { FormFieldAttributes, FormInputOf } from './form-schema'
+import {
+  collectRepeatedEntries,
+  endpointNativeSubmissionKey,
+  extractFormIssues,
+  resolveFormRedirectTemplate,
+} from './form-shared'
+import type { FormValidationIssue } from './form-shared'
 import { hasHttpControlCharacter } from './idempotency'
 import { replacePathParams } from './path-template'
 import type { StatusResponse } from './response'
 import type { EndpointWireValue } from './platform'
+import type { ValidatorSchema } from './validators/common'
 import type { CursorPaginationPage, EndpointCursorPaginationContract } from './pagination'
 
 export type EndpointRouteEntry = {
@@ -313,6 +323,88 @@ export type EndpointCacheKey<METHOD extends HttpMethod = HttpMethod> = readonly 
   string,
   string,
 ]
+
+/** Only a route that declares `form` can be projected into one. */
+export type EndpointFormRoute<ROUTES extends EndpointRouteEntry> = Extract<
+  ROUTES,
+  { definition: { form: EndpointFormContract } }
+>
+
+export type UseEndpointFormClient<ROUTES extends EndpointRouteEntry> = <
+  const PATH extends EndpointPath<EndpointFormRoute<ROUTES>>,
+  const METHOD extends EndpointRouteMethod<EndpointFormRoute<ROUTES>, PATH>,
+  ROUTE extends Extract<EndpointFormRoute<ROUTES>, { path: PATH; method: METHOD }>,
+>(
+  path: PATH,
+  options: EndpointPathClientOptions<ROUTE, METHOD> & EndpointFormCallOptions<ROUTE>,
+) => EndpointFormCall<ROUTE>
+
+/**
+ * The member a browser can actually submit, in the order `findFormBodyMember()`
+ * picks it at build time.
+ */
+type EndpointFormBodyMember<DEFINITION extends EndpointDefinition> = DEFINITION['body'] extends {
+  'multipart/form-data': infer MEMBER extends ValidatorSchema
+}
+  ? MEMBER
+  : DEFINITION['body'] extends {
+        'application/x-www-form-urlencoded': infer MEMBER extends ValidatorSchema
+      }
+    ? MEMBER
+    : never
+
+type EndpointFormSchema<ROUTE extends EndpointRouteEntry> = ROUTE['definition']['form'] extends {
+  method: 'get'
+}
+  ? ROUTE['definition']['query']
+  : EndpointFormBodyMember<ROUTE['definition']>
+
+type EndpointFormMethod<ROUTE extends EndpointRouteEntry> = ROUTE['definition']['form'] extends {
+  method: 'get'
+}
+  ? 'get'
+  : 'post'
+
+type EndpointFormFieldName<ROUTE extends EndpointRouteEntry> = keyof FormInputOf<
+  EndpointFormSchema<ROUTE>
+> &
+  string
+
+/** One attribute set per declared field, ready for `v-bind`. */
+export type EndpointFormFields<ROUTE extends EndpointRouteEntry> = Record<
+  EndpointFormFieldName<ROUTE>,
+  FormFieldAttributes & { value?: string; onInput?: (event: Event) => void }
+>
+
+export type EndpointFormCall<ROUTE extends EndpointRouteEntry> = {
+  /** `action`, `method` and `enctype` for the `<form>` element itself. */
+  attrs: {
+    action: string
+    method: EndpointFormMethod<ROUTE>
+    enctype: string
+    novalidate?: true
+  }
+  fields: EndpointFormFields<ROUTE>
+  /**
+   * The current value of every field the bindings control, which is what
+   * `fields` reads and writes. A file is not among them.
+   */
+  values: EndpointRef<Record<EndpointFormFieldName<ROUTE>, string>>
+  /** Sends a submission without going through a `<form>` element. */
+  submit: (body: FormData | URLSearchParams) => Promise<EndpointResultData<ROUTE>>
+  /** `@submit` handler: takes over the native submission when JavaScript ran. */
+  enhance: (event: { preventDefault: () => void; target: unknown }) => Promise<void>
+  pending: EndpointRef<boolean>
+  result: EndpointRef<EndpointResultData<ROUTE> | undefined>
+  /**
+   * The status of the last submission, whichever path produced it - the native
+   * one leaves no result behind, only what the bridge reported.
+   */
+  status: EndpointRef<number | undefined>
+  /** Validation issues grouped by field name, from either submission path. */
+  issues: EndpointRef<Record<string, readonly EndpointFormIssue[]>>
+  allIssues: EndpointRef<readonly EndpointFormIssue[]>
+}
 
 type EndpointRawCallFeature<
   ROUTE extends EndpointRouteEntry,
@@ -790,6 +882,42 @@ export type EndpointClientRuntimeOptions = {
   captureFetcher?: () => EndpointFetcherRuntime | undefined
 }
 
+/**
+ * The reactivity and navigation primitives `useEndpointForm` needs.
+ *
+ * Injected the way `captureFetcher` is, so this module's client stays free of
+ * any import from Vue or Nuxt. Everything except the two reactive pieces is
+ * optional: without a Nuxt request context there is simply no native
+ * submission to restore, which is the same graceful degradation
+ * `captureFetcher` already has.
+ */
+export type EndpointFormBindings = {
+  ref: <VALUE>(value: VALUE) => { value: VALUE }
+  computed: <VALUE>(getter: () => VALUE) => { readonly value: VALUE }
+  /** Carries a native submission's result across hydration. */
+  useState?: <VALUE>(key: string, init: () => VALUE) => { value: VALUE }
+  /** The request being rendered, when one exists. */
+  useRequestEvent?: () => { context?: Record<string, unknown> } | undefined
+  navigateTo?: (to: string) => unknown
+  /** Lets a GET form load its query endpoint during SSR and native navigation. */
+  useEndpoint?: UseEndpointClientRuntimeValue
+}
+
+/** What the bridge leaves on the event for the page that renders the failure. */
+export type EndpointNativeSubmission = {
+  /**
+   * The endpoint the submission was forwarded to. A page may project more
+   * than one endpoint into a form, and only the one that was actually posted
+   * to should redisplay a rejection.
+   */
+  route: { method: string; path: string }
+  status: number
+  issues: readonly EndpointFormIssue[]
+  values: Record<string, string>
+}
+
+export { endpointNativeSubmissionKey }
+
 export type EndpointCallRuntime = {
   result: () => Promise<EndpointResultRuntime>
   raw: () => Promise<Response>
@@ -854,6 +982,18 @@ export type EndpointClientRouteConfig = {
    * tells the fetcher to hand back the body unread.
    */
   mediaResponse?: true
+  /**
+   * Set when the route declares `form`. Resolved at build time, so what
+   * arrives here is the page URL, the encoding, and plain HTML attributes -
+   * never a schema object.
+   */
+  form?: {
+    action: string
+    method: 'get' | 'post'
+    redirect?: string
+    enctype: string
+    fields: Record<string, Record<string, unknown>>
+  }
   pagination?: {
     kind: 'cursor'
     status: 200
@@ -929,6 +1069,77 @@ function attachEndpointNames(
   }
 }
 
+/**
+ * Builds `useEndpointForm`, next to `useEndpoint`.
+ *
+ * A form projection is not a request variant, so it does not hang off a request
+ * object: it needs component-scoped reactivity and the current request's
+ * context, which is what makes it a composable rather than a plain adapter
+ * like `queryOptions(request)`.
+ *
+ * The reactivity and navigation it needs are injected, the way `captureFetcher`
+ * is, so this runtime imports nothing from Vue or Nuxt.
+ */
+export function createUseEndpointForm(
+  routesInput: EndpointClientRouteConfigInput,
+  bindings: EndpointFormBindings,
+  options: EndpointClientRuntimeOptions = {},
+) {
+  const routes = normalizeRoutes(routesInput)
+  const client = ((path: string, callOptions = {}) => {
+    const { onSuccess, validation, resolveMessage, ...requestOptions } = callOptions as Record<
+      string,
+      unknown
+    >
+    if (validation !== undefined && validation !== 'browser' && validation !== 'server') {
+      throw new TypeError(
+        `[nuxt-endpoints] useEndpointForm validation must be "browser" or "server". Received ${JSON.stringify(validation)}.`,
+      )
+    }
+    if (resolveMessage !== undefined && typeof resolveMessage !== 'function') {
+      throw new TypeError('[nuxt-endpoints] useEndpointForm resolveMessage must be a function.')
+    }
+    const { route, endpointOptions } = resolveEndpointRoute(routes, path, requestOptions)
+    if (!route.form) {
+      throw new Error(
+        `[nuxt-endpoints] ${route.method.toUpperCase()} ${route.path} does not declare \`form\`, so it has no native-form projection. Add \`form: { action: '<page path>' }\` to its contract.`,
+      )
+    }
+    if (route.form.method !== route.method) {
+      throw new Error(
+        `[nuxt-endpoints] Stale form metadata: ${route.form.method.toUpperCase()} form cannot invoke ${route.method.toUpperCase()} ${route.path}. Rebuild the generated endpoint client.`,
+      )
+    }
+    const fetcher = options.fetcher ?? options.captureFetcher?.()
+    const queryState =
+      route.form.method === 'get' && bindings.useEndpoint
+        ? (bindings.useEndpoint(path, {
+            ...endpointOptions,
+            method: route.method,
+          }) as EndpointFormQueryState)
+        : undefined
+    return createEndpointFormCall(
+      route,
+      endpointOptions,
+      bindings,
+      {
+        ...(typeof onSuccess === 'function' ? { onSuccess } : {}),
+        ...(validation ? { validation } : {}),
+        ...(resolveMessage ? { resolveMessage } : {}),
+      } as EndpointFormCallRuntimeOptions,
+      fetcher,
+      queryState,
+    )
+  }) as UseEndpointFormClientRuntimeValue
+
+  return client
+}
+
+export type UseEndpointFormClientRuntimeValue = (
+  path: string,
+  options?: Record<string, unknown>,
+) => unknown
+
 export function createUseEndpoint(
   routesInput: EndpointClientRouteConfigInput,
   useAsyncData: UseAsyncDataRuntime,
@@ -956,7 +1167,6 @@ type QueryEndpointRoute = EndpointRouteEntry & { method: 'get' | 'head' }
 type MutationEndpointRoute = EndpointRouteEntry & {
   method: 'delete' | 'patch' | 'post' | 'put'
 }
-
 /** Converts a GET/HEAD endpoint request into standard Pinia Colada query options. */
 export function queryOptions<
   const ROUTE extends QueryEndpointRoute,
@@ -1722,4 +1932,310 @@ function replaceParams(path: string, params: unknown): string {
     // oxlint-disable-next-line typescript/no-base-to-string
     return encodeURIComponent(String(value))
   })
+}
+
+export type EndpointFormCallOptions<ROUTE extends EndpointRouteEntry = EndpointRouteEntry> = {
+  /** Replaces navigating to the declared target after a successful submission. */
+  onSuccess?: (result: Extract<EndpointResultData<ROUTE>, { ok: true }>) => unknown
+  /**
+   * `browser` keeps generated HTML constraints active. `server` adds
+   * `novalidate`, so every displayed issue comes from the endpoint contract.
+   * Server validation always runs in either mode.
+   *
+   * @default 'browser'
+   */
+  validation?: EndpointFormValidationMode
+  /** Maps a server issue to presentation text on both SSR and enhanced paths. */
+  resolveMessage?: (issue: Readonly<EndpointFormIssue>) => string
+}
+
+export type EndpointFormValidationMode = 'browser' | 'server'
+
+/** The complete server validation issue returned by the validator. */
+export type EndpointFormIssue = FormValidationIssue
+
+/**
+ * What `EndpointFormCallOptions` looks like once the contract is erased. The
+ * runtime below builds one call for every route, so it works in these terms
+ * and the generated types narrow them at the call site.
+ */
+type EndpointFormCallRuntimeOptions = {
+  onSuccess?: (result: EndpointResultDataRuntime) => unknown
+  validation?: EndpointFormValidationMode
+  resolveMessage?: (issue: Readonly<EndpointFormIssue>) => string
+}
+
+type EndpointFormQueryState = {
+  data: EndpointRef<EndpointResultDataRuntime | undefined>
+  pending: EndpointRef<boolean>
+}
+
+/**
+ * Projects a request into what a `<form>` needs, next to the Pinia Colada
+ * `queryOptions()` and `mutationOptions()` adapters.
+ *
+ * The body the request was constructed with is the form's initial value, which
+ * is why this can hang off a request object at all: a form's real body does not
+ * exist until it is submitted.
+ *
+ * Each submission builds a *fresh* request, so an idempotent route gets a new
+ * key per submission - one submission is one logical mutation, the same rule
+ * `mutationOptions()` applies to one request object.
+ */
+function createEndpointFormCall(
+  route: EndpointClientRouteConfig,
+  options: Record<string, unknown>,
+  bindings: EndpointFormBindings,
+  formOptions: EndpointFormCallRuntimeOptions,
+  fetcher?: EndpointFetcherRuntime,
+  queryState?: EndpointFormQueryState,
+) {
+  const form = route.form!
+  const pending = queryState?.pending ?? bindings.ref(false)
+  const result = queryState?.data ?? bindings.ref<EndpointResultDataRuntime | undefined>(undefined)
+  const submitted = readNativeSubmission(route, bindings)
+  const values = bindings.ref<Record<string, string>>(
+    initialFieldValues(form.fields, options, submitted, form.method),
+  )
+
+  const submit = async (input: unknown): Promise<EndpointResultDataRuntime> => {
+    pending.value = true
+    try {
+      const submissionOptions =
+        form.method === 'get'
+          ? { ...options, query: queryFromFormEncoding(input) }
+          : { ...options, body: input, mediaType: form.enctype }
+      const request = createEndpointRequest(route, submissionOptions, { fetcher })
+      const value = toEndpointResultData(await request.result())
+      result.value = value
+      return value
+    } finally {
+      pending.value = false
+    }
+  }
+
+  const enhance = async (event: { preventDefault: () => void; target: unknown }): Promise<void> => {
+    if (form.method === 'get' && !bindings.navigateTo) {
+      // Preserve the native GET navigation when no router integration exists.
+      return
+    }
+    event.preventDefault()
+    const element = event.target as HTMLFormElement
+    const encoded = toDeclaredEncoding(new FormData(element), form.enctype)
+    if (form.method === 'get') {
+      await bindings.navigateTo?.(getFormNavigationTarget(form.action, encoded))
+    }
+    const value = await submit(encoded)
+    if (value.ok && formOptions.onSuccess) {
+      formOptions.onSuccess(value)
+      return
+    }
+    const target = resolveFormRedirect(form.redirect, value)
+    if (target && bindings.navigateTo) {
+      bindings.navigateTo(target)
+    }
+  }
+
+  const status = bindings.computed<number | undefined>(
+    () => result.value?.status ?? submitted?.status,
+  )
+
+  const issueList = bindings.computed<EndpointFormIssue[]>(() =>
+    resolveFormIssueMessages(
+      result.value ? collectResultIssues(result.value) : [...(submitted?.issues ?? [])],
+      formOptions.resolveMessage,
+    ),
+  )
+
+  return {
+    attrs: {
+      action: form.action,
+      method: form.method,
+      enctype: form.enctype,
+      ...(formOptions.validation === 'server' ? { novalidate: true as const } : {}),
+    },
+    fields: createFieldBindings(form.fields, values),
+    values,
+    submit,
+    enhance,
+    pending,
+    result,
+    status,
+    allIssues: issueList,
+    issues: bindings.computed<Record<string, EndpointFormIssue[]>>(() => {
+      const byField: Record<string, EndpointFormIssue[]> = {}
+      for (const issue of issueList.value) {
+        const field = (issue.path ?? []).map(String).join('.')
+        ;(byField[field] ||= []).push(issue)
+      }
+      return byField
+    }),
+  }
+}
+
+function resolveFormIssueMessages(
+  issues: readonly EndpointFormIssue[],
+  resolveMessage: EndpointFormCallRuntimeOptions['resolveMessage'],
+): EndpointFormIssue[] {
+  if (!resolveMessage) {
+    return [...issues]
+  }
+  return issues.map((issue) => {
+    const message = resolveMessage(issue)
+    if (typeof message !== 'string') {
+      throw new TypeError('[nuxt-endpoints] useEndpointForm resolveMessage must return a string.')
+    }
+    return { ...issue, message }
+  })
+}
+
+/**
+ * A form can only submit the encoding it declares, so the enhanced path sends
+ * the same bytes the browser would have - it never re-encodes into JSON.
+ */
+function toDeclaredEncoding(form: FormData, enctype: string): FormData | URLSearchParams {
+  if (enctype === 'multipart/form-data') {
+    return form
+  }
+  const encoded = new URLSearchParams()
+  for (const [name, value] of form.entries()) {
+    if (typeof value === 'string') {
+      encoded.append(name, value)
+    }
+  }
+  return encoded
+}
+
+function queryFromFormEncoding(input: unknown): Record<string, unknown> {
+  if (!(input instanceof URLSearchParams)) {
+    if (typeof input === 'object' && input !== null && !Array.isArray(input)) {
+      return input as Record<string, unknown>
+    }
+    throw new TypeError('[nuxt-endpoints] A GET form submission must be URLSearchParams.')
+  }
+
+  return collectRepeatedEntries(input)
+}
+
+/** Native GET form semantics: its controls replace the action URL's query. */
+function getFormNavigationTarget(action: string, query: URLSearchParams | FormData): string {
+  if (!(query instanceof URLSearchParams)) {
+    throw new TypeError('[nuxt-endpoints] A GET form cannot navigate with multipart data.')
+  }
+  const encoded = query.toString()
+  return `${action}${encoded ? `?${encoded}` : ''}`
+}
+
+/** `'/todos/{id}'` against the response body. */
+function resolveFormRedirect(
+  template: string | undefined,
+  result: EndpointResultDataRuntime,
+): string | undefined {
+  if (!template || !result.ok) {
+    return undefined
+  }
+  const body = (result.body ?? {}) as Record<string, unknown>
+  return resolveFormRedirectTemplate(template, body)
+}
+
+/**
+ * Reads what the bridge left for this render. Absent outside a Nuxt request
+ * context, which is the degraded case rather than an error: everything except
+ * the restored values still works.
+ */
+function readNativeSubmission(
+  route: EndpointClientRouteConfig,
+  bindings: EndpointFormBindings,
+): EndpointNativeSubmission | undefined {
+  const read = () => {
+    try {
+      const context = bindings.useRequestEvent?.()?.context as Record<string, unknown> | undefined
+      const submission = context?.[endpointNativeSubmissionKey] as
+        | EndpointNativeSubmission
+        | undefined
+      return submission?.route.method === route.method && submission.route.path === route.path
+        ? submission
+        : undefined
+    } catch {
+      return undefined
+    }
+  }
+  if (!bindings.useState) {
+    return read()
+  }
+  try {
+    return bindings.useState(`nuxt-endpoints:form:${route.method}:${route.path}`, read).value
+  } catch {
+    return read()
+  }
+}
+
+/**
+ * The module's own validation failure carries its issues under
+ * `data.<source>`. An application that replaced that shape gets an empty list
+ * here and reads `result` directly instead.
+ */
+function collectResultIssues(result: EndpointResultDataRuntime): EndpointFormIssue[] {
+  return result.ok ? [] : extractFormIssues(result.body)
+}
+
+/**
+ * The value each field starts with: what a rejected native submission sent,
+ * or else the request's initial body (POST) or query (GET).
+ *
+ * A checkbox is driven by `checked` rather than `value`, and a file cannot be
+ * given one at all, so anything that is not a scalar is left to the template.
+ */
+function initialFieldValues(
+  fields: Record<string, Record<string, unknown>>,
+  options: Record<string, unknown>,
+  submitted: EndpointNativeSubmission | undefined,
+  method: 'get' | 'post',
+): Record<string, string> {
+  const initial = ((method === 'get' ? options.query : options.body) ?? {}) as Record<
+    string,
+    unknown
+  >
+  const values: Record<string, string> = {}
+  for (const name of Object.keys(fields)) {
+    const value = submitted ? submitted.values[name] : initial[name]
+    if (typeof value === 'string' || typeof value === 'number') {
+      values[name] = String(value)
+    }
+  }
+  return values
+}
+
+/**
+ * One `v-bind`-able attribute set per field, with the value bound in both
+ * directions.
+ *
+ * `value` has to be a getter rather than a snapshot: Vue force-patches that
+ * one prop on every full-props update (`v-bind="..."`), so a fixed value would
+ * overwrite what the user typed the moment anything else on the page changed.
+ * Binding `onInput` alongside it makes the input controlled, which is what
+ * makes redisplay after a rejection work on both submission paths.
+ *
+ * A file input is left alone: a browser refuses to let a page set its value.
+ */
+function createFieldBindings(
+  fields: Record<string, Record<string, unknown>>,
+  values: EndpointRef<Record<string, string>>,
+): Record<string, Record<string, unknown>> {
+  const bound: Record<string, Record<string, unknown>> = {}
+  for (const [name, attributes] of Object.entries(fields)) {
+    const binding: Record<string, unknown> = { ...attributes }
+    if (attributes.type !== 'file') {
+      Object.defineProperty(binding, 'value', {
+        enumerable: true,
+        get: () => values.value[name] ?? '',
+      })
+      binding.onInput = (event: { target?: unknown }) => {
+        const target = event.target as { value?: string } | undefined
+        values.value = { ...values.value, [name]: target?.value ?? '' }
+      }
+    }
+    bound[name] = binding
+  }
+  return bound
 }

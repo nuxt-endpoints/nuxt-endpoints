@@ -10,14 +10,14 @@ Application code should not depend on which route-discovery or typed-fetch
 implementation is active. Both platform lines expose:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   name: 'getItem',
-  params: z.object({ id: z.string() }),
-  validate: {
-    response: {
-      200: z.object({ id: z.string(), createdAt: z.date() }),
-      404: z.object({ message: z.string() }),
-    },
+  request: {
+    params: z.object({ id: z.string() }),
+  },
+  responses: {
+    200: z.object({ id: z.string(), createdAt: z.date() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const item = findItem(event.validated.params.id)
@@ -92,12 +92,10 @@ values:
 
 ```ts
 const ResponseBody = z.object({ createdAt: z.date() })
-
-export default defineRouteHandler({
-  validate: { response: { 200: ResponseBody } },
-  handler: () => ({ createdAt: new Date() }), // server: Date
+export default defineEndpoint({
+  responses: { 200: ResponseBody },
+  handler: () => ({ createdAt: new Date() }),
 })
-
 const result = await $endpoint('/api/items/latest', { method: 'get' })
 result.body.createdAt // client: string
 ```

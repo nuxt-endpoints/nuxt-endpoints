@@ -1,13 +1,10 @@
 import { z } from 'zod'
-
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: z.object({
-        ok: z.literal(true),
-        service: z.string(),
-      }),
-    },
+export default defineEndpoint({
+  responses: {
+    200: z.object({
+      ok: z.literal(true),
+      service: z.string(),
+    }),
   },
   handler: () => ({
     ok: true,

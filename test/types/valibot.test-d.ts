@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import * as v from 'valibot'
-import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import { defineEndpointContract, defineEndpointHandler } from '../internal-runtime'
 import type { InferInput, InferOutput } from '../internal-runtime'
 
 const Params = v.object({
@@ -23,7 +23,7 @@ describe('Valibot support', () => {
   })
 
   it('types handler context from Valibot outputs', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: Params,
       query: Query,
       responses: { 200: UserResponse },
@@ -38,7 +38,7 @@ describe('Valibot support', () => {
   })
 
   it('rejects invalid Valibot response returns', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: UserResponse },
     })
 

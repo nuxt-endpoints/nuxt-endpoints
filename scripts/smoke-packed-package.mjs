@@ -28,6 +28,7 @@ try {
   await writeFile(
     join(smokeRoot, 'pnpm-workspace.yaml'),
     `allowBuilds:
+  'esbuild@0.27.7': true
   'esbuild@0.28.2': true
 `,
   )
@@ -99,12 +100,12 @@ export default defineServerRouteConfig({
     join(smokeRoot, 'server/api/echo.post.ts'),
     `import { z } from 'zod'
 
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: z.object({ message: z.string() }),
-    response: {
-      201: z.object({ message: z.string() }),
-    },
+  },
+  responses: {
+    201: z.object({ message: z.string() }),
   },
   idempotency: true,
   handler: (event) => {
@@ -117,17 +118,17 @@ export default defineRouteHandler({
     join(smokeRoot, 'server/api/upload.post.ts'),
     `import { z } from 'zod'
 
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: {
       'multipart/form-data': z.object({
         name: z.string(),
         file: z.file().max(5000).mime('text/plain'),
       }),
     },
-    response: {
-      201: z.object({ name: z.string() }),
-    },
+  },
+  responses: {
+    201: z.object({ name: z.string() }),
   },
   handler: (event) => {
     return event.respond(201, { name: event.validated.body.name })
@@ -148,8 +149,8 @@ export default defineRouteHandler({
     'serverResponses: ServerRouteResponsesFor',
     'generated application response contract',
   )
-  assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
-  assertSymbolExcludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
+  assertIncludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
+  assertSymbolExcludes(serverImports, 'defineRouteHandler', 'removed server auto-import')
   assertSymbolExcludes(
     serverImports,
     'defineEndpointHandler',

@@ -13,7 +13,7 @@ describe('canonical route source discovery on Nitro 2', () => {
     ).toEqual({ kind: 'none' })
     expect(
       analyzeEndpointContractSource(
-        `export default defineEndpoint({ handler: () => ({ ok: true }) })`,
+        `export default defineEndpointContract({ handler: () => ({ ok: true }) })`,
       ),
     ).toEqual({ kind: 'none' })
     await expect(
@@ -26,13 +26,13 @@ describe('canonical route source discovery on Nitro 2', () => {
   it('detects single and multi-method canonical definitions', async () => {
     const single = `
       import { User } from '../contracts/user'
-      export default defineRouteHandler({
-        validate: { response: { 200: User } },
+      export default defineEndpoint({
+        responses: { 200: User },
         handler: () => ({ id: 1 }),
       })
     `
     const multi = `
-      export default defineRouteHandler({
+      export default defineEndpoint({
         get: { handler: () => ({ ok: true }) },
         put: { handler: () => ({ ok: true }) },
       })
@@ -46,19 +46,19 @@ describe('canonical route source discovery on Nitro 2', () => {
   })
 
   it('allows comments between the canonical identifier and call', () => {
-    expect(hasEndpointDefinition(`defineRouteHandler /* contract */ ({})`)).toBe(true)
+    expect(hasEndpointDefinition(`defineEndpoint /* contract */ ({})`)).toBe(true)
   })
 
   it('ignores comments, strings, templates, member calls, aliases and declarations', () => {
-    expect(hasEndpointDefinition(`// defineRouteHandler({})\ndefineEventHandler(() => ({}))`)).toBe(
+    expect(hasEndpointDefinition(`// defineEndpoint({})\ndefineEventHandler(() => ({}))`)).toBe(
       false,
     )
-    expect(hasEndpointDefinition(`const text = 'defineRouteHandler({})'`)).toBe(false)
-    expect(hasEndpointDefinition('const text = `defineRouteHandler({})`')).toBe(false)
-    expect(hasEndpointDefinition(`factory.defineRouteHandler({})`)).toBe(false)
+    expect(hasEndpointDefinition(`const text = 'defineEndpoint({})'`)).toBe(false)
+    expect(hasEndpointDefinition('const text = `defineEndpoint({})`')).toBe(false)
+    expect(hasEndpointDefinition(`factory.defineEndpoint({})`)).toBe(false)
     expect(hasEndpointDefinition(`defineRouteHandlerAlias({})`)).toBe(false)
     expect(
-      hasEndpointDefinition(`export function defineRouteHandler(definition) { return definition }`),
+      hasEndpointDefinition(`export function defineEndpoint(definition) { return definition }`),
     ).toBe(false)
   })
 })
@@ -78,7 +78,7 @@ describe('canonical route module evaluation', () => {
     const evaluationError = new Error('route import failed')
     expect(() =>
       assertEndpointModuleEvaluated(
-        `export default defineRouteHandler({ handler: () => ({ ok: true }) })`,
+        `export default defineEndpoint({ handler: () => ({ ok: true }) })`,
         '/server/api/items.get.ts',
         evaluationError,
       ),
@@ -88,7 +88,7 @@ describe('canonical route module evaluation', () => {
   it('fails closed when the evaluated export has no metadata', () => {
     expect(() =>
       assertEndpointModuleEvaluated(
-        `export default defineRouteHandler({ handler: () => ({ ok: true }) })`,
+        `export default defineEndpoint({ handler: () => ({ ok: true }) })`,
         '/server/api/items.get.ts',
       ),
     ).toThrow(/did not expose route contract metadata/)

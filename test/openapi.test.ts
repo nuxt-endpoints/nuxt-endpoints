@@ -104,7 +104,6 @@ describe('createOpenApiDocument', () => {
         'application/json': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name'],
             properties: {
               name: { type: 'string', minLength: 1 },
@@ -138,7 +137,6 @@ describe('createOpenApiDocument', () => {
         'application/json': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name'],
             properties: { name: { type: 'string' } },
           },
@@ -146,7 +144,6 @@ describe('createOpenApiDocument', () => {
         'multipart/form-data': {
           schema: {
             type: 'object',
-            additionalProperties: false,
             required: ['name', 'tag'],
             properties: {
               name: { type: 'string' },

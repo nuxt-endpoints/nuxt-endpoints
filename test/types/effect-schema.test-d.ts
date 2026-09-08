@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { Schema } from 'effect'
-import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import { defineEndpointContract, defineEndpointHandler } from '../internal-runtime'
 import type { InferInput, InferOutput } from '../internal-runtime'
 
 const Params = Schema.Struct({
@@ -19,7 +19,7 @@ describe('Effect Schema support', () => {
   })
 
   it('types handler context from Effect Schema outputs', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: Params,
       responses: { 200: UserResponse },
     })
@@ -32,7 +32,7 @@ describe('Effect Schema support', () => {
   })
 
   it('rejects invalid Effect Schema response returns', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: UserResponse },
     })
 

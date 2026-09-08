@@ -22,7 +22,7 @@ On the current Nitro 2 support line, Nuxt Endpoints generates its richer contrac
 
 Nuxt's typed-fetch work and [`fetchdts`](https://github.com/unjs/fetchdts) are complementary to endpoint contracts. `fetchdts` is a type-generation engine, not by itself a Nuxt route declaration API: the detail it can generate depends on the contract metadata supplied by its integration.
 
-Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. The canonical `defineRouteHandler` contract supplies that information. Its consumers can change without changing route authoring.
+Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. The canonical `defineEndpoint` contract supplies that information. Its consumers can change without changing route authoring.
 
 For the Nuxt 5 generation, the preferred direction is to contribute endpoint
 metadata to Nuxt's generated fetch schema through a public integration point,

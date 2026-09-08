@@ -324,22 +324,22 @@ describe('development memory idempotency storage', () => {
 
 describe('fingerprint determinability at definition time', () => {
   it('rejects an idempotent endpoint with no body contract and no fingerprint', async () => {
-    const { defineEndpoint } = await import('./internal-runtime')
+    const { defineEndpointContract } = await import('./internal-runtime')
 
     // Without a body contract the default projection cannot see a body the
     // handler reads itself, and the two payloads would share a fingerprint.
-    expect(() => defineEndpoint({}).idempotency({ required: true })).toThrow(
+    expect(() => defineEndpointContract({}).idempotency({ required: true })).toThrow(
       /needs an explicit fingerprint/,
     )
   })
 
   it('rejects the same single-define endpoint at definition time', async () => {
-    const { defineEndpoint } = await import('./internal-runtime')
+    const { defineEndpointContract } = await import('./internal-runtime')
 
     // The merged form routes its `idempotency` slot through `.idempotency()`,
     // so the assertion fires before the handler is ever attached.
     expect(() =>
-      defineEndpoint({
+      defineEndpointContract({
         idempotency: { required: true },
         handler: () => ({ published: true }),
       }),
@@ -347,11 +347,11 @@ describe('fingerprint determinability at definition time', () => {
   })
 
   it('accepts one once the author states what identifies the request', async () => {
-    const { defineEndpoint } = await import('./internal-runtime')
+    const { defineEndpointContract } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>
-      defineEndpoint({ params: z.object({ id: z.string() }) }).idempotency({
+      defineEndpointContract({ params: z.object({ id: z.string() }) }).idempotency({
         required: true,
         fingerprint: ({ params }) => ({ params }),
       }),
@@ -359,7 +359,7 @@ describe('fingerprint determinability at definition time', () => {
 
     // A request that genuinely takes no input says so.
     expect(() =>
-      defineEndpoint({}).idempotency({
+      defineEndpointContract({}).idempotency({
         required: true,
         fingerprint: () => ({}),
       }),
@@ -367,11 +367,13 @@ describe('fingerprint determinability at definition time', () => {
   })
 
   it('needs nothing extra when a body contract is declared', async () => {
-    const { defineEndpoint } = await import('./internal-runtime')
+    const { defineEndpointContract } = await import('./internal-runtime')
     const { z } = await import('zod')
 
     expect(() =>
-      defineEndpoint({ body: z.object({ amount: z.number() }) }).idempotency({ required: true }),
+      defineEndpointContract({ body: z.object({ amount: z.number() }) }).idempotency({
+        required: true,
+      }),
     ).not.toThrow()
   })
 })

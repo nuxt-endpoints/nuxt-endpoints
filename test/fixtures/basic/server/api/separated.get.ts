@@ -1,10 +1,9 @@
-import { defineRouteHandler } from '../../../../../src/runtime'
+import { defineEndpoint } from '../../../../../src/runtime'
 import { separatedContract } from '../contracts/separated'
-
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     query: separatedContract.query,
-    response: separatedContract.responses,
   },
+  responses: separatedContract.responses,
   handler: (event) => ({ name: event.validated.query.name, separated: true }),
 })

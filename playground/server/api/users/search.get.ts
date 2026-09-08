@@ -1,22 +1,19 @@
 import * as v from 'valibot'
-
 const users = [
   { id: 1, name: 'Tom' },
   { id: 2, name: 'Jane' },
   { id: 3, name: 'Janet' },
   { id: 101, name: 'Sid' },
 ]
-
 const User = v.object({
   id: v.number(),
   name: v.string(),
 })
-
 // Valibot example: query strings are transformed to numbers before the
 // handler runs, and the OpenAPI schema reflects the input (string) side.
-export default defineRouteHandler({
+export default defineEndpoint({
   summary: 'Search users by name',
-  validate: {
+  request: {
     query: v.object({
       q: v.pipe(v.string(), v.minLength(1)),
       limit: v.optional(
@@ -30,12 +27,12 @@ export default defineRouteHandler({
         ),
       ),
     }),
-    response: {
-      200: v.object({
-        items: v.array(User),
-        total: v.number(),
-      }),
-    },
+  },
+  responses: {
+    200: v.object({
+      items: v.array(User),
+      total: v.number(),
+    }),
   },
   handler: (event) => {
     const matches = users.filter((user) =>

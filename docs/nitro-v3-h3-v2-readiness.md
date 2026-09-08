@@ -37,7 +37,7 @@ small adapters.
 
 ## Stable endpoint contract
 
-`defineRouteHandler` receives an endpoint context and may return a plain value.
+`defineEndpoint` receives an endpoint context and may return a plain value.
 The Nuxt 4 compatibility adapter and the H3 v2 implementation intentionally
 share this public authoring shape.
 
@@ -52,11 +52,12 @@ The handler context exposes both HTTP integration levels:
   `request` body can be consumed again after endpoint parsing.
 
 ```ts
-export default defineRouteHandler({
-  validate: { body: RequestBody },
+export default defineEndpoint({
+  request: {
+    body: RequestBody,
+  },
   handler: ({ event, request, body }) => {
     const requestId = request.headers.get('x-request-id')
-
     return {
       accountId: event.context.user.accountId,
       requestId,

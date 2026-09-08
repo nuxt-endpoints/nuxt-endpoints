@@ -36,8 +36,8 @@ application code stable wherever practical is nevertheless a design constraint,
 and unavoidable changes will be documented as migrations.
 
 The mainstream endpoint surface is shared by both lines, including
-`defineRouteHandler`, `$endpoint`, `useEndpoint`, idempotency, and the typed
-Pinia Colada adapters. Progressive enhancement and explicit authoring for
-`HEAD`, `OPTIONS`, `CONNECT`, and `TRACE` depend on the Nuxt 5 platform line.
+`defineEndpoint`, `$endpoint`, `useEndpoint`, idempotency, typed Pinia Colada
+adapters, and progressive enhancement. Only explicit authoring for `HEAD`,
+`OPTIONS`, `CONNECT`, and `TRACE` still depends on the Nuxt 5 platform line.
 
 For the supported release line, start with [Getting Started](/docs/getting-started).

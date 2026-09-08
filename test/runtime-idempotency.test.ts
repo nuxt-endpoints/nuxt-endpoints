@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import {
   createMemoryIdempotencyStorage,
-  defineEndpoint,
+  defineEndpointContract,
   defineEndpointHandler,
 } from './internal-runtime'
 import type { EndpointEventHandler, StandardSchemaLike } from './internal-runtime'
@@ -54,7 +54,7 @@ describe('endpoint idempotency runtime', () => {
 
   it('configures immutable, client-safe definition metadata', () => {
     const storage = createMemoryIdempotencyStorage()
-    const base = defineEndpoint({ body: jsonRecord })
+    const base = defineEndpointContract({ body: jsonRecord })
     const configured = base.idempotency({
       storage: () => storage,
       scope: () => 'public',
@@ -72,7 +72,7 @@ describe('endpoint idempotency runtime', () => {
   })
 
   it('defaults to Idempotency-Key/required metadata and an all-false runtime marker without options', () => {
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency()
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency()
     const handler = defineEndpointHandler(endpoint, () => ({ created: true }))
 
     expect(endpoint.definition.idempotency).toEqual({
@@ -89,7 +89,7 @@ describe('endpoint idempotency runtime', () => {
 
   it('records exactly which runtime options .idempotency() itself received', () => {
     const storage = createMemoryIdempotencyStorage()
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       required: true,
     })
@@ -103,7 +103,7 @@ describe('endpoint idempotency runtime', () => {
   })
 
   it('normalizes merged true and rejects disabled builder inputs at runtime', () => {
-    const merged = defineEndpoint({
+    const merged = defineEndpointContract({
       body: jsonRecord,
       idempotency: true,
       handler: () => ({ created: true }),
@@ -115,19 +115,21 @@ describe('endpoint idempotency runtime', () => {
       required: true,
     })
     expect(() =>
-      defineEndpoint({ body: jsonRecord }).idempotency({ enabled: false } as never),
+      defineEndpointContract({ body: jsonRecord }).idempotency({ enabled: false } as never),
     ).toThrow(/enabled can only be true/i)
-    expect(() => defineEndpoint({ body: jsonRecord }).idempotency(false as never)).toThrow(
+    expect(() => defineEndpointContract({ body: jsonRecord }).idempotency(false as never)).toThrow(
       /must be an object/i,
     )
     expect(() =>
-      defineEndpoint({ idempotency: false, handler: () => ({ created: true }) } as never),
+      defineEndpointContract({ idempotency: false, handler: () => ({ created: true }) } as never),
     ).toThrow(/must be an object/i)
     expect(() =>
-      defineEndpoint({ body: jsonRecord }).idempotency({ scope: 'shared' } as never),
+      defineEndpointContract({ body: jsonRecord }).idempotency({ scope: 'shared' } as never),
     ).toThrow(/scope must be "global" or a function/i)
     expect(() =>
-      defineEndpoint({ body: jsonRecord }).idempotency({ authorization: 'publci' } as never),
+      defineEndpointContract({ body: jsonRecord }).idempotency({
+        authorization: 'publci',
+      } as never),
     ).toThrow(/authorization must be "public", "middleware", or a function/i)
   })
 
@@ -138,7 +140,7 @@ describe('endpoint idempotency runtime', () => {
     const resolveScope = vi.fn(() => 'public')
     const fingerprint = vi.fn(() => ({ amount: 100 }))
     const authorize = vi.fn()
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: resolveStorage,
       scope: resolveScope,
       authorization: authorize,
@@ -160,7 +162,7 @@ describe('endpoint idempotency runtime', () => {
   it('claims and replays when an optional route receives a key', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => ({ created: true }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: 'global',
       authorization: 'public',
@@ -178,7 +180,7 @@ describe('endpoint idempotency runtime', () => {
 
   it('returns Problem Details for a missing required key and malformed keys', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -206,7 +208,7 @@ describe('endpoint idempotency runtime', () => {
     const storage = createMemoryIdempotencyStorage()
     const authorize = vi.fn()
     const execute = vi.fn(() => ({ id: 1 }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: ({ event }) => String(event.context.tenant),
       authorization: authorize,
@@ -233,7 +235,7 @@ describe('endpoint idempotency runtime', () => {
   it('replays a repeated key for a single-define endpoint exactly like the two-call form', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => ({ id: 1 }))
-    const handler = defineEndpoint({
+    const handler = defineEndpointContract({
       body: jsonRecord,
       idempotency: {
         storage: () => storage,
@@ -269,7 +271,7 @@ describe('endpoint idempotency runtime', () => {
   it('returns the same JSON snapshot on the first response and replay', async () => {
     const storage = createMemoryIdempotencyStorage()
     let serializationCount = 0
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -293,7 +295,7 @@ describe('endpoint idempotency runtime', () => {
   it('records and replays successful responses without a body', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(({ respond }) => respond(204, undefined))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -313,7 +315,7 @@ describe('endpoint idempotency runtime', () => {
   it('rejects reuse with a different validated request fingerprint', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => ({ id: 1 }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -336,7 +338,7 @@ describe('endpoint idempotency runtime', () => {
     const execute = vi.fn(({ responseMediaType, respond }) =>
       respond(200, responseMediaType === 'text/csv' ? 'id\n1\n' : '{"id":1}'),
     )
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       body: jsonRecord,
       responses: { 200: { media: ['text/csv', 'application/json'] } },
     }).idempotency({
@@ -366,7 +368,7 @@ describe('endpoint idempotency runtime', () => {
   it('replays when the same key asks for the same representation', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(({ respond }) => respond(200, 'id\n1\n'))
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       body: jsonRecord,
       responses: { 200: { media: ['text/csv', 'application/json'] } },
     }).idempotency({
@@ -391,7 +393,7 @@ describe('endpoint idempotency runtime', () => {
   it('keeps the fingerprint unchanged for an endpoint that declares one representation', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(({ respond }) => respond(200, 'id\n1\n'))
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       body: jsonRecord,
       responses: { 200: { media: 'text/csv' } },
     }).idempotency({
@@ -425,7 +427,7 @@ describe('endpoint idempotency runtime', () => {
   it('includes application-selected validated headers in a custom fingerprint', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => ({ id: 1 }))
-    const endpoint = defineEndpoint({ body: jsonRecord, headers: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord, headers: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -459,7 +461,7 @@ describe('endpoint idempotency runtime', () => {
     const storage = createMemoryIdempotencyStorage()
     const entered = deferred<void>()
     const finish = deferred<void>()
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -487,7 +489,7 @@ describe('endpoint idempotency runtime', () => {
   it('isolates the same client key by trusted scope', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(({ event }: { event: H3Event }) => ({ tenant: event.context.tenant }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: ({ event }) => String(event.context.tenant),
       authorization: 'middleware',
@@ -518,7 +520,7 @@ describe('endpoint idempotency runtime', () => {
         throw new Error('failed after claim')
       })
       .mockReturnValue({ id: 1 })
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -540,7 +542,7 @@ describe('endpoint idempotency runtime', () => {
       .fn<() => { id: number }>()
       .mockReturnValueOnce({ id: -1 })
       .mockReturnValue({ id: 1 })
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       { body: jsonRecord, responses: { 200: positiveIdResponse } },
       { validation: { response: true } },
     ).idempotency({
@@ -565,7 +567,7 @@ describe('endpoint idempotency runtime', () => {
   it('releases instead of recording unsupported native Response values', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(() => new Response(null, { status: 204 }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -587,7 +589,7 @@ describe('endpoint idempotency runtime', () => {
   it('does not record non-success responses unless they are explicitly selected', async () => {
     const storage = createMemoryIdempotencyStorage()
     const execute = vi.fn(({ respond }) => respond(409, { message: 'Try again' }))
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -610,7 +612,7 @@ describe('endpoint idempotency runtime', () => {
       release: delegate.release.bind(delegate),
       complete: vi.fn(async () => ({ outcome: 'lease-lost' as const })),
     }
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -640,7 +642,7 @@ describe('endpoint idempotency runtime', () => {
         },
       ),
     )
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -666,7 +668,7 @@ describe('endpoint idempotency runtime', () => {
 
   it('refuses keyed execution without injected route metadata and duplicate route identities', async () => {
     const storage = createMemoryIdempotencyStorage()
-    const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+    const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
       storage: () => storage,
       scope: () => 'public',
       authorization: 'middleware',
@@ -692,7 +694,7 @@ describe('endpoint idempotency runtime', () => {
       const claim = vi.spyOn(storage, 'claim')
       const complete = vi.spyOn(storage, 'complete')
       const execute = vi.fn(() => ({ id: 1 }))
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency()
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency()
       const handler = defineEndpointHandler(endpoint, execute)
       attachRoute(handler, { method: 'post', routeTemplate: '/api/public-items' })
       handler.__set_endpoint_runtime__({
@@ -719,7 +721,7 @@ describe('endpoint idempotency runtime', () => {
       const execute = vi.fn(({ body, respond }) =>
         respond(409, { acceptedAmount: (body as { amount: number }).amount }),
       )
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ required: true })
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({ required: true })
       const handler = defineEndpointHandler(endpoint, execute)
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
       handler.__set_endpoint_runtime__(
@@ -756,7 +758,7 @@ describe('endpoint idempotency runtime', () => {
     it('uses the injected policy entirely when the endpoint supplies no runtime options', async () => {
       const storage = createMemoryIdempotencyStorage()
       const authorize = vi.fn()
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ required: true })
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({ required: true })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
       handler.__set_endpoint_runtime__({
@@ -780,7 +782,7 @@ describe('endpoint idempotency runtime', () => {
       const policyStorage = createMemoryIdempotencyStorage()
       const endpointClaim = vi.spyOn(endpointStorage, 'claim')
       const policyClaim = vi.spyOn(policyStorage, 'claim')
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
         storage: () => endpointStorage,
         scope: () => 'public',
         authorization: 'middleware',
@@ -808,7 +810,7 @@ describe('endpoint idempotency runtime', () => {
     it('prefers the endpoint leaseTtlMs over the central policy', async () => {
       const storage = createMemoryIdempotencyStorage()
       const claim = vi.spyOn(storage, 'claim')
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
         storage: () => storage,
         scope: () => 'public',
         authorization: 'middleware',
@@ -835,7 +837,7 @@ describe('endpoint idempotency runtime', () => {
     it('falls back to the central policy leaseTtlMs when the endpoint omits it', async () => {
       const storage = createMemoryIdempotencyStorage()
       const claim = vi.spyOn(storage, 'claim')
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
         scope: () => 'public',
         authorization: 'middleware',
         required: true,
@@ -858,7 +860,9 @@ describe('endpoint idempotency runtime', () => {
     })
 
     it('throws a defensive runtime error when nothing resolves storage/scope/authorization', async () => {
-      const endpoint = defineEndpoint({ body: jsonRecord }).idempotency({ scope: () => 'public' })
+      const endpoint = defineEndpointContract({ body: jsonRecord }).idempotency({
+        scope: () => 'public',
+      })
       const handler = defineEndpointHandler(endpoint, () => ({ id: 1 }))
       attachRoute(handler, { method: 'post', routeTemplate: '/api/items' })
 

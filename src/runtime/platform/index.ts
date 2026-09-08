@@ -5,6 +5,15 @@
 export { defineRuntimeHandler, getRuntimeMethod, getRuntimeWebRequest } from './handler'
 export type { RuntimeEvent } from './handler'
 export {
+  continueRuntimeRendering,
+  defineRuntimeMiddleware,
+  getRuntimePathname,
+  runtimeRedirect,
+  runtimeServerFetch,
+} from './middleware'
+export type { RuntimeMiddlewareNext, RuntimeMiddlewareResult } from './middleware'
+export { defineRuntimePlugin } from './plugin'
+export {
   getRuntimeQuery,
   getRuntimeRequestHeaders,
   readRuntimeBinaryBody,

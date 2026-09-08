@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler, respond } from '../internal-runtime'
+import { defineEndpointContract, defineEndpointHandler, respond } from '../internal-runtime'
 import type { EndpointIdempotencyMetadata, StandardSchemaLike } from '../internal-runtime'
 import type { H3Event } from 'h3'
 
@@ -10,10 +10,10 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
   throw new Error('type-only schema')
 }
 
-describe('defineEndpoint handler types', () => {
+describe('defineEndpointContract handler types', () => {
   it('preserves idempotency metadata literals and validated callback context', () => {
     const storage = {} as import('../../src/runtime').IdempotencyStorage
-    const base = defineEndpoint({
+    const base = defineEndpointContract({
       body: schema<{ amount: string }, { amount: number }>(),
     })
     const optional = base.idempotency({
@@ -45,7 +45,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('defaults every runtime option to the central policy when .idempotency() is called without any', () => {
-    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+    const endpoint = defineEndpointContract({ body: schema<{ amount: number }>() })
     const central = endpoint.idempotency()
 
     expectTypeOf(central.definition.idempotency).toEqualTypeOf<
@@ -55,7 +55,7 @@ describe('defineEndpoint handler types', () => {
 
   it('allows storage, scope, and authorization to be omitted individually', () => {
     const storage = {} as import('../../src/runtime').IdempotencyStorage
-    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+    const endpoint = defineEndpointContract({ body: schema<{ amount: number }>() })
 
     // Every runtime option may come from the central policy instead, so any
     // subset (including none) of storage/scope/authorization is valid here.
@@ -71,7 +71,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('accepts public/global sentinels and rejects unknown sentinel values', () => {
-    const endpoint = defineEndpoint({ body: schema<{ amount: number }>() })
+    const endpoint = defineEndpointContract({ body: schema<{ amount: number }>() })
 
     endpoint.idempotency({ scope: 'global', authorization: 'public' })
     endpoint.idempotency({
@@ -88,7 +88,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('rejects hand-written idempotency metadata without runtime policy', () => {
-    defineEndpoint({
+    defineEndpointContract({
       // @ts-expect-error idempotency metadata is created only by .idempotency().
       idempotency: {
         enabled: true,
@@ -98,11 +98,11 @@ describe('defineEndpoint handler types', () => {
     })
 
     const broadlyTyped: import('../../src/runtime').EndpointDefinition = {}
-    defineEndpoint(broadlyTyped)
+    defineEndpointContract(broadlyTyped)
   })
 
   it('does not require operation names for endpoint contracts', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
       responses: { 200: schema<{ id: number; name: string }>() },
     })
@@ -115,7 +115,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('types request context from validator outputs', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
       query: schema<{ include?: string }>(),
       responses: { 200: schema<{ id: number; name: string }>() },
@@ -130,7 +130,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('exposes the H3 event and normalized web request in the handler context', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: schema<{ id: number }>() },
     })
 
@@ -143,7 +143,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('accepts plain returns as the 200 response', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: schema<{ id: number; name: string }>() },
     })
 
@@ -153,7 +153,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('rejects plain returns that do not match the 200 response', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: schema<{ id: number; name: string }>() },
     })
 
@@ -164,7 +164,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('accepts declared non-200 responses', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -177,7 +177,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('preserves the success return type for Nitro InternalApi generation', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -195,7 +195,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('rejects undeclared response statuses', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -209,7 +209,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('rejects non-200 response bodies that do not match the declared response', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: schema<{ id: number; name: string }>(),
         404: schema<{ message: string }>(),
@@ -223,7 +223,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('does not require handlers to exhaust every declared response', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: schema<{ id: number; name: string }>(),
         400: schema<{ message: string }>(),
@@ -237,7 +237,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('allows handler-inferred responses when no response contract is declared', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
     })
 
@@ -247,7 +247,7 @@ describe('defineEndpoint handler types', () => {
   })
 
   it('allows inferred status responses when no response contract is declared', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
     })
 
@@ -268,7 +268,7 @@ describe('defineEndpoint handler types', () => {
 
 describe('tuple and literal response contracts', () => {
   it('accepts a tuple-typed response value', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     const pair: [string, number] = ['a', 1]
@@ -280,7 +280,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('keeps rejecting a tuple whose positions do not match', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
 
@@ -289,21 +289,25 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('accepts inline literals and tuples without as const', () => {
-    const literal = defineEndpoint({ responses: { 200: z.object({ ok: z.literal(true) }) } })
+    const literal = defineEndpointContract({
+      responses: { 200: z.object({ ok: z.literal(true) }) },
+    })
     defineEndpointHandler(literal, () => ({ ok: true }))
 
-    const tuple = defineEndpoint({
+    const tuple = defineEndpointContract({
       responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     defineEndpointHandler(tuple, () => ({ pair: ['a', 1] }))
   })
 
   it('still rejects inline values that do not match the contract', () => {
-    const literal = defineEndpoint({ responses: { 200: z.object({ ok: z.literal(true) }) } })
+    const literal = defineEndpointContract({
+      responses: { 200: z.object({ ok: z.literal(true) }) },
+    })
     // @ts-expect-error false does not satisfy the declared literal.
     defineEndpointHandler(literal, () => ({ ok: false }))
 
-    const tuple = defineEndpoint({
+    const tuple = defineEndpointContract({
       responses: { 200: z.object({ pair: z.tuple([z.string(), z.number()]) }) },
     })
     // @ts-expect-error the second position must be a number.
@@ -313,7 +317,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('keeps widening the return of a handler with no declared responses', () => {
-    const endpoint = defineEndpoint({ query: z.object({ q: z.string() }) })
+    const endpoint = defineEndpointContract({ query: z.object({ q: z.string() }) })
     const handler = defineEndpointHandler(endpoint, () => ({ name: 'Tom' }))
 
     // The sample value must not narrow the generated client type to 'Tom'.
@@ -321,7 +325,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('still accepts ordinary arrays', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: { 200: z.object({ items: z.array(z.string()) }) },
     })
 
@@ -329,7 +333,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('types an unparsed media-type body member as bytes', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       body: {
         'application/json': z.object({ name: z.string() }),
         'application/pdf': true,
@@ -345,7 +349,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('accepts every body shape the HTTP layer forwards for a stream status', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: { media: 'text/csv' },
         404: z.object({ message: z.string() }),
@@ -364,7 +368,7 @@ describe('tuple and literal response contracts', () => {
   })
 
   it('narrows responseMediaType to the declared media types', () => {
-    const negotiating = defineEndpoint({
+    const negotiating = defineEndpointContract({
       responses: {
         200: { media: ['text/csv', 'application/json'] },
         404: z.object({ message: z.string() }),
@@ -380,7 +384,7 @@ describe('tuple and literal response contracts', () => {
       return send(404, { message: 'gone' })
     })
 
-    const single = defineEndpoint({
+    const single = defineEndpointContract({
       responses: {
         200: { media: 'text/csv' },
       },
@@ -391,7 +395,7 @@ describe('tuple and literal response contracts', () => {
       return send(200, new ReadableStream())
     })
 
-    const validated = defineEndpoint({
+    const validated = defineEndpointContract({
       responses: {
         200: z.object({ id: z.number() }),
       },

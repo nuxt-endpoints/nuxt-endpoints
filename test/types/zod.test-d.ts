@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from '../internal-runtime'
+import { defineEndpointContract, defineEndpointHandler } from '../internal-runtime'
 import type { EndpointClient, EndpointRequestValidationProblem } from '../internal-runtime'
 
 type Client = EndpointClient<{
@@ -16,7 +16,7 @@ declare const client: Client
 
 describe('Zod support', () => {
   it('accepts Zod response returns without operation names', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       query: z.object({ q: z.string() }),
       responses: {
         200: z.object({
@@ -31,7 +31,7 @@ describe('Zod support', () => {
   })
 
   it('infers handler context from Zod outputs', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: z.object({ id: z.coerce.number() }),
       query: z.object({ include: z.string().optional() }),
       responses: {
@@ -51,7 +51,7 @@ describe('Zod support', () => {
   })
 
   it('rejects invalid Zod response returns', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: z.object({
           id: z.number(),

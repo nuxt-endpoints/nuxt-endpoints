@@ -210,7 +210,7 @@ function createAuthoringSupport() {
   return `
 import type { StandardSchemaLike } from '#ne-runtime'
 
-export { defineRouteHandler } from '#ne-runtime'
+export { defineEndpoint } from '#ne-runtime'
 
 export function schema<Input, Output = Input>(): StandardSchemaLike<Input, Output> {
   return null as never
@@ -220,16 +220,16 @@ export function schema<Input, Output = Input>(): StandardSchemaLike<Input, Outpu
 
 function createAuthoringFixture(index) {
   return `
-import { defineRouteHandler, schema } from './support.js'
+import { defineEndpoint, schema } from './support.js'
 
 const Article = schema<{ id: number; field${index}: string }>()
 
-export default defineRouteHandler({
+export default defineEndpoint({
   pagination: { kind: 'cursor', item: Article },
-  validate: {
+  request: {
     query: schema<{ category?: string }>(),
-    response: { 404: schema<{ message: string; route: ${index} }>() },
   },
+  responses: { 404: schema<{ message: string; route: ${index} }>() },
   handler: (event) => {
     event.validated.query.limit satisfies number
     return {

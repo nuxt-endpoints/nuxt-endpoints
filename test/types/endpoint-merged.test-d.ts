@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint } from '../internal-runtime'
+import { defineEndpointContract } from '../internal-runtime'
 import type { EndpointClientOptions, StandardSchemaLike } from '../internal-runtime'
 
 type Schema<INPUT, OUTPUT = INPUT> = StandardSchemaLike<INPUT, OUTPUT>
@@ -14,7 +14,7 @@ const schema = <INPUT, OUTPUT = INPUT>(): Schema<INPUT, OUTPUT> => {
 // two-call form.
 describe('single-define endpoint types', () => {
   it('B: params is the coerced OUTPUT type inside the handler', () => {
-    defineEndpoint({
+    defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
       query: schema<{ include?: string }>(),
       responses: {
@@ -29,7 +29,7 @@ describe('single-define endpoint types', () => {
     })
 
     // Same probe with a real Zod coercion.
-    defineEndpoint({
+    defineEndpointContract({
       params: z.object({ id: z.coerce.number() }),
       responses: { 200: z.object({ id: z.number() }) },
       handler: ({ params }) => {
@@ -40,7 +40,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('C: a return that does not match responses[200] is an error', () => {
-    defineEndpoint({
+    defineEndpointContract({
       responses: { 200: z.object({ id: z.number() }) },
       // @ts-expect-error the handler return must match responses[200].
       handler: () => ({ id: 'not-a-number' }),
@@ -48,7 +48,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('D: respond(404, ...) with a mismatched body is an error', () => {
-    defineEndpoint({
+    defineEndpointContract({
       responses: {
         200: z.object({ id: z.number() }),
         404: z.object({ message: z.string() }),
@@ -56,7 +56,7 @@ describe('single-define endpoint types', () => {
       handler: ({ respond }) => respond(404, { message: 'gone' }),
     })
 
-    defineEndpoint({
+    defineEndpointContract({
       responses: {
         200: z.object({ id: z.number() }),
         404: z.object({ message: z.string() }),
@@ -67,7 +67,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('E: with no responses declared the return is inferred and widened', () => {
-    const inferred = defineEndpoint({
+    const inferred = defineEndpointContract({
       handler: () => ({ name: 'Tom', count: 1 }),
     })
 
@@ -78,7 +78,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('F: client option types derive from the assembled definition', () => {
-    const merged = defineEndpoint({
+    const merged = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
       body: schema<{ amount: string }, { amount: number }>(),
       responses: { 200: schema<{ ok: true }>() },
@@ -94,7 +94,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('G: media responses keep their negotiated literal union', () => {
-    defineEndpoint({
+    defineEndpointContract({
       responses: {
         200: { media: ['text/csv', 'application/json'] },
         404: z.object({ message: z.string() }),
@@ -107,7 +107,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('H: tags and summary still type-check', () => {
-    const merged = defineEndpoint({
+    const merged = defineEndpointContract({
       summary: 'Tagged',
       tags: ['merged'],
       responses: { 200: z.object({ ok: z.boolean() }) },
@@ -120,7 +120,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('I: the two-call form is untouched', () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       params: schema<{ id: string }, { id: number }>(),
       responses: { 200: schema<{ id: number }>() },
     })
@@ -130,24 +130,24 @@ describe('single-define endpoint types', () => {
   it('J: literal-typed response bodies match without `as const`', () => {
     // The two-call form's `const` capture keeps `ok: true` narrow; the merged
     // form must too, or every literal/enum/tuple contract needs `as const`.
-    defineEndpoint({
+    defineEndpointContract({
       responses: { 200: z.object({ ok: z.literal(true) }) },
       handler: () => ({ ok: true }),
     })
 
-    defineEndpoint({
+    defineEndpointContract({
       responses: { 200: z.tuple([z.number(), z.string()]) },
       handler: () => [1, 'a'] as const,
     })
   })
 
   it('K: async handlers infer through the promise', () => {
-    defineEndpoint({
+    defineEndpointContract({
       responses: { 200: z.object({ id: z.number() }) },
       handler: async () => ({ id: 1 }),
     })
 
-    const inferred = defineEndpoint({
+    const inferred = defineEndpointContract({
       handler: async () => ({ name: 'Tom' }),
     })
     expectTypeOf<(typeof inferred)['__endpoint_handler_return__']>().toEqualTypeOf<{
@@ -156,7 +156,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('L: a media-type-map body still discriminates', () => {
-    defineEndpoint({
+    defineEndpointContract({
       body: { 'application/json': z.object({ a: z.string() }), 'text/csv': true },
       responses: { 200: z.object({ ok: z.boolean() }) },
       handler: ({ body, bodyMediaType }) => {
@@ -168,7 +168,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('M: an undeclared status is rejected by respond()', () => {
-    defineEndpoint({
+    defineEndpointContract({
       responses: { 200: z.object({ id: z.number() }) },
       // @ts-expect-error 418 is not a declared status.
       handler: ({ respond }) => respond(418, { id: 1 }),
@@ -176,7 +176,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('N: accepts the deprecated normalized metadata spelling temporarily', () => {
-    const legacy = defineEndpoint({
+    const legacy = defineEndpointContract({
       idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
       handler: () => ({ ok: true }),
     })
@@ -184,12 +184,12 @@ describe('single-define endpoint types', () => {
       (typeof legacy)['__endpoint_contract__']['definition']['idempotency']
     >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
 
-    defineEndpoint({
+    defineEndpointContract({
       // @ts-expect-error omit idempotency to disable it.
       idempotency: false,
       handler: () => ({ ok: true }),
     })
-    defineEndpoint({
+    defineEndpointContract({
       // @ts-expect-error enabled: false is not an authoring option.
       idempotency: { enabled: false },
       handler: () => ({ ok: true }),
@@ -197,12 +197,12 @@ describe('single-define endpoint types', () => {
   })
 
   it('O: the idempotency slot carries options and lands as metadata', () => {
-    const shorthand = defineEndpoint({ idempotency: true, handler: () => ({ ok: true }) })
+    const shorthand = defineEndpointContract({ idempotency: true, handler: () => ({ ok: true }) })
     expectTypeOf<
       (typeof shorthand)['__endpoint_contract__']['definition']['idempotency']
     >().toEqualTypeOf<{ enabled: true; headerName: 'Idempotency-Key'; required: true }>()
 
-    const merged = defineEndpoint({
+    const merged = defineEndpointContract({
       body: z.object({ amount: z.number() }),
       idempotency: {
         authorization: 'middleware',
@@ -222,7 +222,7 @@ describe('single-define endpoint types', () => {
 
     // An empty slot still enables idempotency, exactly as `.idempotency()` with
     // no arguments does - it must not collapse the way an absent slot does.
-    const bare = defineEndpoint({
+    const bare = defineEndpointContract({
       body: z.object({ amount: z.number() }),
       idempotency: {},
       handler: () => ({ ok: true }),
@@ -234,7 +234,7 @@ describe('single-define endpoint types', () => {
 
     // ...and without the slot the assembled definition carries `undefined`, so
     // nothing downstream sees idempotency metadata.
-    const none = defineEndpoint({
+    const none = defineEndpointContract({
       body: z.object({ amount: z.number() }),
       handler: () => ({ ok: true }),
     })
@@ -243,7 +243,7 @@ describe('single-define endpoint types', () => {
       (typeof none)['__endpoint_contract__']['definition']['idempotency']
     >().toEqualTypeOf<undefined>()
 
-    const optional = defineEndpoint({
+    const optional = defineEndpointContract({
       idempotency: { required: false },
       handler: () => ({ ok: true }),
     })
@@ -253,7 +253,7 @@ describe('single-define endpoint types', () => {
   })
 
   it('O2: a custom headerName and required: true are reflected in the type', () => {
-    const merged = defineEndpoint({
+    const merged = defineEndpointContract({
       body: z.object({ amount: z.number() }),
       idempotency: { authorization: 'middleware', headerName: 'X-Request-Key', required: true },
       handler: () => ({ ok: true }),
@@ -275,13 +275,13 @@ describe('single-define endpoint types', () => {
   })
 
   it('P: a typo in a slot name is rejected in both forms', () => {
-    defineEndpoint({
+    defineEndpointContract({
       // @ts-expect-error 'respones' is not a contract slot.
       respones: { 200: z.object({ id: z.number() }) },
       handler: () => ({ id: 1 }),
     })
 
-    defineEndpoint({
+    defineEndpointContract({
       // @ts-expect-error 'respones' is not a contract slot.
       respones: { 200: z.object({ id: z.number() }) },
     })

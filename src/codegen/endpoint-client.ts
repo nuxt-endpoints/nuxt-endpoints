@@ -19,11 +19,12 @@ export function generateEndpointClient(
   const asyncDataRuntime = '__useEndpointAsyncData'
   return `
 import { createUseAsyncData } from '#app/composables/asyncData'
-import { useRequestFetch, useRequestHeaders } from 'nuxt/app'
-import { createEndpointClient, createUseEndpoint } from '${clientRuntimeImportPath}'
+import { navigateTo, useRequestEvent, useRequestFetch, useRequestHeaders, useState } from 'nuxt/app'
+import { computed, ref } from 'vue'
+import { createEndpointClient, createUseEndpoint, createUseEndpointForm } from '${clientRuntimeImportPath}'
 
-import type { EndpointFetcherRuntime } from '${clientRuntimeImportPath}'
-import type { $EndpointClient, $UseEndpoint } from '#endpoints'
+import type { EndpointFetcherRuntime, UseEndpointClientRuntimeValue } from '${clientRuntimeImportPath}'
+import type { $EndpointClient, $UseEndpoint, $UseEndpointForm } from '#endpoints'
 
 const routes = ${JSON.stringify(routes, null, 2)} as const
 export const __useEndpointAsyncData = createUseAsyncData()
@@ -46,7 +47,12 @@ const captureFetcher = () => {
   }
 }
 
+// The reactivity and navigation \`useEndpointForm\` needs, injected the way
+// \`captureFetcher\` is so the client runtime imports nothing from Vue or Nuxt.
+const formBindings = { ref, computed, useState, useRequestEvent, navigateTo }
+
 export const $endpoint = createEndpointClient(routes${clientOptions}) as unknown as $EndpointClient
 export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint
+export const useEndpointForm = createUseEndpointForm(routes, { ...formBindings, useEndpoint: useEndpoint as unknown as UseEndpointClientRuntimeValue }, { captureFetcher }) as unknown as $UseEndpointForm
 `.trimStart()
 }

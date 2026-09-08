@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Nuxt } from '@nuxt/schema'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import {
   assertOpenApiRoutesDoNotOverlap,
   findUnsupportedRouteTemplateSyntax,
@@ -12,6 +13,7 @@ import {
   resolveExplicitConventionPath,
   resolveModuleOptions,
 } from '../src/module'
+import { formOf } from '../src/runtime'
 
 describe('build-time idempotency runtime gap detection', () => {
   it('projects a declared endpoint name into detection metadata', () => {
@@ -223,6 +225,72 @@ describe('pagination detection', () => {
         definition: { pagination: { kind: 'cursor' } as never },
       }),
     ).toThrow(/pagination must be/)
+  })
+})
+
+describe('progressive form detection', () => {
+  const Todo = z.object({ title: z.string().min(1), done: z.boolean() })
+
+  it('projects serializable form metadata and field attributes', () => {
+    const detection = getEndpointFromCarrier({
+      definition: {
+        form: { action: '/todos/new', redirect: '/todos/{id}' },
+        body: {
+          'application/json': Todo,
+          'application/x-www-form-urlencoded': formOf(Todo),
+        },
+        responses: { 201: z.object({ id: z.number() }) },
+      },
+    })
+
+    expect(detection).toEqual({
+      form: {
+        action: '/todos/new',
+        method: 'post',
+        redirect: '/todos/{id}',
+        enctype: 'application/x-www-form-urlencoded',
+        fields: {
+          title: { name: 'title', required: true, minlength: 1 },
+          done: { name: 'done' },
+        },
+      },
+    })
+  })
+
+  it('rejects a form projection a browser cannot satisfy', () => {
+    expect(() =>
+      getEndpointFromCarrier({
+        definition: {
+          form: { action: '/todos/new' },
+          body: Todo,
+          responses: {},
+        },
+      }),
+    ).toThrow(/must accept an encoding a browser can submit/)
+
+    expect(() =>
+      getEndpointFromCarrier({
+        __idempotency_runtime_marker__: { storage: true, scope: true, authorization: true },
+        definition: {
+          form: { action: '/todos/new' },
+          idempotency: { enabled: true, headerName: 'Idempotency-Key', required: true },
+          body: { 'application/x-www-form-urlencoded': formOf(Todo) },
+          responses: {},
+        },
+      }),
+    ).toThrow(/cannot send an Idempotency-Key header/)
+  })
+
+  it('rejects an unresolved redirect placeholder', () => {
+    expect(() =>
+      getEndpointFromCarrier({
+        definition: {
+          form: { action: '/todos/new', redirect: '/todos/{id}' },
+          body: { 'application/x-www-form-urlencoded': formOf(Todo) },
+          responses: { 201: z.object({ slug: z.string() }) },
+        },
+      }),
+    ).toThrow(/cannot resolve id from successful response 201/)
   })
 })
 

@@ -360,7 +360,7 @@ export type IdempotencyRuntimeOptionKey = (typeof idempotencyRuntimeOptionKeys)[
 // Every option that belongs to request-time execution rather than the portable
 // route contract. TypeScript rejects these through RouteContractIdempotency;
 // definition-time validation uses the same list so JavaScript cannot have a
-// value accepted at build time and silently discarded by defineRouteHandler.
+// value accepted at build time and silently discarded by defineEndpoint.
 export const idempotencyRouteContractForbiddenOptionKeys = [
   ...idempotencyRuntimeOptionKeys,
   'fingerprint',

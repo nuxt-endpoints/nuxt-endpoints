@@ -2,7 +2,7 @@
 
 Status: maintainer roadmap; proposed items are not public API commitments.
 
-Last consolidated: 2026-09-07
+Last consolidated: 2026-09-08
 
 ## Product boundary
 
@@ -11,9 +11,10 @@ being developed for the Nuxt 5 generation to that support line.
 
 The public product boundary is:
 
-- `defineRouteHandler({...})` for route authoring;
+- `defineEndpoint({...})` for route authoring;
 - `$endpoint(path, { method, ...input })` for lazy status-aware requests;
 - `useEndpoint(path, { method, ...input })` for Nuxt async data;
+- `useEndpointForm(path, { method, ...input })` for native and enhanced forms;
 - typed `queryOptions()`, `mutationOptions()`, and `infiniteQueryOptions()`
   adapters for Pinia Colada;
 - OpenAPI generated from the same contracts.
@@ -35,14 +36,14 @@ instead of silently changing semantics.
 | `main`  | Published Nuxt 4.5+ line using Nitro 2 and H3 1 compatibility adapters  |
 | `nuxt5` | Integration prototype against the H3/Nitro/fetchdts route-contract work |
 
-The two branches keep the same mainstream application-facing API. Progressive
-enhancement and explicit `HEAD` / `OPTIONS` / `CONNECT` / `TRACE` authoring are
-Nuxt 5 platform capabilities; other differences belong behind the platform
-adapter and build-time metadata boundary.
+The two branches keep the same mainstream application-facing API, including
+progressive enhancement. Explicit `HEAD` / `OPTIONS` / `CONNECT` / `TRACE`
+authoring remains a Nuxt 5 platform capability; other differences belong
+behind the platform adapter and build-time metadata boundary.
 
 ## Implemented
 
-- Direct, canonical `defineRouteHandler({...})` authoring, including grouped
+- Direct, canonical `defineEndpoint({...})` authoring, including grouped
   method definitions for method-suffix-free routes.
 - Standard Schema request validation with Zod, Valibot, and Effect Schema.
 - Declared per-status responses, development-default response validation, status-aware
@@ -55,6 +56,8 @@ adapter and build-time metadata boundary.
   verified with the official Nuxt module.
 - Cursor pagination contracts that own their query/page envelope, runtime
   validation, OpenAPI projection, and typed Pinia Colada invocation.
+- Native GET and POST form projections through `useEndpointForm`, including
+  no-JavaScript submission and same-page validation failures.
 - `idempotency: true` authoring, required keys generated when the request
   object is created, and reuse by retries of that object.
 - Application-owned idempotency storage, explicit public/authenticated scope,

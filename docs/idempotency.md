@@ -18,11 +18,11 @@ rejected.
 A route opts in with serializable contract metadata:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: CreatePayment,
-    response: { 201: Payment },
   },
+  responses: { 201: Payment },
   idempotency: true,
   handler: (event) => event.respond(201, createPayment(event.validated.body)),
 })
@@ -89,7 +89,7 @@ export default defineEndpointRuntime({
     '/api/payments': {
       post: {
         idempotency: {
-          leaseTtlMs: 5 * 60_000,
+          leaseTtlMs: 5 * 60000,
           replayStatuses: [201],
         },
       },

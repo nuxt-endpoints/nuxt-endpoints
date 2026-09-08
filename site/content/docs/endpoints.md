@@ -5,21 +5,20 @@ description: Declare validated request and response contracts with the canonical
 
 Nuxt Endpoints uses a single-definition route shape designed to align with the
 route-contract work happening in H3 and Nitro. Directly default-export
-`defineRouteHandler({...})`; the handler receives parsed schema output.
+`defineEndpoint({...})`; the handler receives parsed schema output.
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-
-export default defineRouteHandler({
+export default defineEndpoint({
   name: 'getUser',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
+  request: {
+    params: z.object({ id: z.coerce.number() }),
     query: z.object({ include: z.string().optional() }),
-    response: {
-      200: z.object({ id: z.number(), name: z.string() }),
-      404: z.object({ message: z.string() }),
-    },
+  },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const { params, query } = event.validated
@@ -47,24 +46,42 @@ and method are the canonical identity; `name` only removes those two fields at
 the call site. It does not flatten the explicit `params`, `query`, `headers`, or
 `body` slots. Names must be unique valid JavaScript identifiers.
 
+## Progressively enhanced forms
+
+Add a `form` declaration to a route with a compatible form-encoded body:
+
+```ts
+form: {
+  action: '/users/new',
+  redirect: '/users/{id}',
+},
+```
+
+`action` is the native form submission URL, as in HTML. NE registers a bridge
+at that page URL to call the endpoint; `redirect` names the destination after
+success. `useEndpointForm` derives the HTML attributes and typed fields from
+the contract. The same form works before hydration and with JavaScript
+disabled. See the [complete server and client examples](https://github.com/nuxt-endpoints/nuxt-endpoints/blob/main/docs/progressive-enhancement.md).
+
 ## Definition fields
 
 A single-method definition accepts:
 
-- `params`: Standard Schema for router params.
 - `name`: optional typed `$endpoint` property alias for this method.
 - `summary`, `description`, `tags`: OpenAPI metadata.
 - `idempotency`: serializable idempotency contract metadata.
 - `pagination`: an optional cursor-pagination contract for GET routes.
-- `validate`: request and response schemas.
+- `form`: an optional native-form projection for GET or POST routes.
+- `request`: request schemas.
+- `responses`: status-to-response schemas.
 - `handler`: the single-method handler.
 
-`validate` accepts:
+`request` accepts:
 
+- `params`: parsed route params.
 - `query`: parsed query object.
 - `headers`: request header object.
 - `body`: one schema or a media-type map.
-- `response`: one schema for status 200 or a status-to-response map.
 
 Schema input types become generated client request types. Schema output types
 become handler context types, so coercions and transforms have already run.
@@ -78,27 +95,25 @@ validation, and handler.
 ```ts
 // server/api/users/[id].ts
 import { z } from 'zod'
-
 const User = z.object({ id: z.number(), name: z.string() })
 const Params = z.object({ id: z.coerce.number() })
-
-export default defineRouteHandler({
-  params: Params,
+export default defineEndpoint({
+  request: {
+    params: Params,
+  },
   get: {
     name: 'getUser',
-    validate: {
-      response: { 200: User, 404: z.object({ message: z.string() }) },
-    },
+    responses: { 200: User, 404: z.object({ message: z.string() }) },
     handler: (event) => {
       return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
     },
   },
   put: {
     name: 'updateUser',
-    validate: {
+    request: {
       body: z.object({ name: z.string() }),
-      response: { 200: User },
     },
+    responses: { 200: User },
     handler: (event) => updateUser(event.validated.params.id, event.validated.body),
   },
 })
@@ -127,13 +142,13 @@ The handler receives the native H3 event, extended with the endpoint contract:
 - the usual H3 event context and request properties remain directly available.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: z.object({ name: z.string().trim() }),
-    response: {
-      201: z.object({ id: z.number(), name: z.string() }),
-      409: z.object({ message: z.string() }),
-    },
+  },
+  responses: {
+    201: z.object({ id: z.number(), name: z.string() }),
+    409: z.object({ message: z.string() }),
   },
   handler: async (event) => {
     const { body } = event.validated
@@ -155,10 +170,8 @@ Response schemas drive types, OpenAPI, and optional runtime response validation.
 During development, a declared response is validated before it is serialized:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: { 200: z.object({ createdAt: z.date() }) },
-  },
+export default defineEndpoint({
+  responses: { 200: z.object({ createdAt: z.date() }) },
   handler: () => ({ createdAt: new Date() }),
 })
 ```
@@ -188,13 +201,11 @@ headers are checked against what is actually sent, so a missing or rejected head
 when a header is not always present.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: {
-        body: z.object({ id: z.number() }),
-        headers: { 'X-Request-Id': z.string().uuid() },
-      },
+export default defineEndpoint({
+  responses: {
+    200: {
+      body: z.object({ id: z.number() }),
+      headers: { 'X-Request-Id': z.string().uuid() },
     },
   },
   handler: (event) =>
@@ -210,15 +221,15 @@ Use a media-type map when one route accepts more than one representation.
 Schema members are parsed; `true` members expose raw bytes.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: {
       'application/json': z.object({ name: z.string() }),
       'multipart/form-data': z.object({ name: z.string() }),
       'application/pdf': true,
     },
-    response: { 201: z.object({ ok: z.literal(true) }) },
   },
+  responses: { 201: z.object({ ok: z.literal(true) }) },
   handler: (event) => {
     return event.respond(201, { ok: true })
   },
@@ -234,12 +245,10 @@ A response entry with `media` declares an unparsed representation such as a
 file or stream:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: { media: ['text/csv', 'application/json'] },
-      404: z.object({ message: z.string() }),
-    },
+export default defineEndpoint({
+  responses: {
+    200: { media: ['text/csv', 'application/json'] },
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const body =
@@ -258,11 +267,11 @@ The route definition contains build-time metadata only. Request-time functions
 belong in the application-wide endpoint runtime file:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: PaymentInput,
-    response: { 201: Payment },
   },
+  responses: { 201: Payment },
   idempotency: true,
   handler: (event) => event.respond(201, createPayment(event.validated.body)),
 })
@@ -337,10 +346,11 @@ export const userContract = {
 ```ts
 // server/api/users/[id].get.ts
 import { userContract } from '../../../contracts/user'
-
-export default defineRouteHandler({
-  params: userContract.params,
-  validate: { response: userContract.responses },
+export default defineEndpoint({
+  request: {
+    params: userContract.params,
+  },
+  responses: userContract.responses,
   handler: (event) => {
     return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
   },
@@ -356,7 +366,7 @@ upstream contract carrier that can remove this evaluation requirement.
 
 Keep route declarations compatible with Nitro's compiler boundary:
 
-- call the canonical `defineRouteHandler` identifier directly in the default
+- call the canonical `defineEndpoint` identifier directly in the default
   export;
 - pass an object literal as the first argument;
 - do not alias or shadow the helper;

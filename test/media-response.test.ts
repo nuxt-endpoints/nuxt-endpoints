@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type {
-  defineEndpoint as DefineEndpoint,
+  defineEndpointContract as DefineEndpoint,
   defineEndpointHandler as DefineEndpointHandler,
 } from './internal-runtime'
 
@@ -15,11 +15,11 @@ const setHeaders = vi.fn()
 // before `setResponseStatus`/`setHeaders` above are assigned — tripping
 // Vitest's hoisted `vi.mock` factory into a temporal-dead-zone
 // ReferenceError.
-let defineEndpoint: typeof DefineEndpoint
+let defineEndpointContract: typeof DefineEndpoint
 let defineEndpointHandler: typeof DefineEndpointHandler
 
 beforeAll(async () => {
-  ;({ defineEndpoint, defineEndpointHandler } = await import('./internal-runtime'))
+  ;({ defineEndpointContract, defineEndpointHandler } = await import('./internal-runtime'))
 })
 
 vi.mock('h3', () => {
@@ -65,7 +65,7 @@ describe('media response contracts', () => {
   })
 
   it('passes a returned ReadableStream through untouched, even with response validation enabled', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {
         responses: {
           200: { media: 'text/csv' },
@@ -84,7 +84,7 @@ describe('media response contracts', () => {
   })
 
   it('lets a handler-supplied content-type win over the declared one, case-insensitively', async () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: { media: 'text/csv' },
       },
@@ -107,7 +107,7 @@ describe('media response contracts', () => {
   })
 
   it('still validates a non-media status declared on the same endpoint', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {
         responses: {
           200: { media: 'text/csv' },
@@ -129,7 +129,7 @@ describe('media response contracts', () => {
   })
 
   it('still throws "is not declared" for a media response returned on an undeclared status', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {
         responses: {
           200: { media: 'text/csv' },
@@ -154,7 +154,7 @@ describe('media response contracts', () => {
   })
 
   it('applies a validated contentType of a JSON profile through setHeaders, and still validates the body', async () => {
-    const endpoint = defineEndpoint(
+    const endpoint = defineEndpointContract(
       {
         responses: {
           200: z.object({ ok: z.literal(true) }),
@@ -189,7 +189,7 @@ describe('media response contracts', () => {
   })
 
   it('sets no content-type header for a validated status with no declared contentType', async () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       responses: {
         200: z.object({ id: z.number() }),
       },
@@ -206,7 +206,7 @@ describe('media response contracts', () => {
     it('does not negotiate when each status has one representation of its own', async () => {
       // Two media types exist across the endpoint, but neither status offers a
       // choice, so a request asking for something else must not be refused.
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: {
           200: { media: 'text/csv' },
           404: { media: 'application/problem+json' },
@@ -224,7 +224,7 @@ describe('media response contracts', () => {
     })
 
     it('never negotiates its way into an error status representation', async () => {
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: {
           200: { media: ['text/csv', 'application/json'] },
           404: { media: 'application/problem+json' },
@@ -246,7 +246,7 @@ describe('media response contracts', () => {
         respond: (status: 200, body: unknown, options?: unknown) => unknown
       }) => unknown,
     ) {
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: { 200: { media: ['text/csv', 'application/json'] } },
       })
       return defineEndpointHandler(endpoint, handler as never)
@@ -291,7 +291,7 @@ describe('media response contracts', () => {
 
   describe('Accept negotiation', () => {
     function createNegotiatingEndpoint() {
-      return defineEndpoint({
+      return defineEndpointContract({
         responses: {
           200: { media: ['text/csv', 'application/json'] },
         },
@@ -321,7 +321,7 @@ describe('media response contracts', () => {
     })
 
     it('still reports the single declared media type without varying on Accept', async () => {
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: {
           200: { media: 'text/csv' },
         },
@@ -344,7 +344,7 @@ describe('media response contracts', () => {
     })
 
     it('varies on Accept for every status of a negotiating endpoint, validated ones included', async () => {
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: {
           200: { media: ['text/csv', 'application/json'] },
           404: z.object({ message: z.string() }),
@@ -386,7 +386,7 @@ describe('media response contracts', () => {
 
     it('routes the refusal through the endpoint onValidationError hook', async () => {
       const failures: unknown[] = []
-      const endpoint = defineEndpoint(
+      const endpoint = defineEndpointContract(
         {
           responses: {
             200: { media: ['text/csv', 'application/json'] },
@@ -421,7 +421,7 @@ describe('media response contracts', () => {
     })
 
     it('keeps a status that does not offer the negotiated type on its own declared media type', async () => {
-      const endpoint = defineEndpoint({
+      const endpoint = defineEndpointContract({
         responses: {
           200: { media: ['text/csv', 'application/json'] },
           404: {

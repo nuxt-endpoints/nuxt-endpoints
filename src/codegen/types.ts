@@ -1,4 +1,5 @@
 import type { NitroRouteHandlerDescriptor } from '../nitro-route-handlers'
+import type { FormFieldAttributes } from '../runtime/form-schema'
 import type { EndpointIdempotencyMetadata } from '../runtime/contract'
 import type { EndpointPaginationRouteMetadata } from '../runtime/pagination'
 
@@ -19,9 +20,14 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
   // Set when the route declares a media response, so the generated client
   // config can tell the fetcher not to parse this route's body.
   mediaResponse?: true
+  // Set when the route declares `form`. The field attributes are derived here,
+  // at build time, so the client receives plain HTML attributes and no schema
+  // object ever reaches the browser.
+  form?: EndpointFormRouteMetadata
   pagination?: EndpointPaginationRouteMetadata
-  // Set when this entry was expanded from the multi-method form. Codegen uses
-  // the method key to project the corresponding member of H3's `~routeDef`.
+  // Set when this entry was expanded from one method-suffix-free route file.
+  // Nitro initially contributes a `default` return for that dispatcher;
+  // module.ts removes it and contributes one schema entry per method.
   methodGroup?: true
 }
 
@@ -30,6 +36,19 @@ export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | '
 // settings. Kept narrow so codegen has no reason to import module.ts's option
 // type back, which would create a cycle; `resolvedOptions` in module.ts is a
 // structural superset and is passed in as-is.
+export type EndpointFormRouteMetadata = {
+  /** The page URL a native form submits to. */
+  action: string
+  /** GET projects query fields; POST projects a form-encoded body. */
+  method: 'get' | 'post'
+  /** Success target template over the response body, e.g. `/todos/{id}`. */
+  redirect?: string
+  /** The encoding the declared form member accepts. */
+  enctype: string
+  /** One attribute set per declared field, derived from the form member. */
+  fields: Record<string, FormFieldAttributes>
+}
+
 export type EndpointClientCodegenOptions = {
   client: {
     raw: boolean

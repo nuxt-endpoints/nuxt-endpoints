@@ -3,13 +3,13 @@ title: Incremental Adoption
 description: Convert one route at a time. Every other route keeps working unchanged.
 ---
 
-Nuxt Endpoints is opt-in per route. A server route joins the endpoint system only when it directly default-exports `defineRouteHandler({...})`. Everything else in `server/` keeps running as a plain Nitro route, untouched by this module.
+Nuxt Endpoints is opt-in per route. A server route joins the endpoint system only when it directly default-exports `defineEndpoint({...})`. Everything else in `server/` keeps running as a plain Nitro route, untouched by this module.
 
 ## How discovery works
 
 During build, the module inspects each scanned server route:
 
-- If the route uses the canonical `defineRouteHandler` form, it joins the generated client, the `#endpoints` types, and the OpenAPI document. Schemas and metadata may be imported from ordinary modules.
+- If the route uses the canonical `defineEndpoint` form, it joins the generated client, the `#endpoints` types, and the OpenAPI document. Schemas and metadata may be imported from ordinary modules.
 - If it does not, the route is skipped entirely — it is not even imported during discovery. No validation is added, no types are generated for it, and its runtime behavior does not change.
 
 There is no global middleware and no route allowlist to maintain. The export itself is the opt-in switch.
@@ -31,18 +31,17 @@ Add the contract and handler in one call, replacing the plain event handler:
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-
-export default defineRouteHandler({
-  params: z.object({
-    id: z.coerce.number(),
-  }),
-  validate: {
-    response: {
-      200: z.object({
-        id: z.number(),
-        name: z.string(),
-      }),
-    },
+export default defineEndpoint({
+  request: {
+    params: z.object({
+      id: z.coerce.number(),
+    }),
+  },
+  responses: {
+    200: z.object({
+      id: z.number(),
+      name: z.string(),
+    }),
   },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Tom' }
@@ -54,7 +53,7 @@ The route path, method, and callers do not change. Existing `$fetch('/api/users/
 
 ## Roll back a route
 
-Replace `defineRouteHandler` with `defineEventHandler`. The route leaves the generated client and OpenAPI document, and nothing else needs to be updated.
+Replace `defineEndpoint` with `defineEventHandler`. The route leaves the generated client and OpenAPI document, and nothing else needs to be updated.
 
 ## Coexistence rules
 

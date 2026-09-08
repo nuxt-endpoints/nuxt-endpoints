@@ -1,23 +1,32 @@
 import { z } from 'zod'
-
-const UserInput = z.object({
-  name: z.string().min(1),
-  age: z.number().int().nonnegative().optional(),
-})
-
+import { defineEndpoint } from '../../../../src/runtime'
+import { UserFormInput, UserInput } from '../../../contracts/user'
 const User = z.object({
-  id: z.number(),
+  id: z.string(),
   name: z.string(),
   age: z.number().optional(),
 })
-
-export default defineRouteHandler({
-  validate: {
-    body: UserInput,
-    response: {
-      201: User,
+export default defineEndpoint({
+  // The page at `/form-pe` posts here natively; the bridge forwards it and
+  // sends the browser to `redirect` on success. See
+  // docs/progressive-enhancement.md.
+  form: {
+    action: '/form-pe',
+    redirect: '/form-pe?created={id}',
+  },
+  request: {
+    body: {
+      'application/json': UserInput,
+      'application/x-www-form-urlencoded': UserFormInput,
     },
   },
+  responses: {
+    201: User,
+  },
   handler: (event) =>
-    event.respond(201, { id: 101, name: event.validated.body.name, age: event.validated.body.age }),
+    event.respond(201, {
+      id: 'Ada Lovelace/42',
+      name: event.validated.body.name,
+      age: event.validated.body.age,
+    }),
 })

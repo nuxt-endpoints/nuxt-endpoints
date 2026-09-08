@@ -52,19 +52,18 @@ npm install effect
 ## Your first endpoint
 
 Create an explicit, file-based Nuxt server route and default-export a
-`defineRouteHandler()` call. The route remains an HTTP endpoint; Nuxt Endpoints
+`defineEndpoint()` call. The route remains an HTTP endpoint; Nuxt Endpoints
 adds the contract-aware handler API inside it.
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-
-export default defineRouteHandler({
+export default defineEndpoint({
   summary: 'Get a user',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: { 200: z.object({ id: z.number(), name: z.string() }) },
+  request: {
+    params: z.object({ id: z.coerce.number() }),
   },
+  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Tom' } // params.id is a number — validated and coerced
   },
@@ -132,5 +131,5 @@ Add `@pinia/nuxt` and `@pinia/colada-nuxt` to `modules`; Nuxt Endpoints does not
 - `/_endpoints/schema`: the default OpenAPI 3.1 document route when OpenAPI generation is enabled.
 
 Adding the module changes nothing by itself: only routes whose default export is
-a direct `defineRouteHandler({...})` call are affected. Existing routes keep
+a direct `defineEndpoint({...})` call are affected. Existing routes keep
 working unchanged — see [Incremental Adoption](/docs/incremental-adoption).
