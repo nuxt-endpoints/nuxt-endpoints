@@ -15,6 +15,7 @@
 //   --publish-only  skip preparation; push, tag, and release the current version
 //   --no-publish    prepare and commit, but stop before pushing
 //   --yes           do not prompt before the irreversible step
+//   --date=YYYY-MM-DD override the release date (useful when the host clock differs)
 //
 // The E2E suite is left out on purpose: it binds a port, which not every
 // environment allows, and it has to have passed before a release anyway.
@@ -37,6 +38,11 @@ const publishOnly = args.includes('--publish-only')
 const noPublish = args.includes('--no-publish')
 const assumeYes = args.includes('--yes')
 const requestedVersion = args.find((arg) => /^\d+\.\d+\.\d+$/.test(arg))
+const requestedDate = args.find((arg) => arg.startsWith('--date='))?.slice('--date='.length)
+
+if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+  fail('The release date must use --date=YYYY-MM-DD.')
+}
 
 async function run(command, commandArgs, options = {}) {
   return execFileAsync(command, commandArgs, { cwd: root, maxBuffer: 32 * 1024 * 1024, ...options })
@@ -153,7 +159,7 @@ if (await git('tag', '--list', tag)) {
 
 // --- changelog and bump -----------------------------------------------------
 
-const today = new Date().toISOString().slice(0, 10)
+const today = requestedDate ?? new Date().toISOString().slice(0, 10)
 let releaseHeading = `## ${version} - ${today}`
 
 // A prepared release may be finished on a later day than it was prepared, so
