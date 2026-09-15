@@ -72,6 +72,18 @@ function checkForm() {
 export type FormProjectionChecked = ReturnType<typeof checkForm>
 
 async function checkClient() {
+  const normalized = await client('/normalized/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6', {
+    method: 'get',
+  })
+  if (normalized.status === 200) {
+    const value: true = normalized.body.normalized
+    void value
+  }
+  if (normalized.status === 418) {
+    const message: 'authored-scope' = normalized.body.message
+    void message
+  }
+
   const user = await client('/api/users/:id', { method: 'get', params: { id: '1' } })
   if (user.status === 200) user.body.name.toUpperCase()
   if (user.status === 404) user.body.message.toUpperCase()
@@ -211,3 +223,7 @@ void userResponse
 void searchPath
 void searchMethod
 void multiPutMethod
+
+export type NuxtNormalizedResponseAgreement = Assert<
+  Equal<NuxtServerResponse<'/normalized/@handle', 'GET'>, { normalized: true }>
+>

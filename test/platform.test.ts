@@ -1,13 +1,12 @@
 import { createApp, defineValidatedHandler, toWebHandler } from 'h3'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint, defineEndpointHandler } from './internal-runtime'
+import { defineEndpointContract, defineEndpointHandler } from './internal-runtime'
 import {
   defineRuntimeHandler,
   getRuntimeQuery,
   getRuntimeRequestHeaders,
 } from '../src/runtime/platform'
-
 // These run a real HTTP request through a real H3 app instead of a mocked
 // event, so they pin the request-parsing semantics the adapter depends on.
 // The adapter is the seam that gets rewritten for H3 v2, and several of these
@@ -23,7 +22,6 @@ async function requestThroughH3(
   app.use(handler as never)
   return toWebHandler(app)(new Request(url, init))
 }
-
 describe('h3 adapter request parsing', () => {
   it('parses repeated query parameters into arrays', async () => {
     let query: unknown
@@ -31,32 +29,23 @@ describe('h3 adapter request parsing', () => {
       query = getRuntimeQuery(event)
       return query
     })
-
     const response = await requestThroughH3(handler, 'http://test.local/?tag=a&tag=b&q=nuxt')
-
     await expect(response.json()).resolves.toEqual({ tag: ['a', 'b'], q: 'nuxt' })
     expect(Object.getPrototypeOf(query as object)).toBe(Object.prototype)
   })
-
   it('parses a single query parameter as a string', async () => {
     const handler = defineRuntimeHandler((event) => getRuntimeQuery(event))
-
     const response = await requestThroughH3(handler, 'http://test.local/?tag=a')
-
     await expect(response.json()).resolves.toEqual({ tag: 'a' })
   })
-
   it('exposes request headers as a plain lowercase record', async () => {
     const handler = defineRuntimeHandler((event) => getRuntimeRequestHeaders(event))
-
     const response = await requestThroughH3(handler, 'http://test.local/', {
       headers: { 'X-Request-Id': 'abc' },
     })
-
     await expect(response.json()).resolves.toMatchObject({ 'x-request-id': 'abc' })
   })
 })
-
 describe('h3 v2 validated-handler upstream gaps', () => {
   it('loses repeated query values before the validator can inspect them', async () => {
     let validatorInput: unknown
@@ -68,27 +57,30 @@ describe('h3 v2 validated-handler upstream gaps', () => {
       validate: { query: Query },
       handler: (event) => Object.fromEntries(event.url.searchParams),
     })
-
     const response = await requestThroughH3(handler as never, 'http://test.local/?tag=a&tag=b')
-
     expect(validatorInput).toEqual({ tag: 'b' })
     await expect(response.json()).resolves.toEqual({ tag: 'b' })
   })
-
   it('retains validation schemas by identity without typing that property', () => {
     const Body = z.object({ name: z.string() })
     const handler = defineValidatedHandler({
       validate: { body: Body },
       handler: async (event) => event.req.json(),
     })
-
-    expect((handler as typeof handler & { validate: { body: unknown } }).validate.body).toBe(Body)
+    expect(
+      (
+        handler as typeof handler & {
+          validate: {
+            body: unknown
+          }
+        }
+      ).validate.body,
+    ).toBe(Body)
   })
 })
-
 describe('endpoint query contracts over real requests', () => {
   it('validates repeated query parameters against an array schema', async () => {
-    const endpoint = defineEndpoint({
+    const endpoint = defineEndpointContract({
       query: z.object({
         tag: z.array(z.string()),
         limit: z.coerce.number(),
@@ -99,19 +91,16 @@ describe('endpoint query contracts over real requests', () => {
       tags: query.tag,
       limit: query.limit,
     }))
-
     const response = await requestThroughH3(
       handler as never,
       'http://test.local/?tag=a&tag=b&limit=10',
     )
-
     await expect(response.json()).resolves.toEqual({ tags: ['a', 'b'], limit: 10 })
   })
 })
-
 describe('media-type-map body contracts over real requests', () => {
   function uploadEndpoint() {
-    return defineEndpoint({
+    return defineEndpointContract({
       body: {
         'application/json': z.object({ name: z.string() }),
         'application/x-www-form-urlencoded': z.object({ name: z.string() }),
@@ -123,73 +112,60 @@ describe('media-type-map body contracts over real requests', () => {
       },
     })
   }
-
   it('parses a real multipart/form-data request, collapsing repeated fields into arrays', async () => {
     const handler = defineEndpointHandler(uploadEndpoint(), ({ body, bodyMediaType }) => ({
       body,
       bodyMediaType,
     }))
-
     const formData = new FormData()
     formData.append('name', 'Tom')
     formData.append('tag', 'a')
     formData.append('tag', 'b')
-
     const response = await requestThroughH3(handler as never, 'http://test.local/upload', {
       method: 'POST',
       body: formData,
     })
-
     await expect(response.json()).resolves.toEqual({
       bodyMediaType: 'multipart/form-data',
       body: { name: 'Tom', tag: ['a', 'b'] },
     })
   })
-
   it('parses a real application/x-www-form-urlencoded request', async () => {
     const handler = defineEndpointHandler(uploadEndpoint(), ({ body, bodyMediaType }) => ({
       body,
       bodyMediaType,
     }))
-
     const response = await requestThroughH3(handler as never, 'http://test.local/upload', {
       method: 'POST',
       body: new URLSearchParams({ name: 'Tom' }),
     })
-
     await expect(response.json()).resolves.toEqual({
       bodyMediaType: 'application/x-www-form-urlencoded',
       body: { name: 'Tom' },
     })
   })
-
   it('parses a real text/plain request as raw text', async () => {
     const handler = defineEndpointHandler(uploadEndpoint(), ({ body, bodyMediaType }) => ({
       body,
       bodyMediaType,
     }))
-
     const response = await requestThroughH3(handler as never, 'http://test.local/upload', {
       method: 'POST',
       headers: { 'content-type': 'text/plain' },
       body: '123',
     })
-
     await expect(response.json()).resolves.toEqual({
       bodyMediaType: 'text/plain',
       body: '123',
     })
   })
-
   it('responds 415 for a real request whose Content-Type matches no declared member', async () => {
     const handler = defineEndpointHandler(uploadEndpoint(), ({ body }) => ({ body }))
-
     const response = await requestThroughH3(handler as never, 'http://test.local/upload', {
       method: 'POST',
       headers: { 'content-type': 'text/html' },
       body: '<p>nope</p>',
     })
-
     expect(response.status).toBe(415)
     await expect(response.json()).resolves.toMatchObject({
       statusMessage: 'Unsupported Media Type',

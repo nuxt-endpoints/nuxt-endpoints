@@ -70,7 +70,7 @@ The pagination declaration is the only source of truth for the generated
 query and successful page response:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   pagination: {
     kind: 'cursor',
     item: Event,
@@ -86,18 +86,18 @@ This constructs `query: { cursor?: string, limit?: number }` for callers,
 normalizes the handler input to `{ cursor?: string, limit: number }`, and
 constructs response 200 as `{ items: Event[], nextCursor?: string }`.
 
-Additional filters and non-200 responses may still use `validate`, but the
+Additional filters and non-200 responses may still use `request` and `responses`, but the
 generated fields may not be repeated:
 
 ```ts
-validate: {
+request: {
   query: z.object({ category: z.string().optional() }), // combined
-  response: { 404: Problem },                           // combined
 }
+responses: { 404: Problem } // combined
 ```
 
-Declaring `validate.query.cursor`, `validate.query.limit`, or
-`validate.response[200]` is an error even if the duplicate schema happens to
+Declaring `request.query.cursor`, `request.query.limit`, or
+`responses[200]` is an error even if the duplicate schema happens to
 agree today. There is no precedence rule. TypeScript reports it early, and
 build discovery repeats the check for JavaScript and cast paths.
 

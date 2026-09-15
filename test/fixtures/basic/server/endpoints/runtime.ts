@@ -1,7 +1,5 @@
 import { createMemoryIdempotencyStorage, defineEndpointRuntime } from '../../../../../src/runtime'
-
 const storage = createMemoryIdempotencyStorage()
-
 export default defineEndpointRuntime({
   routes: {
     '/api/idempotent-bodyless': {
@@ -9,8 +7,8 @@ export default defineEndpointRuntime({
         idempotency: {
           fingerprint: () => ({ operation: 'bodyless-conflict' }),
           replayStatuses: [409],
-          leaseTtlMs: 15_000,
-          replayTtlMs: 60_000,
+          leaseTtlMs: 15000,
+          replayTtlMs: 60000,
         },
       },
     },
@@ -18,7 +16,10 @@ export default defineEndpointRuntime({
       post: {
         idempotency: {
           fingerprint: ({ body }) => {
-            const input = body as { name: string; file: File }
+            const input = body as {
+              name: string
+              file: File
+            }
             return {
               name: input.name,
               file: {

@@ -14,6 +14,8 @@ export type ResolvePath = (path: string) => string
 // the generators below share instead of redeclaring it.
 export type EndpointRouteHandler = Omit<NitroRouteHandlerDescriptor, 'route' | 'method'> & {
   route: string
+  /** Authored path retained for response scope configuration and its types. */
+  sourceRoute?: string
   method: string
   name?: string
   idempotency?: EndpointIdempotencyMetadata

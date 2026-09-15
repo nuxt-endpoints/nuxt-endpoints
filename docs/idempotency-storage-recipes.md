@@ -237,7 +237,6 @@ every request.
 ```ts
 // server/endpoints/runtime.ts
 const idempotencyStorage: IdempotencyStorage = createApplicationStorage(redis)
-
 export default defineEndpointRuntime({
   idempotency: {
     storage: () => idempotencyStorage,
@@ -249,11 +248,11 @@ export default defineEndpointRuntime({
 
 ```ts
 // server/api/points/grants.post.ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: GrantPointsBody,
-    response: { 201: GrantPointsResult },
   },
+  responses: { 201: GrantPointsResult },
   idempotency: true,
   handler: (event) => event.respond(201, grantPoints(event.validated.body)),
 })

@@ -51,12 +51,12 @@ idempotency, an outbox, or a domain uniqueness constraint is still required.
 NE already has the intended split:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   idempotency: true,
-  validate: {
+  request: {
     body: CreatePayment,
-    response: { 201: Payment },
   },
+  responses: { 201: Payment },
   handler: (event) => event.respond(201, createPayment(event.validated.body)),
 })
 ```

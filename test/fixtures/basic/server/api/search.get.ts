@@ -1,16 +1,15 @@
 import { z } from 'zod'
-import { defineRouteHandler } from '../../../../../src/runtime'
-
-export default defineRouteHandler({
-  validate: {
+import { defineEndpoint } from '../../../../../src/runtime'
+export default defineEndpoint({
+  request: {
     query: z.object({
       q: z.string(),
     }),
-    response: {
-      200: z.object({
-        items: z.array(z.string()),
-      }),
-    },
+  },
+  responses: {
+    200: z.object({
+      items: z.array(z.string()),
+    }),
   },
   handler: (event) => ({ items: [event.validated.query.q] }),
 })

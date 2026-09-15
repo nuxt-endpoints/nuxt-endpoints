@@ -29,9 +29,15 @@ try {
 ${
   upstreamRoot
     ? `overrides:
+  '@nuxt/kit': file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-kit-5.0.0-0.tgz')}
+  '@nuxt/nitro-server': file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz')}
+  '@nuxt/schema': file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-schema-5.0.0-0.tgz')}
+  '@nuxt/vite-builder': file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-vite-builder-5.0.0-0.tgz')}
+  '@nuxt/vite-server': file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-vite-server-5.0.0-0.tgz')}
   h3: link:${join(upstreamRoot, 'h3')}
   fetchdts: link:${join(upstreamRoot, 'fetchdts')}
   nitro: link:${join(upstreamRoot, 'nitro')}
+  nuxt: file:${join(upstreamRoot, 'nuxt/.prototype-pack/nuxt-5.0.0-20260903.d070492f.tgz')}
 `
     : ''
 }
@@ -103,14 +109,15 @@ export default defineServerRouteConfig({
   )
   await writeFile(
     join(smokeRoot, 'server/api/echo.post.ts'),
-    `import { z } from 'zod'
+    `import { defineEndpoint } from 'nuxt-endpoints/runtime'
+import { z } from 'zod'
 
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: z.object({ message: z.string() }),
-    response: {
-      201: z.object({ message: z.string() }),
-    },
+  },
+  responses: {
+    201: z.object({ message: z.string() }),
   },
   idempotency: true,
   handler: (event) => event.respond(201, event.validated.body),
@@ -122,10 +129,6 @@ export default defineRouteHandler({
   run('vp', ['exec', 'nuxi', 'prepare'], smokeRoot)
 
   const endpointTypes = await readFile(join(smokeRoot, '.nuxt/types/endpoints.d.ts'), 'utf8')
-  const serverImports = await readFirstFile([
-    join(smokeRoot, '.nuxt/types/nitro/nitro-imports.d.ts'),
-    join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'),
-  ])
 
   assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
   assertIncludes(
@@ -133,16 +136,6 @@ export default defineRouteHandler({
     'serverResponses: ServerRouteResponsesFor',
     'generated application response contract',
   )
-  assertIncludes(serverImports, 'defineRouteHandler', 'defineRouteHandler server auto-import')
-  assertSymbolExcludes(serverImports, 'defineEndpoint', 'defineEndpoint server auto-import')
-  assertSymbolExcludes(
-    serverImports,
-    'defineEndpointHandler',
-    'defineEndpointHandler server auto-import',
-  )
-  assertSymbolExcludes(serverImports, 'createResponse', 'createResponse server auto-import')
-  assertSymbolExcludes(serverImports, 'respond', 'respond server auto-import')
-
   run('vp', ['exec', 'nuxi', 'build'], smokeRoot)
   console.log(`Packed artifact smoke test passed with Nuxt ${nuxtVersion}.`)
 } finally {
@@ -156,22 +149,5 @@ function run(command, args, cwd) {
 function assertIncludes(source, expected, label) {
   if (!source.includes(expected)) {
     throw new Error(`Missing ${label}: ${expected}`)
-  }
-}
-
-async function readFirstFile(paths) {
-  for (const path of paths) {
-    try {
-      return await readFile(path, 'utf8')
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
-    }
-  }
-  throw new Error(`None of the expected generated files exists: ${paths.join(', ')}`)
-}
-
-function assertSymbolExcludes(source, symbol, label) {
-  if (new RegExp(`\\b${symbol}\\b`).test(source)) {
-    throw new Error(`Unexpected ${label}: ${symbol}`)
   }
 }

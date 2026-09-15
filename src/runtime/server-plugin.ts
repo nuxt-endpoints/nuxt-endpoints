@@ -1,5 +1,3 @@
-import { definePlugin } from 'nitro'
-import { formRoutes } from '#nuxt-endpoints/form-routes'
 import endpointsOptions from '#nuxt-endpoints/options'
 import endpointRuntimeModule from '#nuxt-endpoints/runtime'
 import serverRouteConfigModule from '#nuxt-endpoints/server-route-config'
@@ -22,12 +20,11 @@ import type {
   EndpointRuntime,
   EndpointRuntimeAttachmentOptions,
 } from './endpoint-runtime'
-import { setFormRoutes } from './form-routes-state'
-import type { EndpointFormRouteEntry } from '../codegen/form-routes'
 import { createOpenApiDocument } from './openapi'
 import { setOpenApiDocument } from './openapi-state'
 import { resolveServerRouteResponseMaps, validateServerRouteConfig } from './server-route-config'
 import type { ServerRouteConfig } from './server-route-config'
+import { defineRuntimePlugin, normalizeRuntimeRouteIdentity } from './platform'
 
 type EndpointsRuntimeOptions = {
   dev: boolean
@@ -57,15 +54,13 @@ type HandlerFunction = {
 
 type HandlerDefinition = {
   route: string
+  sourceRoute?: string
   method: string
   load: () => Promise<HandlerFunction>
 }
 
-export default definePlugin(async () => {
+export default defineRuntimePlugin(async () => {
   const options = endpointsOptions as EndpointsRuntimeOptions
-  // Handed over rather than imported by the bridge itself - see
-  // form-routes-state.ts for why.
-  setFormRoutes(formRoutes as Readonly<Record<string, EndpointFormRouteEntry>>)
   const { handlers: endpointHandlerManifest } = await import('#nuxt-endpoints/server-handlers')
   const endpointRuntime = assertValidEndpointRuntime(endpointRuntimeModule)
   const serverRouteConfig = assertValidServerRouteConfig(serverRouteConfigModule)
@@ -127,7 +122,7 @@ export async function extractEndpoints(
 
     const identity = {
       method: definition.method.toLowerCase(),
-      routeTemplate: definition.route,
+      routeTemplate: normalizeRuntimeRouteIdentity(definition.route),
     }
     const routeRuntime = resolveEndpointRouteRuntime(
       runtime,
@@ -196,7 +191,7 @@ export async function extractEndpoints(
       definition: contract.definition,
       serverResponseMaps: resolveServerRouteResponseMaps(
         serverRouteConfig,
-        definition.route,
+        definition.sourceRoute ?? definition.route,
         definition.method,
       ),
     })
@@ -220,7 +215,7 @@ function assertRouteRuntimeIsNotShared(
   const previous = registrations.get(handler)
   if (previous && (previous.hasOverride || routeRuntime !== undefined)) {
     throw new Error(
-      `[nuxt-endpoints] Route-specific runtime settings cannot be attached to a handler shared by ${previous.identity} and ${current}. Export a distinct defineRouteHandler() instance for each route.`,
+      `[nuxt-endpoints] Route-specific runtime settings cannot be attached to a handler shared by ${previous.identity} and ${current}. Export a distinct defineEndpoint() instance for each route.`,
     )
   }
   registrations.set(handler, {
@@ -248,7 +243,7 @@ function resolveEndpointContract(
   const member = handler.__endpoint_contracts__[definition.method]
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method entry in its defineRouteHandler(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
+      `[nuxt-endpoints] Endpoint route ${definition.method} ${definition.route} has no matching method entry in its defineEndpoint(). Declared methods: ${Object.keys(handler.__endpoint_contracts__).join(', ')}.`,
     )
   }
   return member
@@ -281,7 +276,7 @@ function assertNoUnmatchedRuntimeEntries(
 }
 
 function runtimeEntryKey(path: string, method: string): string {
-  return `${method.toLowerCase()} ${path}`
+  return `${method.toLowerCase()} ${normalizeRuntimeRouteIdentity(path)}`
 }
 
 function isIdempotencyPolicyShape(value: unknown): value is EndpointIdempotencyPolicy {

@@ -47,13 +47,11 @@ through `detail` or extensions.
 The existing low-level NE contract already works:
 
 ```ts
-validate: {
-  response: {
+responses: {
     403: {
       body: OutOfCreditProblem,
       contentType: 'application/problem+json',
     },
-  },
 }
 ```
 
@@ -66,12 +64,9 @@ const OutOfCredit = defineHttpProblem({
   title: 'Insufficient credit',
   extensions: z.object({ balance: z.number() }),
 })
-
-export default defineRouteHandler({
-  validate: {
-    response: {
-      403: OutOfCredit.response,
-    },
+export default defineEndpoint({
+  responses: {
+    403: OutOfCredit.response,
   },
   handler: (event) =>
     event.respond(

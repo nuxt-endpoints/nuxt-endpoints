@@ -13,6 +13,7 @@ import {
 import type { Nuxt, NuxtModule } from '@nuxt/schema'
 import type { NitroRouteContract, NitroTypes } from 'nitro/types'
 import { camelCase } from 'scule'
+import { normalizeRoute } from 'h3'
 import {
   generateEndpointClient,
   generateEndpointFormRoutes,
@@ -137,7 +138,11 @@ type EndpointsNuxtHook = ((
     name: 'nitro:config',
     listener: (config: {
       ignore?: string[]
-      experimental?: { routeContracts?: boolean; routeContractSources?: string[] }
+      experimental?: {
+        routeContracts?: boolean
+        routeContractSources?: string[]
+        routeContractMacros?: Array<{ name: string; source: string }>
+      }
     }) => void,
   ) => void)
 
@@ -254,9 +259,10 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
       nitroConfig.experimental = {
         ...nitroConfig.experimental,
         routeContracts: true,
-        routeContractSources: [
-          ...(nitroConfig.experimental?.routeContractSources ?? []),
-          resolve('./runtime'),
+        routeContractMacros: [
+          ...(nitroConfig.experimental?.routeContractMacros ?? []),
+          { name: 'defineEndpoint', source: 'nuxt-endpoints/runtime' },
+          { name: 'defineEndpoint', source: resolve('./runtime') },
         ],
       }
     })
@@ -307,6 +313,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     nuxt.options.build.transpile.push(resolve('./runtime'))
     addServerPlugin(resolve('./runtime/server-plugin'))
+    addServerPlugin(resolve('./runtime/form-plugin'))
     // Registered unconditionally: with no route declaring `form` the generated
     // map is empty and the middleware returns on its first lookup.
     addServerHandler({ middleware: true, handler: resolve('./runtime/form-bridge') })
@@ -347,6 +354,7 @@ export async function composeHandlers(
 ): Promise<EndpointRouteHandler[]> {
   const endpointHandlers: EndpointRouteHandler[] = []
   const endpointNames = new Map<string, string>()
+  const routeIdentities = new Map<string, string>()
 
   // Applies the checks a single detected method has always gone through
   // (catch-all/optional route rejection, idempotency-gap-without-policy
@@ -368,6 +376,15 @@ export async function composeHandlers(
         `[nuxt-endpoints] Route ${handler.handler} (${route}) declares an endpoint on a ${unsupportedSyntax} route. The generated client and OpenAPI document cannot represent it correctly yet; keep this route as a plain defineEventHandler.`,
       )
     }
+
+    const identity = `${method.toLowerCase()} ${comparableRoutePath(route)}`
+    const previousRoute = routeIdentities.get(identity)
+    if (previousRoute) {
+      throw new Error(
+        `[nuxt-endpoints] ${previousRoute} and ${handler.handler} resolve to the same route identity (${identity}).`,
+      )
+    }
+    routeIdentities.set(identity, handler.handler)
 
     const { name, idempotency, mediaResponse, form, pagination } = detection
     if (name !== undefined) {
@@ -410,6 +427,7 @@ export async function composeHandlers(
     endpointHandlers.push({
       ...handler,
       route,
+      ...(handler.route !== route ? { sourceRoute: handler.route } : {}),
       method,
       ...(name !== undefined ? { name } : {}),
       ...(mediaResponse ? { mediaResponse: true as const } : {}),
@@ -424,7 +442,7 @@ export async function composeHandlers(
     if (handler.middleware || !handler.route) {
       continue
     }
-    const route = handler.route
+    const route = normalizeRoute(handler.route)
 
     const detection = routeContracts.get(routeContractKey(handler.handler, handler.method))
     if (!detection) {
@@ -434,7 +452,7 @@ export async function composeHandlers(
     if (isEndpointGroupDetection(detection)) {
       if (handler.method) {
         throw new Error(
-          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineRouteHandler() on a method-suffixed file (.${handler.method}.ts). Method entries belong on a method-suffix-free route file — its other declared methods would otherwise be unreachable. Move the declaration to a bare route file, or declare a single method.`,
+          `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a multi-method defineEndpoint() on a method-suffixed file (.${handler.method}.ts). Method entries belong on a method-suffix-free route file — its other declared methods would otherwise be unreachable. Move the declaration to a bare route file, or declare a single method.`,
         )
       }
       for (const [method, memberDetection] of Object.entries(detection.methods)) {
@@ -445,7 +463,7 @@ export async function composeHandlers(
 
     if (!handler.method) {
       throw new Error(
-        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineRouteHandler() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
+        `[nuxt-endpoints] Route ${handler.handler} (${route}) declares a single-method defineEndpoint() but its file has no method suffix. Rename it to <name>.<method>.ts, or use the multi-method form.`,
       )
     }
 
@@ -478,7 +496,7 @@ export function indexRouteContracts(
 }
 
 /**
- * Refuses a `validate.headers` or `validate.query` declaration that requires
+ * Refuses a `request.headers` or `request.query` declaration that requires
  * something a native submission cannot carry.
  *
  * This is the enforcement boundary. `NativeFormProjectionConstraint`
@@ -563,7 +581,7 @@ function resolveFormMetadata(
   }
   if (/[?#]/.test(form.action)) {
     throw new Error(
-      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in validate.query for GET, or in the form-encoded body for POST.`,
+      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in request.query for GET, or in the form-encoded body for POST.`,
     )
   }
   const method = form.method ?? 'post'
@@ -586,12 +604,12 @@ function resolveFormMetadata(
   if (method === 'get') {
     if (definition.body !== undefined) {
       throw new Error(
-        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `validate.body`.',
+        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `request.body`.',
       )
     }
     if (definition.query === undefined) {
       throw new Error(
-        '[nuxt-endpoints] A GET form needs `validate.query` to declare the fields the browser places in the URL.',
+        '[nuxt-endpoints] A GET form needs `request.query` to declare the fields the browser places in the URL.',
       )
     }
     if ('redirect' in form && form.redirect !== undefined) {
@@ -610,7 +628,7 @@ function resolveFormMetadata(
   const member = findFormBodyMember(definition.body)
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`validate.body\` - \`formOf()\` derives one from the JSON member.`,
+      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`request.body\` - \`formOf()\` derives one from the JSON member.`,
     )
   }
   assertNativeFormCanSatisfy(
@@ -769,7 +787,7 @@ function resolveNitroOpenApiRoute(nitro: NitroWithEndpointHandlers): string | un
 // `/schema` are the same route to the router even though they are different
 // strings in config.
 function comparableRoutePath(path: string): string {
-  const withLeadingSlash = normalizePath(path)
+  const withLeadingSlash = normalizeRoute(path)
   return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash
 }
 

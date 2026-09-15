@@ -1,4 +1,5 @@
 import { createResolver } from '@nuxt/kit'
+import { normalizationCases } from './normalization-cases'
 import NuxtEndpoints from '../../../src/module'
 
 const resolver = createResolver(import.meta.url)
@@ -20,6 +21,11 @@ export default defineNuxtConfig({
     // lives outside every scanned directory, so it exists only because
     // discovery reads Nitro's configured handlers too.
     handlers: [
+      ...normalizationCases.map(([route]) => ({
+        route,
+        method: 'get' as const,
+        handler: resolve('server/custom-routes/normalized.get.ts'),
+      })),
       {
         route: '/custom/report',
         method: 'get',

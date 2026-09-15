@@ -1,6 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { defineEndpointRuntime } from '../../src/runtime'
-
 describe('defineEndpointRuntime route overrides', () => {
   it('accepts explicit public idempotency policy sentinels', () => {
     defineEndpointRuntime({
@@ -27,7 +26,6 @@ describe('defineEndpointRuntime route overrides', () => {
       },
     })
   })
-
   it('accepts only the public response-validation modes', () => {
     defineEndpointRuntime({ validation: { response: 'development' } })
     defineEndpointRuntime({ validation: { response: 'always' } })
@@ -39,7 +37,6 @@ describe('defineEndpointRuntime route overrides', () => {
       },
     })
   })
-
   it('keeps application policy separate from the four idempotency overrides', () => {
     defineEndpointRuntime({
       wrapHandler: async (_context, next) => next(),
@@ -55,14 +52,13 @@ describe('defineEndpointRuntime route overrides', () => {
                 return { params, query, body }
               },
               replayStatuses: [409],
-              leaseTtlMs: 30_000,
-              replayTtlMs: 60_000,
+              leaseTtlMs: 30000,
+              replayTtlMs: 60000,
             },
           },
         },
       },
     })
-
     defineEndpointRuntime({
       routes: {
         '/api/items': {
@@ -75,7 +71,6 @@ describe('defineEndpointRuntime route overrides', () => {
         },
       },
     })
-
     defineEndpointRuntime({
       routes: {
         '/api/items': {

@@ -39,11 +39,11 @@ import type { EndpointRuntime } from './endpoint-runtime'
 import type { RuntimeContractEvent, RuntimeEvent } from './platform'
 import type { InferInput, ValidatorSchema } from './validator'
 
-type RouteValidation<QUERY, HEADERS, BODY, RESPONSES> = {
+type EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY> = {
+  params?: PARAMS
   query?: QUERY
   headers?: HEADERS
   body?: BODY
-  response?: RESPONSES
 }
 
 // The contract carries only portable metadata. Request-time settings have no
@@ -91,8 +91,11 @@ type RouteHandlerInput<
   ACTUAL_RETURN,
 > = {
   name?: string
-  params?: PARAMS
-  validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
+  request?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
+  responses?: RESPONSES
+  params?: never
+  validate?: never
+  response?: never
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
@@ -115,24 +118,25 @@ type RuntimeMethodMetadata = {
   idempotency?: RouteContractIdempotencyInput
 }
 
-type RuntimeMethodValidation = RouteValidation<
+type RuntimeMethodRequest = EndpointRequestInput<
+  never,
   ValidatorSchema,
   ValidatorSchema,
-  ValidatorSchema | EndpointBodyMediaTypeMap,
-  EndpointResponsesContract
+  ValidatorSchema | EndpointBodyMediaTypeMap
 >
 
 type RuntimeMethodDefinition = RuntimeMethodMetadata & {
   pagination?: EndpointPaginationContract
-  validate?: RuntimeMethodValidation
+  request?: RuntimeMethodRequest
+  responses?: EndpointResponsesContract
   handler: (event: EndpointRouteEvent<any>) => unknown
 }
 
 type RuntimeMethodsDefinition = {
   handler?: never
   name?: never
-  params?: ValidatorSchema
-  validate?: never
+  request?: { params?: ValidatorSchema }
+  responses?: never
   get?: RuntimeMethodDefinition
   post?: RuntimeMethodDefinition
   put?: RuntimeMethodDefinition
@@ -165,8 +169,8 @@ type PropertyOf<Value, Key extends PropertyKey> = Value extends unknown
     : undefined
   : never
 
-type ValidationPropertyOf<Value, Key extends PropertyKey> = PropertyOf<
-  PropertyOf<Value, 'validate'>,
+type RequestPropertyOf<Value, Key extends PropertyKey> = PropertyOf<
+  PropertyOf<Value, 'request'>,
   Key
 >
 
@@ -179,17 +183,15 @@ type PaginationOf<Value> = Value extends {
 type EndpointDefinitionOf<Method, Params> = {
   name: PropertyOf<Method, 'name'>
   params: Params
-  query: ApplyPaginationQuery<ValidationPropertyOf<Method, 'query'>, PaginationOf<Method>>
-  headers: ValidationPropertyOf<Method, 'headers'>
-  body: ValidationPropertyOf<Method, 'body'>
-  responses: ApplyPaginationResponses<
-    ValidationPropertyOf<Method, 'response'>,
-    PaginationOf<Method>
-  >
+  query: ApplyPaginationQuery<RequestPropertyOf<Method, 'query'>, PaginationOf<Method>>
+  headers: RequestPropertyOf<Method, 'headers'>
+  body: RequestPropertyOf<Method, 'body'>
+  responses: ApplyPaginationResponses<PropertyOf<Method, 'responses'>, PaginationOf<Method>>
   summary: PropertyOf<Method, 'summary'>
   description: PropertyOf<Method, 'description'>
   tags: PropertyOf<Method, 'tags'>
   idempotency: NormalizeEndpointIdempotencyInput<PropertyOf<Method, 'idempotency'>>
+  form: PropertyOf<Method, 'form'>
   pagination: PaginationOf<Method>
 }
 
@@ -198,7 +200,7 @@ type RouteMethodKeys<Definition> = Extract<keyof Definition, RouteMethodKey>
 type ResolvedEndpointDefinition<Definition, Method extends RouteMethodKeys<Definition>> =
   EndpointDefinitionOf<
     Definition[Method],
-    PropertyOf<Definition, 'params'>
+    RequestPropertyOf<Definition, 'params'>
   > extends infer MethodDefinition extends EndpointDefinition
     ? MethodDefinition
     : never
@@ -206,15 +208,16 @@ type ResolvedEndpointDefinition<Definition, Method extends RouteMethodKeys<Defin
 type ResolvedRuntimeMethodDefinition<
   Params extends ValidatorSchema | undefined,
   Metadata extends RuntimeMethodMetadata,
-  Validation extends RuntimeMethodValidation,
+  Request extends RuntimeMethodRequest,
+  Responses extends EndpointResponsesContract | undefined,
   Pagination extends EndpointPaginationContract | undefined = undefined,
 > = {
   name: PropertyOf<Metadata, 'name'>
   params: Params
-  query: ApplyPaginationQuery<PropertyOf<Validation, 'query'>, Pagination>
-  headers: PropertyOf<Validation, 'headers'>
-  body: PropertyOf<Validation, 'body'>
-  responses: ApplyPaginationResponses<PropertyOf<Validation, 'response'>, Pagination>
+  query: ApplyPaginationQuery<PropertyOf<Request, 'query'>, Pagination>
+  headers: PropertyOf<Request, 'headers'>
+  body: PropertyOf<Request, 'body'>
+  responses: ApplyPaginationResponses<Responses, Pagination>
   summary: PropertyOf<Metadata, 'summary'>
   description: PropertyOf<Metadata, 'description'>
   tags: PropertyOf<Metadata, 'tags'>
@@ -225,19 +228,20 @@ type ResolvedRuntimeMethodDefinition<
 type InferredRuntimeMethod<
   Params extends ValidatorSchema | undefined,
   Metadata extends RuntimeMethodMetadata,
-  Validation extends RuntimeMethodValidation,
+  Request extends RuntimeMethodRequest,
+  Responses extends EndpointResponsesContract | undefined,
   ActualReturn,
   Pagination extends EndpointPaginationContract | undefined = undefined,
 > = Metadata & {
-  validate?: Validation
+  request?: Request
+  responses?: Responses
+  params?: never
+  validate?: never
+  response?: never
   pagination?: Pagination &
-    PaginationContractConstraint<
-      Pagination,
-      PropertyOf<Validation, 'query'>,
-      PropertyOf<Validation, 'response'>
-    >
+    PaginationContractConstraint<Pagination, PropertyOf<Request, 'query'>, Responses>
   handler: CapturedRouteHandler<
-    ResolvedRuntimeMethodDefinition<Params, Metadata, Validation, Pagination>,
+    ResolvedRuntimeMethodDefinition<Params, Metadata, Request, Responses, Pagination>,
     ActualReturn
   >
 }
@@ -262,6 +266,21 @@ type RouteMethodSuccessBody<Definition> = {
     RouteMethodHandlerReturns<Definition>[Method]
   >
 }[RouteMethodKeys<Definition>]
+
+type RouteContractDescriptor<Definition extends EndpointDefinition, SuccessResponse> = {
+  definition: Definition
+  successResponse: SuccessResponse
+}
+
+type RouteMethodContractDescriptors<Definition> = {
+  [Method in RouteMethodKeys<Definition>]: RouteContractDescriptor<
+    ResolvedEndpointDefinition<Definition, Method>,
+    EndpointHandlerSuccessBody<
+      ResolvedEndpointDefinition<Definition, Method>,
+      RouteMethodHandlerReturns<Definition>[Method]
+    >
+  >
+}
 
 type EndpointRouteRequest<Definition extends EndpointDefinition> = {
   body: RouteBodyInput<Definition['body']>
@@ -301,6 +320,7 @@ export type EndpointRouteMethodsEventHandler<Definition> = ((
   event: RuntimeContractEvent<RouteMethodRequest<Definition>>,
 ) => Promise<RouteMethodSuccessBody<Definition>>) & {
   readonly '~routeDef': NormalizeMethodRouteAuthoringDefinition<Definition>
+  readonly '~routeContract': RouteMethodContractDescriptors<Definition>
   __endpoint_contracts__: RouteMethodContracts<Definition>
   __endpoint_method_handler_returns__: RouteMethodHandlerReturns<Definition>
   __set_endpoint_route__: (identity: EndpointRouteIdentity) => void
@@ -310,7 +330,7 @@ export type EndpointRouteMethodsEventHandler<Definition> = ((
 export type EndpointDefinitionFromRoute<Definition, Method extends string | undefined = undefined> =
   Method extends RouteMethodKeys<Definition>
     ? ResolvedEndpointDefinition<Definition, Method>
-    : EndpointDefinitionOf<Definition, PropertyOf<Definition, 'params'>>
+    : EndpointDefinitionOf<Definition, RequestPropertyOf<Definition, 'params'>>
 
 /**
  * H3 deliberately carries unknown metadata without interpreting it. Cursor
@@ -360,6 +380,9 @@ type EndpointRouteEventHandler<
       : EndpointDefinition,
 > = ((event: RuntimeContractEvent<EndpointRouteRequest<ResolvedDefinition>>) => Promise<Return>) & {
   readonly '~routeDef': NormalizeRouteAuthoringDefinition<Definition>
+  readonly '~routeContract': {
+    default: RouteContractDescriptor<ResolvedDefinition, Return>
+  }
 }
 
 type AssembledRouteDefinition<
@@ -405,8 +428,11 @@ type CursorPaginatedRouteHandlerInput<
   ACTUAL_RETURN,
 > = {
   name?: string
-  params?: PARAMS
-  validate?: RouteValidation<QUERY, HEADERS, BODY, RESPONSES>
+  request?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
+  responses?: RESPONSES
+  params?: never
+  validate?: never
+  response?: never
   summary?: SUMMARY
   description?: DESCRIPTION
   tags?: TAGS
@@ -418,11 +444,11 @@ type CursorPaginatedRouteHandlerInput<
 } & RouteContractIdempotencyConstraint<IDEMPOTENCY>
 
 /**
- * Nuxt Endpoints adapter for H3's unified route-handler authoring shape.
- * Nitro treats the direct call as a compiler macro; at runtime this adapter
- * keeps only NE's application-level context, idempotency, and response policy.
+ * Defines an HTTP endpoint contract and its handler. Nitro extracts the direct
+ * call at build time; the runtime receives the same contract after NE-specific
+ * normalization.
  */
-export function defineRouteHandler<
+export function defineEndpoint<
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -484,7 +510,7 @@ export function defineRouteHandler<
   >,
   CursorPaginationPage<ITEM>
 >
-export function defineRouteHandler<
+export function defineEndpoint<
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
   const HEADERS extends ValidatorSchema | undefined = undefined,
@@ -585,75 +611,104 @@ export function defineRouteHandler<
       : WidenCapturedReturn<ACTUAL_RETURN>
   >
 >
-export function defineRouteHandler<
+export function defineEndpoint<
   const Params extends ValidatorSchema | undefined = undefined,
   const GetMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const GetValidation extends RuntimeMethodValidation = Record<never, never>,
+  const GetRequest extends RuntimeMethodRequest = Record<never, never>,
+  const GetResponses extends EndpointResponsesContract | undefined = undefined,
   const GetPagination extends EndpointPaginationContract | undefined = undefined,
   const GetReturn extends DeepReadonly<
     HandlerReturn<
-      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation, GetPagination>
+      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetRequest, GetResponses, GetPagination>
     >
   > = DeepReadonly<
     HandlerReturn<
-      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetValidation, GetPagination>
+      ResolvedRuntimeMethodDefinition<Params, GetMetadata, GetRequest, GetResponses, GetPagination>
     >
   >,
   const PostMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const PostValidation extends RuntimeMethodValidation = Record<never, never>,
+  const PostRequest extends RuntimeMethodRequest = Record<never, never>,
+  const PostResponses extends EndpointResponsesContract | undefined = undefined,
   const PostReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PostMetadata, PostValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PostMetadata, PostRequest, PostResponses>>
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PostMetadata, PostValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PostMetadata, PostRequest, PostResponses>>
   >,
   const PutMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const PutValidation extends RuntimeMethodValidation = Record<never, never>,
+  const PutRequest extends RuntimeMethodRequest = Record<never, never>,
+  const PutResponses extends EndpointResponsesContract | undefined = undefined,
   const PutReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PutMetadata, PutValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PutMetadata, PutRequest, PutResponses>>
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PutMetadata, PutValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PutMetadata, PutRequest, PutResponses>>
   >,
   const PatchMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const PatchValidation extends RuntimeMethodValidation = Record<never, never>,
+  const PatchRequest extends RuntimeMethodRequest = Record<never, never>,
+  const PatchResponses extends EndpointResponsesContract | undefined = undefined,
   const PatchReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PatchMetadata, PatchValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, PatchMetadata, PatchRequest, PatchResponses>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, PatchMetadata, PatchValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, PatchMetadata, PatchRequest, PatchResponses>
+    >
   >,
   const DeleteMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const DeleteValidation extends RuntimeMethodValidation = Record<never, never>,
+  const DeleteRequest extends RuntimeMethodRequest = Record<never, never>,
+  const DeleteResponses extends EndpointResponsesContract | undefined = undefined,
   const DeleteReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, DeleteMetadata, DeleteValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, DeleteMetadata, DeleteRequest, DeleteResponses>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, DeleteMetadata, DeleteValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, DeleteMetadata, DeleteRequest, DeleteResponses>
+    >
   >,
   const HeadMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const HeadValidation extends RuntimeMethodValidation = Record<never, never>,
+  const HeadRequest extends RuntimeMethodRequest = Record<never, never>,
+  const HeadResponses extends EndpointResponsesContract | undefined = undefined,
   const HeadReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadRequest, HeadResponses>>
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadValidation>>
+    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, HeadMetadata, HeadRequest, HeadResponses>>
   >,
   const OptionsMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const OptionsValidation extends RuntimeMethodValidation = Record<never, never>,
+  const OptionsRequest extends RuntimeMethodRequest = Record<never, never>,
+  const OptionsResponses extends EndpointResponsesContract | undefined = undefined,
   const OptionsReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsRequest, OptionsResponses>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, OptionsMetadata, OptionsRequest, OptionsResponses>
+    >
   >,
   const ConnectMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const ConnectValidation extends RuntimeMethodValidation = Record<never, never>,
+  const ConnectRequest extends RuntimeMethodRequest = Record<never, never>,
+  const ConnectResponses extends EndpointResponsesContract | undefined = undefined,
   const ConnectReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectRequest, ConnectResponses>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, ConnectMetadata, ConnectRequest, ConnectResponses>
+    >
   >,
   const TraceMetadata extends RuntimeMethodMetadata = Record<never, never>,
-  const TraceValidation extends RuntimeMethodValidation = Record<never, never>,
+  const TraceRequest extends RuntimeMethodRequest = Record<never, never>,
+  const TraceResponses extends EndpointResponsesContract | undefined = undefined,
   const TraceReturn extends DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceRequest, TraceResponses>
+    >
   > = DeepReadonly<
-    HandlerReturn<ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceValidation>>
+    HandlerReturn<
+      ResolvedRuntimeMethodDefinition<Params, TraceMetadata, TraceRequest, TraceResponses>
+    >
   >,
   const Definition extends Record<string, unknown> = Record<never, never>,
 >(
@@ -662,38 +717,96 @@ export function defineRouteHandler<
     handler?: never
     /** A name identifies one HTTP method, so declare it inside the method entry. */
     name?: never
-    params?: Params
+    request?: {
+      params?: Params
+      query?: never
+      headers?: never
+      body?: never
+    }
     idempotency?: RouteContractIdempotencyInput
     /** A method group has no root pagination contract. */
     pagination?: never
-    /** Request validation is per method: declare it inside each method entry. */
+    /** Responses are per method: declare them inside each method entry. */
+    responses?: never
+    params?: never
     validate?: never
-    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn, GetPagination>
-    post?: InferredRuntimeMethod<Params, PostMetadata, PostValidation, PostReturn>
-    put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
-    patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
-    delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
-    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadValidation, HeadReturn>
-    options?: InferredRuntimeMethod<Params, OptionsMetadata, OptionsValidation, OptionsReturn>
-    connect?: InferredRuntimeMethod<Params, ConnectMetadata, ConnectValidation, ConnectReturn>
-    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceValidation, TraceReturn>
+    response?: never
+    get?: InferredRuntimeMethod<
+      Params,
+      GetMetadata,
+      GetRequest,
+      GetResponses,
+      GetReturn,
+      GetPagination
+    >
+    post?: InferredRuntimeMethod<Params, PostMetadata, PostRequest, PostResponses, PostReturn>
+    put?: InferredRuntimeMethod<Params, PutMetadata, PutRequest, PutResponses, PutReturn>
+    patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchRequest, PatchResponses, PatchReturn>
+    delete?: InferredRuntimeMethod<
+      Params,
+      DeleteMetadata,
+      DeleteRequest,
+      DeleteResponses,
+      DeleteReturn
+    >
+    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadRequest, HeadResponses, HeadReturn>
+    options?: InferredRuntimeMethod<
+      Params,
+      OptionsMetadata,
+      OptionsRequest,
+      OptionsResponses,
+      OptionsReturn
+    >
+    connect?: InferredRuntimeMethod<
+      Params,
+      ConnectMetadata,
+      ConnectRequest,
+      ConnectResponses,
+      ConnectReturn
+    >
+    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceRequest, TraceResponses, TraceReturn>
   },
 ): EndpointRouteMethodsEventHandler<
   Definition & {
-    params?: Params
-    get?: InferredRuntimeMethod<Params, GetMetadata, GetValidation, GetReturn, GetPagination>
-    post?: InferredRuntimeMethod<Params, PostMetadata, PostValidation, PostReturn>
-    put?: InferredRuntimeMethod<Params, PutMetadata, PutValidation, PutReturn>
-    patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchValidation, PatchReturn>
-    delete?: InferredRuntimeMethod<Params, DeleteMetadata, DeleteValidation, DeleteReturn>
-    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadValidation, HeadReturn>
-    options?: InferredRuntimeMethod<Params, OptionsMetadata, OptionsValidation, OptionsReturn>
-    connect?: InferredRuntimeMethod<Params, ConnectMetadata, ConnectValidation, ConnectReturn>
-    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceValidation, TraceReturn>
+    request?: { params?: Params }
+    get?: InferredRuntimeMethod<
+      Params,
+      GetMetadata,
+      GetRequest,
+      GetResponses,
+      GetReturn,
+      GetPagination
+    >
+    post?: InferredRuntimeMethod<Params, PostMetadata, PostRequest, PostResponses, PostReturn>
+    put?: InferredRuntimeMethod<Params, PutMetadata, PutRequest, PutResponses, PutReturn>
+    patch?: InferredRuntimeMethod<Params, PatchMetadata, PatchRequest, PatchResponses, PatchReturn>
+    delete?: InferredRuntimeMethod<
+      Params,
+      DeleteMetadata,
+      DeleteRequest,
+      DeleteResponses,
+      DeleteReturn
+    >
+    head?: InferredRuntimeMethod<Params, HeadMetadata, HeadRequest, HeadResponses, HeadReturn>
+    options?: InferredRuntimeMethod<
+      Params,
+      OptionsMetadata,
+      OptionsRequest,
+      OptionsResponses,
+      OptionsReturn
+    >
+    connect?: InferredRuntimeMethod<
+      Params,
+      ConnectMetadata,
+      ConnectRequest,
+      ConnectResponses,
+      ConnectReturn
+    >
+    trace?: InferredRuntimeMethod<Params, TraceMetadata, TraceRequest, TraceResponses, TraceReturn>
   }
 >
-export function defineRouteHandler(
-  definition: RuntimeMethodsDefinition | (RuntimeMethodDefinition & { params?: ValidatorSchema }),
+export function defineEndpoint(
+  definition: RuntimeMethodsDefinition | RuntimeMethodDefinition,
 ): unknown {
   if ('handler' in definition && typeof definition.handler === 'function') {
     const contract = toEndpointDefinition(definition)
@@ -709,6 +822,7 @@ export function defineRouteHandler(
   }
 
   const methodsDefinition = definition as RuntimeMethodsDefinition
+  assertEndpointAuthoringShape(methodsDefinition, 'shared')
   if ('name' in methodsDefinition) {
     throw new TypeError(
       'A method-group endpoint cannot declare a root name. Declare name inside each method entry.',
@@ -729,7 +843,8 @@ export function defineRouteHandler(
   ] as const) {
     const entry = methodsDefinition[method]
     if (!entry) continue
-    const contract = toEndpointDefinition(entry, definition.params)
+    assertEndpointAuthoringShape(entry, 'method')
+    const contract = toEndpointDefinition(entry, definition.request?.params, 'method')
     validateEndpointDefinition(contract)
     const options = routeHandlerRuntimeOptions(contract)
     endpoints[method] = createRouteEndpoint(contract, options)
@@ -738,7 +853,7 @@ export function defineRouteHandler(
   return Object.assign(
     defineEndpointMethodHandlers(defineEndpointMethods(endpoints as never), handlers as never),
     { '~routeDef': definition },
-  ) as EndpointRouteMethodsEventHandler<RuntimeMethodsDefinition>
+  ) as unknown as EndpointRouteMethodsEventHandler<RuntimeMethodsDefinition>
 }
 
 function createRouteEndpoint(
@@ -782,20 +897,20 @@ function toEndpointRouteEvent<DEFINITION extends EndpointDefinition>(
 
 function toEndpointDefinition(
   definition: RuntimeMethodDefinition,
-  params: ValidatorSchema | undefined = (
-    definition as RuntimeMethodDefinition & { params?: ValidatorSchema }
-  ).params,
+  params: ValidatorSchema | undefined = definition.request?.params,
+  requestLocation: 'single' | 'method' = 'single',
 ): EndpointDefinition {
-  const { handler: _handler, validate, ...metadata } = definition
-  const query = validate?.query
-  const responses = normalizeResponses(validate?.response)
+  assertEndpointAuthoringShape(definition, requestLocation)
+  const { handler: _handler, request, responses: authoredResponses, ...metadata } = definition
+  const query = request?.query
+  const responses = normalizeResponses(authoredResponses)
   const contract: EndpointDefinition = {
     ...metadata,
     idempotency: normalizeEndpointIdempotencyMetadata(metadata.idempotency),
     params,
     query,
-    headers: validate?.headers,
-    body: validate?.body,
+    headers: request?.headers,
+    body: request?.body,
     responses,
   }
   if (metadata.pagination?.kind === 'cursor') {
@@ -804,6 +919,42 @@ function toEndpointDefinition(
     contract.responses = paginated.responses as EndpointResponsesContract
   }
   return contract
+}
+
+function assertEndpointAuthoringShape(
+  definition: Record<string, unknown>,
+  requestLocation: 'single' | 'shared' | 'method',
+): void {
+  if (requestLocation === 'shared' && 'responses' in definition) {
+    throw new TypeError(
+      'A method-group endpoint must declare `responses` inside each method entry.',
+    )
+  }
+  for (const removed of ['params', 'validate', 'response']) {
+    if (removed in definition) {
+      throw new TypeError(
+        `Endpoint contract \`${removed}\` is not supported. Declare request schemas under \`request\` and status responses under \`responses\`.`,
+      )
+    }
+  }
+  const request = definition.request
+  if (request === undefined) return
+  if (typeof request !== 'object' || request === null || Array.isArray(request)) {
+    throw new TypeError('Endpoint contract `request` must be an object.')
+  }
+  const allowed = new Set(
+    requestLocation === 'single'
+      ? ['params', 'query', 'headers', 'body']
+      : requestLocation === 'shared'
+        ? ['params']
+        : ['query', 'headers', 'body'],
+  )
+  const unknown = Object.keys(request).find((key) => !allowed.has(key))
+  if (unknown) {
+    throw new TypeError(
+      `Endpoint contract request field \`${unknown}\` is not supported in this location.`,
+    )
+  }
 }
 
 function normalizeResponses(

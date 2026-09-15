@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { normalizationCases } from '../fixtures/basic/normalization-cases'
 
 const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
@@ -20,6 +21,27 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       server: true,
       port: Number(process.env.NUXT_ENDPOINTS_E2E_PORT || 53491),
       setupTimeout: 120000,
+    })
+
+    it.each(normalizationCases)(
+      'serves the authored and canonical spelling of %s',
+      async (source, canonical) => {
+        for (const path of new Set([source, canonical])) {
+          const response = await fetch(path)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ normalized: true })
+        }
+      },
+    )
+
+    it('uses canonical OpenAPI paths while preserving authored response scopes', async () => {
+      const schema = await $fetch<Record<string, any>>('/_endpoints/schema')
+      for (const [, path] of normalizationCases) {
+        expect(schema.paths[path].get.responses['200']).toBeDefined()
+      }
+      expect(
+        schema.paths['/normalized/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6'].get.responses['418'],
+      ).toBeDefined()
     })
 
     it('serves endpoint handlers through Nuxt', async () => {
@@ -738,9 +760,12 @@ function generateServerRoutesAgreementTypecheck(endpointTypes: string): string {
   const routes = endpointTypes
     .split('\n')
     .flatMap((line) => {
-      const match = line.match(/\{ path: '([^']+)', method: '([^']+)'/)
+      const match = line.match(
+        /\{ (?:name: '(?:\\.|[^'\\])*', )?path: '((?:\\.|[^'\\])*)', method: '([^']+)'/,
+      )
       if (!match) return []
-      const [, path, method] = match
+      const [, encodedPath, method] = match
+      const path = JSON.parse(`"${encodedPath!.replace(/\\'/g, "'")}"`) as string
       return [{ path, method }]
     })
     .filter((route) => route.path !== undefined && route.method !== undefined)

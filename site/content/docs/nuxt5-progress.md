@@ -44,10 +44,11 @@ npm registry. Use the `main` branch for that.
 The goal of this branch is to stop maintaining a second copy of infrastructure that belongs to
 the platform. What the module no longer owns:
 
-- **Contract authoring, dispatch, and validation primitives** live in h3. `defineRouteHandler`,
-  single and multi-method dispatch, request validation, `params`, response checks, and media-type
-  body maps are h3's. NE chooses when the defensive response body/header traversal runs
-  (`development` by default) and re-exports h3's validation helpers instead of reimplementing them.
+- **Contract execution, dispatch, and validation primitives** live in h3. Single and multi-method
+  dispatch, request validation, route params, response checks, and media-type body maps are h3's.
+  NE's `defineEndpoint({ request, responses, handler })` is the application-facing authoring API;
+  it normalizes that declaration into the shared H3 contract. NE chooses when the defensive
+  response body/header traversal runs (`development` by default).
 - **Route discovery and contract extraction** live in Nitro. Nitro extracts contracts at build
   time and exposes them through `getRouteContracts()`, so the module no longer evaluates route
   files itself — the previous jiti-based scanner is gone.
@@ -96,11 +97,11 @@ endpoint runtime failure.
 
 `$endpoint` and `useEndpoint` are useful application-facing APIs independently of where route
 contract discovery and validation live. This branch therefore replaces module-owned plumbing with
-upstream primitives while preserving that UX, and route files use the same `defineRouteHandler`
-syntax on both lines.
+upstream primitives while preserving that UX. Route files use the same
+`defineEndpoint({ request, responses, handler })` syntax on both lines.
 
 Nitro 3 no longer provides server auto-imports, so Nuxt 5 route files explicitly import
-`defineRouteHandler` from `nuxt-endpoints/runtime`. The declaration shape itself is unchanged.
+`defineEndpoint` from `nuxt-endpoints/runtime`.
 
 The one authoring difference between the lines: this branch can declare `head`, `options`,
 `connect`, and `trace` explicitly, while the Nuxt 4 line supports five methods, derives HEAD from

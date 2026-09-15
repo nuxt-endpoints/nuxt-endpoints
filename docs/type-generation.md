@@ -46,13 +46,10 @@ server. HTTP clients receive the JSON representation of that value. These are
 not always the same TypeScript type.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: { 200: z.object({ createdAt: z.date() }) },
-  },
-  handler: () => ({ createdAt: new Date() }), // server/schema output: Date
+export default defineEndpoint({
+  responses: { 200: z.object({ createdAt: z.date() }) },
+  handler: () => ({ createdAt: new Date() }),
 })
-
 const result = await $endpoint('/api/items/:id', { method: 'get', params: { id: '1' } })
 result.body.createdAt // client/wire value: string
 ```
@@ -97,14 +94,14 @@ merged into `ServerRoutes`' ordinary successful response projection.
 
 ## Discovery failure policy
 
-Nitro treats the direct `defineRouteHandler({...})` call as a macro. Unsupported
+Nitro treats the direct `defineEndpoint({...})` call as a macro. Unsupported
 or mutable bindings fail with a source diagnostic; extraction never silently
 drops part of a contract. Ordinary routes and unrelated helpers with the same
 local name are ignored. The extracted module may evaluate schema imports, but
 it does not retain handler-only callbacks such as `validate.onError`.
 
 Nitro 3 removed server auto-imports. Nuxt 5 route files therefore import
-`defineRouteHandler` explicitly from `nuxt-endpoints/runtime`; the direct
+`defineEndpoint` explicitly from `nuxt-endpoints/runtime`; the direct
 default-exported call remains the macro boundary.
 
 ## Nuxt 5 and `fetchdts`

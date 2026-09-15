@@ -1,5 +1,4 @@
-import { defineRouteHandler } from '../../../../../src/runtime'
-
-export default defineRouteHandler({
+import { defineEndpoint } from '../../../../../src/runtime'
+export default defineEndpoint({
   handler: () => ({ name: 'Tom', count: 1 }),
 })

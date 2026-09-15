@@ -1,0 +1,4203 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index be459be..6975a62 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,6 +2,58 @@
+ 
+ All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+ 
++## v2.0.1-rc.32
++
++[compare changes](https://github.com/h3js/h3/compare/v2.0.1-rc.30...v2.0.1-rc.32)
++
++### 🚀 Enhancements
++
++- **rules:** Support non-trailing `**` in redirect/proxy targets ([228bca3](https://github.com/h3js/h3/commit/228bca3))
++- Export `normalizeRoute` as a public path utility ([#1549](https://github.com/h3js/h3/pull/1549))
++
++### 🔥 Performance
++
++- **rules:** Evict memoized matches with SIEVE instead of FIFO ([#1543](https://github.com/h3js/h3/pull/1543))
++
++### 🩹 Fixes
++
++- **route-rules:** Pass uncacheable requests through the cache rule ([b6c7d08](https://github.com/h3js/h3/commit/b6c7d08))
++- Handle srvx body limit errors as 413 ([b5d20d5](https://github.com/h3js/h3/commit/b5d20d5))
++- **error:** Require `status` in `HTTPError.isError` ([e6b726b](https://github.com/h3js/h3/commit/e6b726b))
++
++### 📦 Build
++
++- Export `TypedHeaders` type ([#1547](https://github.com/h3js/h3/pull/1547))
++
++### 🌊 Types
++
++- **handler:** Infer route handler request type instead of any ([#1546](https://github.com/h3js/h3/pull/1546))
++- **handler:** Use request header names for `req.headers` ([ae529f1](https://github.com/h3js/h3/commit/ae529f1))
++
++### 🏡 Chore
++
++- Apply automated updates ([c460ebe](https://github.com/h3js/h3/commit/c460ebe))
++- Update deps ([1316ffb](https://github.com/h3js/h3/commit/1316ffb))
++- Apply automated updates ([21a26d9](https://github.com/h3js/h3/commit/21a26d9))
++- Update lockfile ([00c0d3f](https://github.com/h3js/h3/commit/00c0d3f))
++- Apply automated updates ([6075f8a](https://github.com/h3js/h3/commit/6075f8a))
++- **release:** V2.0.1-rc.31 ([df811cd](https://github.com/h3js/h3/commit/df811cd))
++- Update lockfile ([bae31f3](https://github.com/h3js/h3/commit/bae31f3))
++- Apply automated updates ([7f5f106](https://github.com/h3js/h3/commit/7f5f106))
++- Update deps ([a5fdc86](https://github.com/h3js/h3/commit/a5fdc86))
++- Update deps ([60d883f](https://github.com/h3js/h3/commit/60d883f))
++
++### 🤖 CI
++
++- Replace setup-node and corepack with setup-jup ([#1544](https://github.com/h3js/h3/pull/1544))
++
++### ❤️ Contributors
++
++- Pooya Parsa ([@pi0](https://github.com/pi0))
++- Pi0x <x@pi0.io>
++- Rith Banerjee ([@Rithb898](https://github.com/Rithb898))
++- Lazizbek Ergashev ([@lazerg](https://github.com/lazerg))
++
+ ## v2.0.1-rc.31
+ 
+ [compare changes](https://github.com/h3js/h3/compare/v2.0.1-rc.30...v2.0.1-rc.31)
+diff --git a/docs/1.guide/2.rules.md b/docs/1.guide/2.rules.md
+index 23334e0..ce5c7eb 100644
+--- a/docs/1.guide/2.rules.md
++++ b/docs/1.guide/2.rules.md
+@@ -323,7 +323,7 @@ In practice:
+ - CORS can answer a preflight request before any other rule runs.
+ - `headers` wraps every rule inside it, so its values override headers produced by caching or other inner rules.
+ - `redirect`, `proxy`, and `cache` can finish the request without calling the next rule. Each has a separate order. `cache` is innermost and dispatches the route handler.
+-- Because `cache` dispatches the route itself, it also ends the app's _global_ middleware chain. See [Cached Routes and Global Middleware](#cached-routes-and-global-middleware).
++- Because `cache` dispatches the route itself, it also ends the app's _global_ middleware chain for every request it can cache. See [Cached Routes and Global Middleware](#cached-routes-and-global-middleware).
+ - Custom rules use order `0` by default, so they run before `redirect`, `proxy`, and `cache`.
+ 
+ `order` is a number, and lower values run first. The `-2` slot is intentionally free for a custom rule that must short-circuit before `headers`, `redirect`, `proxy`, and `cache`. Rules with the same order run by rule name. That order is deterministic but has no semantic meaning, so give any short-circuiting handler an explicit order. See [Security](#security) for the security implications.
+@@ -528,11 +528,11 @@ If a header must be present on such a response too, set it from global middlewar
+ 
+ ### Cached Routes and Global Middleware
+ 
+-The `cache` rule dispatches the matched route handler itself instead of calling the next layer, so **global middleware registered after `routeRules()` never runs for a route a `cache` rule matched** — on a cache _miss_ just as much as on a hit:
++The `cache` rule dispatches the matched route handler itself instead of calling the next layer, so **global middleware registered after `routeRules()` never runs for a cacheable request to a route a `cache` rule matched** — on a cache _miss_ just as much as on a hit:
+ 
+ ```ts
+ app.use(routeRules({ "/api/**": { swr: 60 } }, { handlers: { cache } }));
+-app.use(requireAuth); // never runs for /api/** — not even on the first request
++app.use(requireAuth); // never runs for a cacheable /api/** request — not even the first
+ app.get("/api/private/:id", handler);
+ ```
+ 
+@@ -545,6 +545,17 @@ app.use(routeRules({ "/api/**": { swr: 60 } }, { handlers: { cache } }));
+ 
+ Per-route middleware is unaffected — it is part of the composed route handler the cache rule dispatches, so it runs on a miss and is cached along with the response (which is its own reason not to put a credential check there). `redirect` and `proxy` end the chain too, but they answer the request outright and never reach the route handler, so this is only surprising for `cache`.
+ 
++Requests the cache never serves are the exception. The ocache handler passes anything it would not store — every method other than `GET` and `HEAD`, and any request carrying a `Range` header — down the chain instead, the way a CDN sends an uncacheable request to its origin. A `POST` to a `cache`-matched route therefore runs the middleware registered after `routeRules()`, reaches the route through normal dispatch, and keeps its `Authorization` header:
++
++```ts
++app.use(routeRules({ "/api/**": { swr: 60 } }, { handlers: { cache } }));
++app.use(requireAuth); // skipped for a cacheable GET — but runs for POST, PUT, ...
++app.get("/api/non-cachable/:id", handler);
++app.post("/api/non-cachable/:id", handler);
++```
++
++A [custom cache handler](#custom-rule-handlers) declares its own uncacheable requests with the `shouldBypass` option of `createCacheRuleHandler`; without it, every request to a matched route ends the chain. A `shouldBypassCache` hook passed through `createOcacheRuleHandler({ defaults })` is resolved inside the cache instead, so it does not pass the request through.
++
+ That same composition is why `routeRules()` belongs in `app.use()`, not on a route:
+ 
+ ```ts
+diff --git a/docs/2.utils/4.security.md b/docs/2.utils/4.security.md
+index 323c1b7..b63660d 100644
+--- a/docs/2.utils/4.security.md
++++ b/docs/2.utils/4.security.md
+@@ -146,6 +146,22 @@ Pass the same options as the later {@link resolveDotSegments} call, or stricter
+ 
+ Takes a bare pathname. Like the resolver, it has no notion of a query or hash and scans one as if it were path, so `/a?next=/../b` is reported non-canonical (and would resolve to `/b`).
+ 
++### `normalizeRoute(route)`
++
++Normalize a route pattern into the canonical form h3 registers it under — the same shape as the `event.url.pathname` it will be matched against.
++
++`app.on()`, `app.use(route, …)`, `app.mount()` and `removeRoute()` all apply this to the pattern they receive. Use it when registering patterns into a router of your own (e.g. a build-time compiled rou3 router) that is then matched against h3's `event.url.pathname`, so both sides agree on the string — a pattern that normalized differently could leave a route reachable while a guard registered with the same source string matches nothing.
++
++A leading `/` is added if missing (`about` → `/about`), characters a request pathname always carries percent-encoded are encoded (`/café/**` → `/caf%C3%A9/**`), needless escapes are decoded the way h3 decodes them in the request pathname (`/%40handle` → `/@handle`; `%2F` and `%25` stay encoded), and `.`/`..` segments are resolved (`/a/b/../c` → `/a/c`). rou3 pattern syntax (`?`, `{`, `}`, `^`, `\`) is left verbatim — spell one percent-encoded to match it literally.
++
++Idempotent. Throws on an absolute URL (`http://…`): a route pattern is a pathname, never a URL.
++
++**Example:**
++
++```ts
++normalizeRoute("/について/**"); // "/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6/**"
++```
++
+ ### `resolveDotSegments(path, opts?)`
+ 
+ Resolve `.` and `..` segments in a path, without ever escaping above the root `/`. The result is always an absolute path with a single leading `/`, so it can never be protocol-relative (`//host`).
+diff --git a/package.json b/package.json
+index bf4f086..8333e19 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "h3",
+-  "version": "2.0.1-rc.31",
++  "version": "2.0.1-rc.32",
+   "description": "Minimal H(TTP) framework built for high performance and portability.",
+   "homepage": "https://h3.dev",
+   "license": "MIT",
+@@ -55,18 +55,18 @@
+   },
+   "dependencies": {
+     "rou3": "^0.9.2",
+-    "srvx": "^1.0.2"
++    "srvx": "^1.0.5"
+   },
+   "devDependencies": {
+-    "@happy-dom/global-registrator": "^20.13.2",
++    "@happy-dom/global-registrator": "^20.14.5",
+     "@mitata/counters": "^0.0.8",
+     "@types/connect": "^3.4.38",
+     "@types/express": "^5.0.6",
+-    "@types/node": "^26.4.1",
+-    "@types/react": "^19.2.18",
+-    "@types/react-dom": "^19.2.5",
++    "@types/node": "^26.5.1",
++    "@types/react": "^19.3.0",
++    "@types/react-dom": "^19.3.0",
+     "@typescript/native-preview": "latest",
+-    "@vitest/coverage-v8": "^4.1.11",
++    "@vitest/coverage-v8": "^5.0.0",
+     "automd": "^0.4.3",
+     "changelogen": "^0.6.2",
+     "connect": "^3.7.0",
+@@ -79,24 +79,24 @@
+     "get-port-please": "^3.2.0",
+     "h3": "workspace:*",
+     "h3-nightly": "latest",
+-    "happy-dom": "^20.13.2",
+-    "hono": "^4.13.5",
+-    "magic-string": "^1.2.3",
++    "happy-dom": "^20.14.5",
++    "hono": "^4.13.7",
++    "magic-string": "^1.3.1",
+     "mdzilla": "^0.2.1",
+     "memoirist": "^1.2.2",
+     "mitata": "^1.0.34",
+-    "obuild": "^0.4.39",
++    "obuild": "^0.4.40",
+     "ocache": "^0.3.0",
+-    "oxc-parser": "^0.147.0",
+-    "oxfmt": "^0.65.0",
+-    "oxlint": "^1.81.0",
++    "oxc-parser": "^0.149.0",
++    "oxfmt": "^0.67.0",
++    "oxlint": "^1.82.0",
+     "pkg-pr-new": "^0.0.88",
+-    "react": "^19.2.8",
+-    "react-dom": "^19.2.8",
++    "react": "^19.3.0",
++    "react-dom": "^19.3.0",
+     "typescript": "^7.0.2",
+-    "vite": "^8.2.2",
+-    "vitest": "^4.1.11",
+-    "zod": "^4.5.4"
++    "vite": "^8.3.0",
++    "vitest": "^5.0.0",
++    "zod": "^4.6.4"
+   },
+   "peerDependencies": {
+     "crossws": "^0.4.12",
+@@ -117,7 +117,7 @@
+   "devEngines": {
+     "packageManager": {
+       "name": "pnpm",
+-      "version": "^12",
++      "version": "12.3.4",
+       "onFail": "warn"
+     },
+     "runtime": {
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index b92aa97..aa61ae3 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -7,96 +7,96 @@ importers:
+     configDependencies: {}
+     packageManagerDependencies:
+       pnpm:
+-        specifier: ^12
+-        version: 12.3.1
++        specifier: 12.3.4
++        version: 12.3.4
+ 
+ packages:
+ 
+-  '@pnpm/exe.darwin-arm64@12.3.1':
+-    resolution: {integrity: sha512-Yer+aZnQtgE+OOLKwbRHaAEt74WBJdH8eXpLrSWf+5vj7DkkDvhSR45HVxN3a5d430fMUyF0lmQai02T650r4g==}
++  '@pnpm/exe.darwin-arm64@12.3.4':
++    resolution: {integrity: sha512-PAyUol8T1+/+ViOiXAt51ECA+QnfXCqz6foL4bW+LsoX0NcVd5XVEM2mRQu+LV4oc7uRz9zf9U0P+XFfuQeDAw==}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@pnpm/exe.darwin-x64@12.3.1':
+-    resolution: {integrity: sha512-XPZYf+XpxufwZS8tpQQdftsv6eUtPDA0uU5NlfXA1uMVPvXJesw5PLGWmmJZHcI4rIscn2H6FngkIcvkuZaaKQ==}
++  '@pnpm/exe.darwin-x64@12.3.4':
++    resolution: {integrity: sha512-fxP9JCk0Cdye+ePuj+GJJLMUMTqHGWRdb1dtv4How876uQ2ehxvenpgiYAir/ceO9PsYUZkFTtyZdx+rRu5QOA==}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@pnpm/exe.linux-arm64-musl@12.3.1':
+-    resolution: {integrity: sha512-WjKcLeuierWGSQHjb0QeDl8avQTel8rN5jDMCI55tBJTrTBXNQsdlpgzP9uCD0GSzjPH+hjWKb+GjeMNvv5Ruw==}
++  '@pnpm/exe.linux-arm64-musl@12.3.4':
++    resolution: {integrity: sha512-FBOt0/7ye6O6q4AllVV5QMviB6qE6fqkeczV/+MDWQsmo+QJrlfsh6X7CpH/tClVpBZEyIbjpUoT8bNhCYBxEg==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@pnpm/exe.linux-arm64@12.3.1':
+-    resolution: {integrity: sha512-X0HxHlEYubFRuMPBOy+ytKsv6c11v4em/ovVVCy5KCdJVBtVGF7vF5ywlGqw7EjpGdqM39pdLTWFwH9Q77lUzQ==}
++  '@pnpm/exe.linux-arm64@12.3.4':
++    resolution: {integrity: sha512-t71AVA7LRqiKTyZ5xMYaZc2n5DfdpMbfokZuiIOXHBOM03ECnF0t4iYwaBDqJgVjlKYUOwaF/bRQajGNA4cJ4w==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@pnpm/exe.linux-x64-musl@12.3.1':
+-    resolution: {integrity: sha512-ZvzQI2+Ek0v+V6m30XV3ShIx5sm+ZIZoM669Z0F/RvMSpHgklqv3CBdEwAsQCZ7XBNZLMQIE7RPR2yIwxt3mnw==}
++  '@pnpm/exe.linux-x64-musl@12.3.4':
++    resolution: {integrity: sha512-RPmk7Jb/aYaFvL2iyDN/AtMY+hUEsue732WmXpcuQ9tBpMnGyA5py7Z3+e+qmQaJ0zY/4ni9jJiyPBQHujmv6w==}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@pnpm/exe.linux-x64@12.3.1':
+-    resolution: {integrity: sha512-ubvbQ2OSt7fR3kSnhtknx5xnm2H7uRi0kC32ADmzKJ1vZz337kmL30rTHoUzTG7ZcIyEhODg7R+zI1cW1ZdVDw==}
++  '@pnpm/exe.linux-x64@12.3.4':
++    resolution: {integrity: sha512-2ZqOlSPkfwX1h5cR+FPiWf8+F+2hZT/3TvhUK5sigHqwaQCIiq8R7CGxhndKs63JtcLi2a1Qpo+wX/EoyfjyJQ==}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@pnpm/exe.win32-arm64@12.3.1':
+-    resolution: {integrity: sha512-e+5CjFBGWP7U7RfFlH/EQnlFaP9Uyo/Y0BDCEbitsC4if28WBur3ajAkc25rRwiEwmmEpipTSzqNsKIs9Mq72Q==}
++  '@pnpm/exe.win32-arm64@12.3.4':
++    resolution: {integrity: sha512-ANyrHqyqco6SXBysUTRF74itDyyraea7IbFsKFdNXTjcFnfycTDx37EwuhdpPYFNSIh2JhUG4fByclsRfiHX7w==}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@pnpm/exe.win32-x64@12.3.1':
+-    resolution: {integrity: sha512-5pW8NQuVF3dkNdaUCm03PeoDiC5I9h4y9Fz717KLWi5jxDKmgARmD1zDdm60F5ohRZHPrRv/jAg94a/5+VXxow==}
++  '@pnpm/exe.win32-x64@12.3.4':
++    resolution: {integrity: sha512-WH/KqBPY/hq2Tb7SgQltEZytimcjgKRaCRL/aM9CI0c67iKc5TVmHUhIiL3Ux9FB4bWn36i6XewUcScQI+zG8w==}
+     cpu: [x64]
+     os: [win32]
+ 
+-  pnpm@12.3.1:
+-    resolution: {integrity: sha512-PBTBVAjRSJ01D47X+TNh0mzHBwVPaEmk7qO7dAf/T+RWS0E6HEIadzoXarEWio3xx9VI8s0Nx9NE9YxOaApbGA==}
++  pnpm@12.3.4:
++    resolution: {integrity: sha512-lhqkH7B32joEpEHZ+OFevAyW2o73ELLrZ7+e58sGEOq9SPH9hfUc/+c4RnhfoPh8VqOocqHYk/hEZ0G1zORUVw==}
+     engines: {node: '>=18.*'}
+     hasBin: true
+ 
+ snapshots:
+ 
+-  '@pnpm/exe.darwin-arm64@12.3.1':
++  '@pnpm/exe.darwin-arm64@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.darwin-x64@12.3.1':
++  '@pnpm/exe.darwin-x64@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.linux-arm64-musl@12.3.1':
++  '@pnpm/exe.linux-arm64-musl@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.linux-arm64@12.3.1':
++  '@pnpm/exe.linux-arm64@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.linux-x64-musl@12.3.1':
++  '@pnpm/exe.linux-x64-musl@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.linux-x64@12.3.1':
++  '@pnpm/exe.linux-x64@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.win32-arm64@12.3.1':
++  '@pnpm/exe.win32-arm64@12.3.4':
+     optional: true
+ 
+-  '@pnpm/exe.win32-x64@12.3.1':
++  '@pnpm/exe.win32-x64@12.3.4':
+     optional: true
+ 
+-  pnpm@12.3.1:
++  pnpm@12.3.4:
+     optionalDependencies:
+-      '@pnpm/exe.darwin-arm64': 12.3.1
+-      '@pnpm/exe.darwin-x64': 12.3.1
+-      '@pnpm/exe.linux-arm64': 12.3.1
+-      '@pnpm/exe.linux-arm64-musl': 12.3.1
+-      '@pnpm/exe.linux-x64': 12.3.1
+-      '@pnpm/exe.linux-x64-musl': 12.3.1
+-      '@pnpm/exe.win32-arm64': 12.3.1
+-      '@pnpm/exe.win32-x64': 12.3.1
++      '@pnpm/exe.darwin-arm64': 12.3.4
++      '@pnpm/exe.darwin-x64': 12.3.4
++      '@pnpm/exe.linux-arm64': 12.3.4
++      '@pnpm/exe.linux-arm64-musl': 12.3.4
++      '@pnpm/exe.linux-x64': 12.3.4
++      '@pnpm/exe.linux-x64-musl': 12.3.4
++      '@pnpm/exe.win32-arm64': 12.3.4
++      '@pnpm/exe.win32-x64': 12.3.4
+ 
+ ---
+ lockfileVersion: '9.0'
+@@ -113,12 +113,12 @@ importers:
+         specifier: ^0.9.2
+         version: 0.9.2
+       srvx:
+-        specifier: ^1.0.2
+-        version: 1.0.2
++        specifier: ^1.0.5
++        version: 1.0.5
+     devDependencies:
+       '@happy-dom/global-registrator':
+-        specifier: ^20.13.2
+-        version: 20.13.2
++        specifier: ^20.14.5
++        version: 20.14.5
+       '@mitata/counters':
+         specifier: ^0.0.8
+         version: 0.0.8
+@@ -129,44 +129,44 @@ importers:
+         specifier: ^5.0.6
+         version: 5.0.6
+       '@types/node':
+-        specifier: ^26.4.1
+-        version: 26.4.1
++        specifier: ^26.5.1
++        version: 26.5.1
+       '@types/react':
+-        specifier: ^19.2.18
+-        version: 19.2.18
++        specifier: ^19.3.0
++        version: 19.3.0
+       '@types/react-dom':
+-        specifier: ^19.2.5
+-        version: 19.2.5(@types/react@19.2.18)
++        specifier: ^19.3.0
++        version: 19.3.0(@types/react@19.3.0)
+       '@typescript/native-preview':
+         specifier: latest
+         version: 7.0.0-dev.20260707.2
+       '@vitest/coverage-v8':
+-        specifier: ^4.1.11
+-        version: 4.1.11(vitest@4.1.11)
++        specifier: ^5.0.0
++        version: 5.0.0(vitest@5.0.0)
+       automd:
+         specifier: ^0.4.3
+-        version: 0.4.3(magicast@0.5.4)
++        version: 0.4.3(magicast@0.5.5)
+       changelogen:
+         specifier: ^0.6.2
+-        version: 0.6.2(magicast@0.5.4)
++        version: 0.6.2(magicast@0.5.5)
+       connect:
+         specifier: ^3.7.0
+-        version: 3.7.0(supports-color@7.2.0)
++        version: 3.7.0
+       cookie-es:
+         specifier: ^3.1.1
+         version: 3.1.1
+       crossws:
+         specifier: ^0.4.12
+-        version: 0.4.12(srvx@1.0.2)
++        version: 0.4.12(srvx@1.0.5)
+       elysia:
+         specifier: ^1.4.30
+-        version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.4)(file-type@22.0.2(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
++        version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.6)(file-type@22.1.0)(openapi-types@12.1.3)(typescript@7.0.2)
+       esbuild:
+         specifier: ^0.28.2
+         version: 0.28.2
+       express:
+         specifier: ^5.2.1
+-        version: 5.2.1(supports-color@7.2.0)
++        version: 5.2.1
+       fetchdts:
+         specifier: ^0.2.0
+         version: 0.2.0
+@@ -178,16 +178,16 @@ importers:
+         version: 'link:'
+       h3-nightly:
+         specifier: latest
+-        version: 2.0.0-20260903-101917-849fa36(crossws@0.4.12(srvx@1.0.2))(ocache@0.3.0)
++        version: 2.0.0-20260903-101917-849fa36(crossws@0.4.12(srvx@1.0.5))(ocache@0.3.0)
+       happy-dom:
+-        specifier: ^20.13.2
+-        version: 20.13.2
++        specifier: ^20.14.5
++        version: 20.14.5
+       hono:
+-        specifier: ^4.13.5
+-        version: 4.13.5
++        specifier: ^4.13.7
++        version: 4.13.7
+       magic-string:
+-        specifier: ^1.2.3
+-        version: 1.2.3
++        specifier: ^1.3.1
++        version: 1.3.1
+       mdzilla:
+         specifier: ^0.2.1
+         version: 0.2.1
+@@ -198,53 +198,53 @@ importers:
+         specifier: ^1.0.34
+         version: 1.0.34
+       obuild:
+-        specifier: ^0.4.39
+-        version: 0.4.39(@typescript/native-preview@7.0.0-dev.20260707.2)(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.4)(typescript@7.0.2)
++        specifier: ^0.4.40
++        version: 0.4.40(@typescript/native-preview@7.0.0-dev.20260707.2)(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.5)(typescript@7.0.2)
+       ocache:
+         specifier: ^0.3.0
+         version: 0.3.0
+       oxc-parser:
+-        specifier: ^0.147.0
+-        version: 0.147.0
++        specifier: ^0.149.0
++        version: 0.149.0
+       oxfmt:
+-        specifier: ^0.65.0
+-        version: 0.65.0
++        specifier: ^0.67.0
++        version: 0.67.0
+       oxlint:
+-        specifier: ^1.81.0
+-        version: 1.81.0
++        specifier: ^1.82.0
++        version: 1.82.0
+       pkg-pr-new:
+         specifier: ^0.0.88
+         version: 0.0.88
+       react:
+-        specifier: ^19.2.8
+-        version: 19.2.8
++        specifier: ^19.3.0
++        version: 19.3.0
+       react-dom:
+-        specifier: ^19.2.8
+-        version: 19.2.8(react@19.2.8)
++        specifier: ^19.3.0
++        version: 19.3.0(react@19.3.0)
+       typescript:
+         specifier: ^7.0.2
+         version: 7.0.2
+       vite:
+-        specifier: ^8.2.2
+-        version: 8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)
++        specifier: ^8.3.0
++        version: 8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)
+       vitest:
+-        specifier: ^4.1.11
+-        version: 4.1.11(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.13.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0))
++        specifier: ^5.0.0
++        version: 5.0.0(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(happy-dom@20.14.5)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0))
+       zod:
+-        specifier: ^4.5.4
+-        version: 4.5.4
++        specifier: ^4.6.4
++        version: 4.6.4
+ 
+   examples:
+     dependencies:
+       h3:
+         specifier: latest
+-        version: 2.0.1-rc.30(crossws@0.4.12(srvx@1.0.2))(ocache@0.3.0)
++        version: 2.0.1-rc.31(crossws@0.4.12(srvx@1.0.5))(ocache@0.3.0)
+ 
+   playground:
+     dependencies:
+       h3:
+         specifier: ^2.0.1-rc.13
+-        version: 2.0.1-rc.30(crossws@0.4.12(srvx@1.0.2))(ocache@0.3.0)
++        version: 2.0.1-rc.31(crossws@0.4.12(srvx@1.0.5))(ocache@0.3.0)
+ 
+ packages:
+ 
+@@ -432,8 +432,8 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@happy-dom/global-registrator@20.13.2':
+-    resolution: {integrity: sha512-pGO7WhgHVLi7mi7zCLyJ+FkTad2aPTcjUXhRbgA4T5n1vLRJ/9uw3EsLieScNSX6HOfPF947bOP7N42l+KrWjg==}
++  '@happy-dom/global-registrator@20.14.5':
++    resolution: {integrity: sha512-B05ID9DhSwLs6mlm1fzlkAtTIvB3duCvjJjfr19LBrlTK7VZtRjDqoTRIVv13GuYuNdhByu8LSZgThwV3Rkj7g==}
+     engines: {node: '>=20.0.0'}
+ 
+   '@jridgewell/resolve-uri@3.1.2':
+@@ -449,374 +449,371 @@ packages:
+   '@mitata/counters@0.0.8':
+     resolution: {integrity: sha512-f11w0Y1ETFlarDP7CePj8Z+y8Gv5Ax4gMxWsEwrqh0kH/YIY030Ezx5SUJeQg0YPTZ2OHKGcLG1oGJbIqHzaJA==}
+ 
+-  '@oxc-parser/binding-android-arm-eabi@0.147.0':
+-    resolution: {integrity: sha512-fOtoGvIoirkvxQVw9J1WJPxz571XPgLsPf9uhRD+PJteUnvrJHMDmK9pw2yZEGGyismtRoEsp+JcXUdF/JDMDw==}
++  '@oxc-parser/binding-android-arm-eabi@0.149.0':
++    resolution: {integrity: sha512-OQmN5XYQ/GNRkbU0Ksb2QSaHOgKWhFw7Bz6lJvANBdwVkLzTlcHXDLj62XrNPtUf3pDxRBr7OoHJrKhHYOb9iA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [android]
+ 
+-  '@oxc-parser/binding-android-arm64@0.147.0':
+-    resolution: {integrity: sha512-emjQHOYJaomo4ykaXQ1EItunr/I94Nk01oqBmU4dSkKSTupIDx6OysVDf2e8Eytm77rb+4ZxzgElyWP7rcEX7A==}
++  '@oxc-parser/binding-android-arm64@0.149.0':
++    resolution: {integrity: sha512-M7nHwfHY2Xv5Rm1iygvyOTPXrD4d5WRVw+C8eItLwoipzQBnkUMmwh3jvuGLBio2BGetfIH0F7J3Afb1Qn9dJg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@oxc-parser/binding-darwin-arm64@0.147.0':
+-    resolution: {integrity: sha512-kXvBPJL7RmDPJ2mze/vXPPVQimCDtFr9OFLjf7dyhV5Dx64cgcXh9KKrA1sMWvCObvJll9CZZUO0FBlFwD0l6A==}
++  '@oxc-parser/binding-darwin-arm64@0.149.0':
++    resolution: {integrity: sha512-h6NrhqRAVKbgzfShjHoBgjeJ1vQR2o6iNM6/t8JCSej1XRKJyraV08Zz7ey6SsjPzof4ecp48Upg2vidqoDgtQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@oxc-parser/binding-darwin-x64@0.147.0':
+-    resolution: {integrity: sha512-mgFF8pLU6R64LbT27lSrtVRspVC/3IcZ0qyIikzmi78Y3Ik2OPnlAHHI0UEBRcC3qmNgtjaef7zkFt7/uPxIcw==}
++  '@oxc-parser/binding-darwin-x64@0.149.0':
++    resolution: {integrity: sha512-+WRRZeFYqVznJEEttiWNcI43Ij2iD0yphmMFkAuKNOQTyXQ+lLCAVW6aVLOD6nPO6FOymW7HtDh5KmnxZPi/2A==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@oxc-parser/binding-freebsd-x64@0.147.0':
+-    resolution: {integrity: sha512-v38aiF11qufOTBcCAKL4skgQf0zJ4NEvRlivq7B5kHrlyvjCLjvNrMtNWDTz1SDUL6/xVsJRmLDxv2e+Cp4oWw==}
++  '@oxc-parser/binding-freebsd-x64@0.149.0':
++    resolution: {integrity: sha512-kG0YUZj/4hdHBQDtIr2UZ7Nyxy3M5Et+w3A0V0eefRgtQWE4wJrNflBJMJfwFPiwMLPlPL6qJR+5JdeIqhzW/g==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@oxc-parser/binding-linux-arm-gnueabihf@0.147.0':
+-    resolution: {integrity: sha512-AeIiBbwUaP0H1+4/qGW9l5qHecS/+XA5iMuieVcGb1T+tyc2dVGspFW13BWk/XrLsiGP/CiDJTJqAPLLCzZHkw==}
++  '@oxc-parser/binding-linux-arm-gnueabihf@0.149.0':
++    resolution: {integrity: sha512-gOD5NhD8DG7aJ8CLZ+ve5xoDq0y0J0zKZSfkfMGfk96XLhu21IzSFvjpEvVUGodD7Yyy3Tr9rNdiPEdZjkuRqQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxc-parser/binding-linux-arm-musleabihf@0.147.0':
+-    resolution: {integrity: sha512-/41MKPW4RgPY4DJco0NCF0RYX3IMZaVlRNMNzvhaxRavc7tN3Txm+qllZbh0aMRs0VHdgUlbI8TcAOiTai4TKg==}
++  '@oxc-parser/binding-linux-arm-musleabihf@0.149.0':
++    resolution: {integrity: sha512-UtPYQkciY1NzYRtfKBopYfOjSxPFFVyprs0iH+Z5KZKNv9at/71pGd2KNrlmALhRcNocnxEsc+KuhY3nUlhIxg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxc-parser/binding-linux-arm64-gnu@0.147.0':
+-    resolution: {integrity: sha512-bmpw/RPhVXgZbtb3xBDuwW5s8+LvZYdqcDSX/sP2ltL77aTio3DP/B5ZTwwgoJ6Mr9vJs4RrmgEKW9XkLNUU1g==}
++  '@oxc-parser/binding-linux-arm64-gnu@0.149.0':
++    resolution: {integrity: sha512-3jWkwykjJJegMD+5dU9n30mzwvTLi99fkUqHU9Pqdzw3fIVfyn6ZnjOl8l053jogr0BGQPxagTjIKBksp288eQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxc-parser/binding-linux-arm64-musl@0.147.0':
+-    resolution: {integrity: sha512-gd7VX/FDVOw6mjQcu45iIcp4QkgybgJwh3a0OFG2NxmPCj628mQWD96QGu1kK8+mZF9qK4b/gIEyC63vQoB7+Q==}
++  '@oxc-parser/binding-linux-arm64-musl@0.149.0':
++    resolution: {integrity: sha512-H7n8zPxnLVI0pkutAxyXJNE/IaCuCJS6ghgv2cl8IDIgXCDZWjG/Bs8rF8BHKQ9gsOpA4m+T4lFaFAdnGuk/cw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxc-parser/binding-linux-ppc64-gnu@0.147.0':
+-    resolution: {integrity: sha512-HnAzcfki7dSUNHf510Q2NmbJlz8Ys7rn8l9l588Pkx0tYe1BHLZnmELIgqizJ4WPhHGSwN8Ce+B/menVxS3odA==}
++  '@oxc-parser/binding-linux-ppc64-gnu@0.149.0':
++    resolution: {integrity: sha512-aByOTCdLYp8FjwAUUmN7YYjAmPJ/9t0I1ACuhAkYun87fajIHbwuZ/opaBk0Pnfxzp2vYyD8hdG8OQWEglP5oA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ppc64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxc-parser/binding-linux-riscv64-gnu@0.147.0':
+-    resolution: {integrity: sha512-qlkOL6wT44U+fT5s/+sR6Shx0OdwvQF83JyIPZUxG/ovqZF5/7atOtjH+JPZ5/7ATQLbFBBSmghcy/+2NVB/ew==}
++  '@oxc-parser/binding-linux-riscv64-gnu@0.149.0':
++    resolution: {integrity: sha512-SAdNs+uxMRBLPM6QuLlOxzE4duWia4EMhqGknsJS2EGnWni7i53gSZhaW3VYPxaP8nk/UsMQxMODIFwBHbRWcQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxc-parser/binding-linux-riscv64-musl@0.147.0':
+-    resolution: {integrity: sha512-DlefD7L7sMXs/3hIBH23Egk0phj8kG0SA81dVGOQ3S1ekjOlmTLH2E+F2Thwfh1slKx6aH+lNc5fQYAw0GU7/g==}
++  '@oxc-parser/binding-linux-riscv64-musl@0.149.0':
++    resolution: {integrity: sha512-RhmzD62QNtMjuBAeKJ15gzyNRv06Yz1ZFi6lgTiA5S3ixkrSMPJWIPGyqdlC4XiWxwAW9W4jeQNV4/Om9V27gA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxc-parser/binding-linux-s390x-gnu@0.147.0':
+-    resolution: {integrity: sha512-Xqpagk/031IvZ4svrk2FF01YEqM/iN3MJV3SVZadKg/CsGlDCGoREqKHXYnoV5+8SfGe/m6RM1szXFLusTu/Uw==}
++  '@oxc-parser/binding-linux-s390x-gnu@0.149.0':
++    resolution: {integrity: sha512-HqEExoeKhlfUacdhj7KEe1m93B1SzCUkF88c1qLQR5Km6GPSoMHMIjK7qmRXLzjsO+ipSTWVsnYMVG0j2/mxNA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [s390x]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxc-parser/binding-linux-x64-gnu@0.147.0':
+-    resolution: {integrity: sha512-QioQOeUbI4ATUr0S2z88uA3Cds2R3Mm5Ge7U8XNYtlTb2GJF3rWlcj70z0AJhhOlbdm0YgVjqPBldUNbFylDIg==}
++  '@oxc-parser/binding-linux-x64-gnu@0.149.0':
++    resolution: {integrity: sha512-FuAv1J7GoSkmxg5glvzlHA88Ld7dOIg23VdAsVLngPZN/ZjZPtCaBZDby1GPn63Yj+7h47/wbcd7i1p2UJTeNQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxc-parser/binding-linux-x64-musl@0.147.0':
+-    resolution: {integrity: sha512-NXy1tv/OdC+pPTwf9RiCZWPK53V/Xq/2cjSnjOSyKopajdaDqMIkgtDY+jXZemp2e8px5FeWfY2L2LwhKZQovg==}
++  '@oxc-parser/binding-linux-x64-musl@0.149.0':
++    resolution: {integrity: sha512-KDFOVgjMIOiMiRUw+jZlAIEZZFG0WgGk+adcldjc+/qz0/kvobnYJqDqNX0+REJbSpSsM1Knj0zrEGTQ6WTIng==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxc-parser/binding-openharmony-arm64@0.147.0':
+-    resolution: {integrity: sha512-GpGWZ6oKz4bjCWW9Mz5pCaGPyk2Aaze6zEoaslIQqpSLtpx5pXj/ap5gUNb5Jn2LIbqWyjkGLX9yv3NMuNcBVQ==}
++  '@oxc-parser/binding-openharmony-arm64@0.149.0':
++    resolution: {integrity: sha512-O3O+ZBhGEUhtbDXFWRMTuOCBg+fC2hf1wrtZBrd3VJUtV/MDd1LCwZXIHY2nMCnh9Akgjay965pBok2h5AXN0A==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [openharmony]
+ 
+-  '@oxc-parser/binding-win32-arm64-msvc@0.147.0':
+-    resolution: {integrity: sha512-a8mlt7CC8z7LUdCfaxhff4kCd+vSjE+NEFL0cxA8ukfuSnvAto/pWTjytW4BuVLnQGcCVdHJwcRKOfs++H+tjw==}
++  '@oxc-parser/binding-win32-arm64-msvc@0.149.0':
++    resolution: {integrity: sha512-9hMvs3GZESAcbUGU3mqXFWRLgBd8TLeosNYfHusHp/hrBnk5lIP2nJtark3hZ6qT+lqSdS79sH8NoWHj1x9iUw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@oxc-parser/binding-win32-ia32-msvc@0.147.0':
+-    resolution: {integrity: sha512-M5ViVDBcFLnl2632AuuWuP35zEL5oikK1jTx8r3+902VEDeSNHxFZAB6RZyfZ7MU6Oi5QTOG8MmMkIeHsudSaw==}
++  '@oxc-parser/binding-win32-ia32-msvc@0.149.0':
++    resolution: {integrity: sha512-8hQaS1Urc1NnlutDfhQ+DwijRALGLY+AmqJSBHV4OmyPZDoqgtkmjTHl2tsTLK6PETe6PbIJLKmXcpJuqkf8Lw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ia32]
+     os: [win32]
+ 
+-  '@oxc-parser/binding-win32-x64-msvc@0.147.0':
+-    resolution: {integrity: sha512-DUaE13OwnUSlHpLZNcC/nuT10ivlWqc5EZgsfgXuAmWYw0r3nDxGeLD1zlGwYwIgVk1/ZMAxoXpV+05stvbHaA==}
++  '@oxc-parser/binding-win32-x64-msvc@0.149.0':
++    resolution: {integrity: sha512-xFqDgKSKdY0m2EtHQL7uMuknuEGnvbtxkWllGle5hmhVe5xn5XZ0Zb9iViAsItFAf0CjSiZ5er3XqqAlr5oARA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@oxc-project/types@0.147.0':
+-    resolution: {integrity: sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg==}
++  '@oxc-project/types@0.149.0':
++    resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
+ 
+-  '@oxc-project/types@0.148.0':
+-    resolution: {integrity: sha512-Nm4s/jB+4FpFsPhWGEC4h7rzksesmtnMXomo6rCMcg/b8zLQuOziRgkCS1fxDCXOlJB/6Q8oABOZ/OP6RIPj9A==}
+-
+-  '@oxfmt/binding-android-arm-eabi@0.65.0':
+-    resolution: {integrity: sha512-M10Gs1SSpTNI6ahGx3M/OlIdUF4hkaP6OgUb+MS79t/Pgflk3r1nW5gPFqsZGUAXg0H1AfANT9AvLdBSTIhZKg==}
++  '@oxfmt/binding-android-arm-eabi@0.67.0':
++    resolution: {integrity: sha512-2olh3ioEmc4gRzQm7jxyB1b/PFBoFvTq8KdgYySeNpysDtA6DEg2Mvya4/I6flhL7G0eOrE8RD7JCNCIMhE16Q==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [android]
+ 
+-  '@oxfmt/binding-android-arm64@0.65.0':
+-    resolution: {integrity: sha512-6DXH5sftNlaHpWJG50hFMF+Qxtq5D2TmahvcDPxWNcGIf8qrC9Y0YgHYcYZ2hlWzaccKXh/f3GcssH8vtkl4JA==}
++  '@oxfmt/binding-android-arm64@0.67.0':
++    resolution: {integrity: sha512-ulfw8EHN1MBq/MFFDXw2/M1VAFu5mRUcnuZ8Hqbv9viAnFzO9t1jKSAsDqKYYDGMlytF/uj6Z5z5n/tHupnKhw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@oxfmt/binding-darwin-arm64@0.65.0':
+-    resolution: {integrity: sha512-K9m7lr53pcOLETNsC88sWes/GWHUGjZyHx95UhYcSXy0r30haLdeXlSufSenEAtoLaW753WN8/l4M7GYcRt6cg==}
++  '@oxfmt/binding-darwin-arm64@0.67.0':
++    resolution: {integrity: sha512-MfONZx/O2o9M5v2jDFol556G9+A+P9xCuJ4DZ+qhE+RnaCdoscy6Eu5nq1dbuNxhwdJyZ6kLI7fnG9mwEeOeGg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@oxfmt/binding-darwin-x64@0.65.0':
+-    resolution: {integrity: sha512-sTNwIx1gre3MyiHOPLu7IGW4UyMScYL4DTmJT01p4vzB0En+OJUQz6KuH8t0PpsClRSaMuY3b0QmtoPItfO8Lg==}
++  '@oxfmt/binding-darwin-x64@0.67.0':
++    resolution: {integrity: sha512-CYnIx5LvFVJnyJcCqwH2jxMKjFjqo5678MPjdmNFoSGMhlOvZ/xRZqvhDcolKrXc8fezW3AKh+C4wyoFuWOSSg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@oxfmt/binding-freebsd-x64@0.65.0':
+-    resolution: {integrity: sha512-lYZMVIiIpnjGu5hJb2jxA8NYQ/e0OTGuaiAf4dqlGPNnPmUTu23FZRMltmjro/KkQm1uE4NT4n5yJ2zWmKcpfA==}
++  '@oxfmt/binding-freebsd-x64@0.67.0':
++    resolution: {integrity: sha512-7/iF1orvIS9mxhKUqnmtMgm+OrSQ5acPwuvdQrm6ECgqbwPmC+Pw9cdke3sNfVN6pT2hbJ58+jP8BCThl5HXOg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@oxfmt/binding-linux-arm-gnueabihf@0.65.0':
+-    resolution: {integrity: sha512-gIdXFAt/bURnjxuoedDEWdZ0PEWEmdDcm8qdpoFYYvW3QMk/5D4vUaH4mlMeRpeTdST4izUgHVO6RawQ4QulJw==}
++  '@oxfmt/binding-linux-arm-gnueabihf@0.67.0':
++    resolution: {integrity: sha512-yy+OGys07IZOpOmYPZoObKyUQLkfxeQqeCypk+1jaZd8HGo77hzvU1Jg8X3+W75o+9lszOjBfg0nkGtlwYywXw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxfmt/binding-linux-arm-musleabihf@0.65.0':
+-    resolution: {integrity: sha512-jJVyADto7gA2AaX5qAjAexrxx9PJQaKWOe8PICE7yKMbjBRyOHcmj9TtVJ+MZYDUQ3hodU0AcoTj0jFQ1W4C6Q==}
++  '@oxfmt/binding-linux-arm-musleabihf@0.67.0':
++    resolution: {integrity: sha512-wPIeeigXgJpwNw3wydYRt3U9iN9Y/ejpOZuYL9IA7igxWs7LIQMOkhKxTumRvy6dIv0iXKk3RTw3Vmjg0i+2sg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxfmt/binding-linux-arm64-gnu@0.65.0':
+-    resolution: {integrity: sha512-p3RFkB+u7u+8up99b/NEcI1hdpLDiGgJYNwDorB60n7eH+eKposAKuMBxx+NqB3b+sJP4CZmYDh9G7X62tUsKg==}
++  '@oxfmt/binding-linux-arm64-gnu@0.67.0':
++    resolution: {integrity: sha512-0+XNxcdbkTfxdcD4qW6Ci9n+mBNJ8xTBumnxKvKBmRFOdx0Wf8/KiHjCJayooXmYkqRpRVd98Q5egvzx5BLSgQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxfmt/binding-linux-arm64-musl@0.65.0':
+-    resolution: {integrity: sha512-5Prb0uFzJHr+OUD/qS/TmU526wD+PaHDsm3KoRiUXbMIDpTSErjeQYkK3OQeshAvD/PuLa9WGEi9WPajjdOZJg==}
++  '@oxfmt/binding-linux-arm64-musl@0.67.0':
++    resolution: {integrity: sha512-I75LKPJyNOYUzkqAiAMIE31+Ye7xtQXZdoty1IXn4B+bw5Zpmez5wfG19ejGpNnS/BzQ7LFS+7jxuTPb+vHiZw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxfmt/binding-linux-ppc64-gnu@0.65.0':
+-    resolution: {integrity: sha512-S8svxTp81obnF3admN9yd+u2rOYXtyzThLGBTg1PY6TPtGcC09BaaXLQD+TBSMa7yvqhCDZ8DFri+S/yG60qCg==}
++  '@oxfmt/binding-linux-ppc64-gnu@0.67.0':
++    resolution: {integrity: sha512-c2M5iRpe1QMZSRE/UvZoPdXBWb5Ic/ycvOyNiKCqPwQ/OyOKIMiJs02ynlNnjb7ZZJnRXYLmGcohoINOcwDK3w==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ppc64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxfmt/binding-linux-riscv64-gnu@0.65.0':
+-    resolution: {integrity: sha512-WtXBr75G/h2qOHy8SiGtC1R6aS3jt4mE52v1D8AtwMXIgoOmSNP9lKvbSaTRoL0e5wsMPoi6T72QWDYPu+S+nA==}
++  '@oxfmt/binding-linux-riscv64-gnu@0.67.0':
++    resolution: {integrity: sha512-dQzzYlV24Udhfm5ECuSdgqRvFJU/CGHzcYYEO3dLM6W6+CHiBFrq9OjIllkdCcPhsoSQ8o223Dja84MOSzed9A==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxfmt/binding-linux-riscv64-musl@0.65.0':
+-    resolution: {integrity: sha512-YwSLVvpaz4o/nv/miiPEBJz+eJ+VmbgNIrao6RccK9ce+L5EA8wP+ZD0uFeq6wKOza6zoWv/dR0sj6lip6R3EA==}
++  '@oxfmt/binding-linux-riscv64-musl@0.67.0':
++    resolution: {integrity: sha512-rFNq1CgX4qMJANOq42LkAs90JE80GpiaEohAV2qn/gT2hGjQTW1zBO5zQBxArI4926pM1OSzo3CN0tBszGBIaA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxfmt/binding-linux-s390x-gnu@0.65.0':
+-    resolution: {integrity: sha512-XQTPqgvyrgkKcFq+Tp2eK6JS7sqqJ+nRmy2Fav4j3I+i4dJoPJm7YwEdoeSDX9xkqj9jZ/lWfF3bXUWztIrn6A==}
++  '@oxfmt/binding-linux-s390x-gnu@0.67.0':
++    resolution: {integrity: sha512-Sky6rEdz2o5IGq01lPhS12yEvDdChVEcaYrcLHkveh4Fx0qPjljE/Iul6SX/bRMl6lNc8J7J/mDQdzgBdA++Pg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [s390x]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxfmt/binding-linux-x64-gnu@0.65.0':
+-    resolution: {integrity: sha512-cjZlx6S/VkeCNWCbwZriTnLnZeTcV3DEyeRGSw/2wwLP9viq+C0bJ4bC1k/ZLkFxDcB1lUgSasPkYGP1bdraOg==}
++  '@oxfmt/binding-linux-x64-gnu@0.67.0':
++    resolution: {integrity: sha512-vPXmlNORV8AZq2Ocxh07pxwMjfENUWCV/eZArnao0qC3NO/hDeTVkQvee7SJJUbIiF5PZbBa4kYmaXnu7Rk58w==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxfmt/binding-linux-x64-musl@0.65.0':
+-    resolution: {integrity: sha512-2azCjxdLtK4zCcIOU1dlXlU0xxfbPi6EjwWx7Ac7teWPidIIDOcIhudup83xNCKYhtqeVd/gaVDOxbUq4syXWA==}
++  '@oxfmt/binding-linux-x64-musl@0.67.0':
++    resolution: {integrity: sha512-x/WAtFqYtVr3vZ9ni8nr4kn9whSitg8fOljq/pZzBpxopRdY1BMLZCZkrbIbaBcYkm46qGbqVea2FCWmtQ2P9w==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxfmt/binding-openharmony-arm64@0.65.0':
+-    resolution: {integrity: sha512-KXQ7xi1e/voP0IQaw6fG6XY4Z5+Llf1XmRSZS1t7pVFCecFJ0iXaboKmVwjFtp5MLlT5iWQrJ2U1C3GJdZ2u+Q==}
++  '@oxfmt/binding-openharmony-arm64@0.67.0':
++    resolution: {integrity: sha512-eRw9Neh4/aA6i+q/R3WU1gGQINhVM0J4fXIm6t27caOamkr/37uAkp1IdBx4zlJH97hmXR63z/q9n5c5dN7MzA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [openharmony]
+ 
+-  '@oxfmt/binding-win32-arm64-msvc@0.65.0':
+-    resolution: {integrity: sha512-2FbbjG5jEqLSLKVJwBap84uJfpn5Y5A53KEO0aUNr+zeiRB9nyPUIFMcSbZVMFLitfBytFWRNngozXYjb6Rsbw==}
++  '@oxfmt/binding-win32-arm64-msvc@0.67.0':
++    resolution: {integrity: sha512-YIMvb+sGNYN2uc6+QK2HLPeEKM2vl7QZ5onQzpAJRb6pnf0DwUFP5R8tdS9R0l8hdUil2gu4Uxd0Yxrop0iT4w==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@oxfmt/binding-win32-ia32-msvc@0.65.0':
+-    resolution: {integrity: sha512-LJ+ZacAPSjegDOnSLyA1TMWAhdDrsK4el3REdr1oL2UtVBCMhO2II/Sb3cEW6mF2MfLhl8hDNCSvc7KSbgk3LQ==}
++  '@oxfmt/binding-win32-ia32-msvc@0.67.0':
++    resolution: {integrity: sha512-LzmU9MyACPzwNDIK0ItMedHPz735Ug7ELWguxo4/kuy6zWuDoeglOAEFCY8jLg0PzRpFO3hDyLFe2Gu2eFDeGA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ia32]
+     os: [win32]
+ 
+-  '@oxfmt/binding-win32-x64-msvc@0.65.0':
+-    resolution: {integrity: sha512-higu9cWEO6XXFzATD1jf0mCK34rNfN2H9JrJie7QB1IhleVpTh0QlLH9Ip2C1H/Nd5n0v5pvRtC+5R0uE4HpVg==}
++  '@oxfmt/binding-win32-x64-msvc@0.67.0':
++    resolution: {integrity: sha512-sbQOIDNLUEeVZcAJcSL5VURn7kfjvilPviody4Yl5n8lQCDtUm+C9oHTTwZS/m4d/Z6Vv3jNEiAofH932NPPCg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@oxlint/binding-android-arm-eabi@1.81.0':
+-    resolution: {integrity: sha512-IcCRsXiedJoJopY6mpZUBEeVFsUrutmrG7dZ87zMuKJlhg70Ora9bBl1WcCxZQtyI10YpnVdEso5oCg7YcfSHw==}
++  '@oxlint/binding-android-arm-eabi@1.82.0':
++    resolution: {integrity: sha512-a3LB+C5Dsj5b/qtmG/mv5WrzuiXEpg1KF5nXWcEvaoN5TYAqkIvxPOwTPp3Jy/FoGpRo8zsTFhMElMXfeoOEzA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [android]
+ 
+-  '@oxlint/binding-android-arm64@1.81.0':
+-    resolution: {integrity: sha512-GRrIPyTGVhx3L3h+0T5xT2A0jFAcdPv4+IfuXpGDLIdl6XeYhgg/zw72A5ILZoUgRqZuM8F1y+V/gfDriXSxzQ==}
++  '@oxlint/binding-android-arm64@1.82.0':
++    resolution: {integrity: sha512-OBlhRgNqFblGpGenno/aqOfJLOkQ2B8Ig3iDAalfn0H8hJGZKXPeexCRTDm6uwv6YUjSA9Xnwt1y/Bgj5ZH8uw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@oxlint/binding-darwin-arm64@1.81.0':
+-    resolution: {integrity: sha512-qNQ9tXRgLuKbqSV1S2h9h4KPHjbovO7RRR2/enUOtHzTkFZ7B9X5zqqHJua8dRyc7dBy7Aoyq5pqTSLFVcAzGQ==}
++  '@oxlint/binding-darwin-arm64@1.82.0':
++    resolution: {integrity: sha512-dsopxqtY5ZdyT9uLHyGt1SyiLop6hi7hWI3PKpePodkRQOkLaCm+OE4fR9CAz9qdfjiFO8531tX/QDyP/psjFg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@oxlint/binding-darwin-x64@1.81.0':
+-    resolution: {integrity: sha512-q0QTm32jWga2Gv4j7IaVZN0jYMi9UV73sWVgFtDA4iIfqwMCLLZ3ve+9KwfYtsaKZSgQhmPaogeZWqDZpcY1Pw==}
++  '@oxlint/binding-darwin-x64@1.82.0':
++    resolution: {integrity: sha512-94Lu0SgTClKColU66g1VDuigV3HkcbkJBnTtZjGYfE8UPugaWDgKrm2icjC6HJVUYler2OXaHP/X0TBy8+CowQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@oxlint/binding-freebsd-x64@1.81.0':
+-    resolution: {integrity: sha512-/+8wVWDXEC7wHVAhOc59Fw/SkMc1arLkFD8iQCaSsmzenK1X4doFqquL9H1wrtGUzaiycVqkf/sSpcILK6W1UA==}
++  '@oxlint/binding-freebsd-x64@1.82.0':
++    resolution: {integrity: sha512-hne/V06ewhh1i0w8+l7GDNROAGCGPmyFuOwiP7YTRu0JycyStJ4785dmF8xU5p0uUwt2emvIF9vc7Xjis+cJ0g==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@oxlint/binding-linux-arm-gnueabihf@1.81.0':
+-    resolution: {integrity: sha512-4xt422FEgioRq9hAL4Tq7fujGUWnc8z1BJ+Oi8RN8vB8axaP+sdK6a2xdlcQCCYnJg9QMuMFS0AucuIFx/EacA==}
++  '@oxlint/binding-linux-arm-gnueabihf@1.82.0':
++    resolution: {integrity: sha512-aWY2xtbZf1LneW9Qsv/n2Sp8gOu74JrlQzEtj4coHX2SHFrCfhmAumaU+sI/A5nr+yoTRTSmI/pL2s6ADlNSkw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxlint/binding-linux-arm-musleabihf@1.81.0':
+-    resolution: {integrity: sha512-u3vna8KdGplH4DRCW9K54D68fcMo7IxVrkCJWwXnIhwtBdnDnYrmzOUA/XjmBlPpcLsgw9Z5BNdY4za9+Dj+MQ==}
++  '@oxlint/binding-linux-arm-musleabihf@1.82.0':
++    resolution: {integrity: sha512-Fe+TtXCXMh/5f7kWlZ2VAwsMumZWtraFlKVk1NJlL52/beGwfDE7ov+/8gVirHzWokzGu7X65hSPq0ucPDskWQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@oxlint/binding-linux-arm64-gnu@1.81.0':
+-    resolution: {integrity: sha512-3j9k+gsYsE7nv71GWotXsqsa2l9/aJenD7dVHNt/CBvsb0SgRjSMnHFeP59IXUAl1wvVFhqGl2wJNMwWU3UBlA==}
++  '@oxlint/binding-linux-arm64-gnu@1.82.0':
++    resolution: {integrity: sha512-6azCZ6OJudlvipNttXCCQcyeFfcJ/NvUZdSN1z8elo73kCHtyQC7WTiUcSjWYvJ1jaq9KDUyMAoAS/vNzhBomA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxlint/binding-linux-arm64-musl@1.81.0':
+-    resolution: {integrity: sha512-k5iAp3dNxW0/uDCBY+WSm8jKB2szu7SkEQZdgRRpDXvuDd69vvDcqhB3A/pWCfCwXyenjNjFn9Td1fVoyAc+Yg==}
++  '@oxlint/binding-linux-arm64-musl@1.82.0':
++    resolution: {integrity: sha512-PLEaSD8IAIIlwW4dwOd9YaxuxeOpwiXL4J24rcnE4iNtyM5j9Q9/3+gti08oXpx0u2ygNjRDx9xjWWpQonuJEw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxlint/binding-linux-ppc64-gnu@1.81.0':
+-    resolution: {integrity: sha512-TFqLja3uYmVSte6nof9GWrex9Z8WgdZrNiLC6Te5rXGDqXB2y4j/26iFhwosXiAFqDhE9JJVuuCkDKLwptTn1g==}
++  '@oxlint/binding-linux-ppc64-gnu@1.82.0':
++    resolution: {integrity: sha512-D94em/BwknNTn4vqxjHh5wb2oL566eFhArabqKIr0cNZMHOJuiraFp1A8tXpH05bbE5tqwEfLXTI0MWEGtn3Dw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ppc64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxlint/binding-linux-riscv64-gnu@1.81.0':
+-    resolution: {integrity: sha512-UEcySvGS0NOVo7h7n7CYyJL9+6gFAh7Zc/ToDXVScFvzHSTIxtzkMVU30rmQ6+nQ1LF+UdiRDdJajpDu+OylLg==}
++  '@oxlint/binding-linux-riscv64-gnu@1.82.0':
++    resolution: {integrity: sha512-MOprxBaoYU2D4VgxXCl3ghydThWtx7Um1lL51kGYNeQ5Al7WzsH7/tqGdNtbLrIWnjq3bsm13+nz/gRIxjrOXw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxlint/binding-linux-riscv64-musl@1.81.0':
+-    resolution: {integrity: sha512-H+diDbhD00+wI1IRP8Kz88x/lat+DgtoBJzoTthS16xkTJGNaEkfb8gzmd1rzc/2uDQQMl7GNl+JFUacVeWxIA==}
++  '@oxlint/binding-linux-riscv64-musl@1.82.0':
++    resolution: {integrity: sha512-5h55QsfJ/luDXZzC20k6SNOY1Az+dCP9WvntKtcUWh2JhckAdwApY2ZusaBTwLENnReXU+A2fJtSrYvZJNKNPg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [riscv64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxlint/binding-linux-s390x-gnu@1.81.0':
+-    resolution: {integrity: sha512-8znJ/5TekjOKg1j1Acho4PJMdiAHLtlcXuWEiipOhAMV6rQcXdmDdXCbheyDczN6TjBwiNfjcP81k4AthrKRzw==}
++  '@oxlint/binding-linux-s390x-gnu@1.82.0':
++    resolution: {integrity: sha512-IE8NJNLlHr0CaXyGJPGVn0eTkUyoj1I2UfA8x7I4PSOYKsQ/6btVC7Pywrj5onk0cMH25r6Z38SoN3AvE5Zuog==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [s390x]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxlint/binding-linux-x64-gnu@1.81.0':
+-    resolution: {integrity: sha512-Q2Wj70yFsvn5QjlmifFzbj4H+kJy53bwqc41o1fzoM7MpLV1NIbhg/LpWXRfC6KOkSAdUx1Wd8VJsdPmhp/HRA==}
++  '@oxlint/binding-linux-x64-gnu@1.82.0':
++    resolution: {integrity: sha512-XUUUxaBo9XKl+J1B9EmP1cTGQPddzeURvoGkfwh/94PGnbW+hBprDljneoI2M1jzC1bzrIV3ihc7iM9UXl8+tg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@oxlint/binding-linux-x64-musl@1.81.0':
+-    resolution: {integrity: sha512-cPInHp/ddEe5qkyK2IiyQ8Q3Mp2oLLEhhsGgTK2oZx4L6+llGam1H1yBvJZ7qHfOXj8N3hxBS8sj4tO+gtFlIg==}
++  '@oxlint/binding-linux-x64-musl@1.82.0':
++    resolution: {integrity: sha512-SWLSFulX9TDuH6yvbPYp4+VNn6jkkIvvI+KiujDM5rWBRHEfkesCC/pCneIIUr6ovkxZ5fRtpi2v5Cz5FrMJZg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@oxlint/binding-openharmony-arm64@1.81.0':
+-    resolution: {integrity: sha512-0CQxSX4ajqm07AHBf5U33qQzXKdd7wtq/oTL/7vpY6RNNuxrRi8W4bqUV1Jyu/vj+9KmxQyDhxfeVX1nQL6kfg==}
++  '@oxlint/binding-openharmony-arm64@1.82.0':
++    resolution: {integrity: sha512-BQy35f6ZUdNr9a6c7B7orxQTcLjByGT2z3WAgmRovpRwmPYAaJ+NTplmMzhdjdJ4qSchfMNZy/Ukg+qRg6zseQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [openharmony]
+ 
+-  '@oxlint/binding-win32-arm64-msvc@1.81.0':
+-    resolution: {integrity: sha512-l0hbeISm9673hVrrQU8j/p2M7YH9Ouoj7p7E/QM55NTrKVLP+P3PF8hLu+OY+x0VtGRW+ggiQKZqmdYps9H+TA==}
++  '@oxlint/binding-win32-arm64-msvc@1.82.0':
++    resolution: {integrity: sha512-V4QhSTg5gctZue8RJjsGi7NpQPThr/p1/HfmiMC5kfe1KFEup9SQRVub4A6kijQjdHfxj7bLL1KO3QO7/5bwMQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@oxlint/binding-win32-ia32-msvc@1.81.0':
+-    resolution: {integrity: sha512-ksqPP5jbFXcYreEQ7zdJh06rJQBymCTyGRCdaXjfcf2aG4f8KxUWY5wcgYHmaTK+FJ4bPG5sUAdOX+6trnH1JA==}
++  '@oxlint/binding-win32-ia32-msvc@1.82.0':
++    resolution: {integrity: sha512-TUSCLaKB2yktpFAJ/r3HAUYsaV/3DT7JS4iNKyoh3a9YNwD0UG7Ezh4D8m23654vQcU6P/RQrCAjRPKe4peP/A==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ia32]
+     os: [win32]
+ 
+-  '@oxlint/binding-win32-x64-msvc@1.81.0':
+-    resolution: {integrity: sha512-IZuUCwGw9emG5JtCp+fYGB+Z4OWEoeEcM8R5BA1pYw63/ieYFVdcU2ylxTpHbVHSenZnsYE+ZZ20uHAJszQ4cA==}
++  '@oxlint/binding-win32-x64-msvc@1.82.0':
++    resolution: {integrity: sha512-VTVoRIWJTb+wvUX8EYoPArfFH02whuR10goFXE/LHRRX33ajRrFgqbcONXZMiF4C5rnattfkm87HqYn8jb8hmQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [win32]
+@@ -903,98 +900,98 @@ packages:
+     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
+     engines: {node: '>= 10.0.0'}
+ 
+-  '@rolldown/binding-android-arm-eabi@1.2.7':
+-    resolution: {integrity: sha512-EypzgnYCwyVY4NDHKzGmNJT5b+XaQEBniHxsMdeIQLB/tcCzZnhqrzHpZFbX9iaxx+5RiB8caATBtfvZP7zVxQ==}
++  '@rolldown/binding-android-arm-eabi@1.2.8':
++    resolution: {integrity: sha512-tN5aztYkKCte4i5SIrrz5yK/HMjEuCqCSCJa418jOV8tZ1cBY3YF2otxB1ktPxzsLA1BeTqwapK0bfjxNvHJVw==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [android]
+ 
+-  '@rolldown/binding-android-arm64@1.2.7':
+-    resolution: {integrity: sha512-l17HE9EweWaqJZhuUuNBN/FzM62xw+DECVnJyvMsxn8vJFAGLy5QfLDoYAcronkAN8VxKZHezDpulHDPx95vFw==}
++  '@rolldown/binding-android-arm64@1.2.8':
++    resolution: {integrity: sha512-dIYTWl9XprMUiQFoc55KUyk/oS8SKYH3zFl0LTR7RT0Xj4hgSVyuJcroH8JUu8RcpF8fTB6E0aOwCkZoYPcDSQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@rolldown/binding-darwin-arm64@1.2.7':
+-    resolution: {integrity: sha512-8ED8ELFvHXc6OCETIn4gXObPiaR6bckM/ipXtbzlPVDRMBfEGjCKgO90F9YtfdpDatVx/ZQw7aZ1vUMf/+T3Mw==}
++  '@rolldown/binding-darwin-arm64@1.2.8':
++    resolution: {integrity: sha512-PCSDQGXD2IyTEFrcgPyBM8jJuGmrbCMuoIOXdbEGVemruKACXoLQJrb+A45Z0L5t1RQkdfJprAYPkikbh7dzdA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@rolldown/binding-darwin-x64@1.2.7':
+-    resolution: {integrity: sha512-/WPripjtiAIZ2tWY7ddijORT0Ujg87wxWW/qcoFVCKAWVDPhtY0xr7Dj0M3GyNGz60jGwTElhro/mkF9dT7dDQ==}
++  '@rolldown/binding-darwin-x64@1.2.8':
++    resolution: {integrity: sha512-Uk7lRsGhPFHVX/sAUC6D5H9Ol30dFHd6iquokll2th3LpdJ3F5CzQB+7DHn0Ri2mG+U7k2zXiPHDrwZenXhwSA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@rolldown/binding-freebsd-x64@1.2.7':
+-    resolution: {integrity: sha512-14DI4NcqpvbICxSnGLx3PmtDaWqRP/KGSGb6C+JLLVPeZRl6dKdHba3pGsqT3vpdTqhEYIPG0MMQ8c0xYqoJxA==}
++  '@rolldown/binding-freebsd-x64@1.2.8':
++    resolution: {integrity: sha512-DjszaTEVogPqA5bYzsEeqDCQxbcp2fexQwKcRspYji2yzR68fCf+e4fx6kBSRDwX5/brZaHw/hWS9+A/+/w9sQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@rolldown/binding-linux-arm-gnueabihf@1.2.7':
+-    resolution: {integrity: sha512-bxrWIRvHWQvbJwi+VIie/kDJmQxcNE6xxWwZdqF/ExVAigtHkv54WTLQPb+QsZdnFy18fg7JPfWGL0RH6vwIlQ==}
++  '@rolldown/binding-linux-arm-gnueabihf@1.2.8':
++    resolution: {integrity: sha512-zmwa7FTmdzB6aaEEuuls18H6Ap5JmJPSoPTuXixeJZV6tG40SyLkApQtz1g8ptZtiEKqj9OM0oNLPh1AgvE31Q==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@rolldown/binding-linux-arm64-gnu@1.2.7':
+-    resolution: {integrity: sha512-toOY2BChBZyuxU7OYX6Tn389di4IzAqPTycVcci0O7FSfBqzRB3RZn+K5Is6ANf4tmgRd/K1yZTsNTXbkXsnLg==}
++  '@rolldown/binding-linux-arm64-gnu@1.2.8':
++    resolution: {integrity: sha512-KdYQDPHwJVnbFwdTGMgxsI9SqblBlz6STGM+w1We/d5B8OWWidYH0MwkU/uA1wM5fIpO2MkOVxXrNzzuZhw9ew==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@rolldown/binding-linux-arm64-musl@1.2.7':
+-    resolution: {integrity: sha512-lAIXTH/aiLRLxsTgQvfhjo4K1ydWIp00+V0voOr9beb/9ZmkUFrSIb03dXNFRgMNvkE6oGsF10ioQ6UsI+vS5Q==}
++  '@rolldown/binding-linux-arm64-musl@1.2.8':
++    resolution: {integrity: sha512-jFJTifHnNPY+yzOoNZQfSIysrVyXzEQPhPnOUjmD1bcQGHH6s7c8cViKWar8YplQImE5N9JRqMCLrM2CdxOrZA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@rolldown/binding-linux-ppc64-gnu@1.2.7':
+-    resolution: {integrity: sha512-kdnwS28Pkenp/mZMRwjXXXwxQ7pIsm+bF919LUK93BOyhcLsrVKdP2p9fxpiPNPAbNuch8ypQt0pm2P2LYCAGg==}
++  '@rolldown/binding-linux-ppc64-gnu@1.2.8':
++    resolution: {integrity: sha512-FhiOziBDWPBjbcmRzfLyIJnaP7AVMFXT7YCXPjXxj7wKU3vx24RjrCNN/zjvVa+N2vVoHJwCoUBvsrN/DG3zIA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [ppc64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@rolldown/binding-linux-s390x-gnu@1.2.7':
+-    resolution: {integrity: sha512-516OdsyLdr5E65paF3yBF55t8mfm9+gmtCsK3xI7XKXIT7EfRlHhxL8K/NR6Hu8BWSgF5+1w74lTL0+nxcc8Qw==}
++  '@rolldown/binding-linux-s390x-gnu@1.2.8':
++    resolution: {integrity: sha512-WnHfADMzOV2Y55wlx1hzzQnar/wDt/VdvWSD99r18Mz9ylNieIGOkRx3UV21h7m/eJvjySYJkO26VvGNFkwsIQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [s390x]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@rolldown/binding-linux-x64-gnu@1.2.7':
+-    resolution: {integrity: sha512-r8/z8n7GFaYRln3xmP1Cxy0HH/HLM0uBUPkEuSVEfKGDA89M0FsZRZJRSwe/tJjRx+fpH/gjorfhB8tmEbSFLA==}
++  '@rolldown/binding-linux-x64-gnu@1.2.8':
++    resolution: {integrity: sha512-H9tRr5ibfXFVLxbPOseVewewFpl28zcEdjRDt2FTUZU7odxP0gEv1ki4/kGmcGOh78oRwZuuQllGLZ9zTJp84g==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@rolldown/binding-linux-x64-musl@1.2.7':
+-    resolution: {integrity: sha512-pAsE8iiDxUg1xBqdhrTfg45AVDVpirjz00sblEYClGNNcMnDb+e8beQgqIAw6LvauX/APvgxUnwrgun/YYGBhw==}
++  '@rolldown/binding-linux-x64-musl@1.2.8':
++    resolution: {integrity: sha512-UefiqfM3D6IVNlZ8tSGs9+Ejjud2T+oxO0IHADU45Y+lyEjD2dVFyZHbkfX0LUb5Zugo/oIv1eCO/KVYhgYJYA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@rolldown/binding-openharmony-arm64@1.2.7':
+-    resolution: {integrity: sha512-lTcIYmmnQQA8Or/2DatS6oSqcdLHvendjS+zLu+FwgToynWMRSmQdpM65fTANJgIS4mjbMOo5KT2lnT9SAb96w==}
++  '@rolldown/binding-openharmony-arm64@1.2.8':
++    resolution: {integrity: sha512-637Ke4kWSy6rp9cxQ9gMOXlxPgIw/c1beASV4M//3+9I4uwBVOOl74G+e3zyU3u19U7RkRl/HuewixZ/Z6+Rjg==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [openharmony]
+ 
+-  '@rolldown/binding-win32-arm64-msvc@1.2.7':
+-    resolution: {integrity: sha512-e3Gu3WxbNk/UqQhxqU7YIYO+9ZBvWNz3U+h/qRFosscMFzdRPbXYSaSWgSnklv2fz1TgzBTcti2z35c/7irsHw==}
++  '@rolldown/binding-win32-arm64-msvc@1.2.8':
++    resolution: {integrity: sha512-xWBkPOF1Q9k/Gv1nQXnVdLxKu74jXppuOM4Z3mnypVUJJJwLsMl7hNJGRAUJoG8A5MgOI1ACKM+wBFxSJzKy4A==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@rolldown/binding-win32-x64-msvc@1.2.7':
+-    resolution: {integrity: sha512-W/jg5qoRSqjsEv0+dZi4e687mcHqmVuU0P4fK6qS/xjetW2Gmc1W8j//z5nAeNcC8Ttm0hV46IjcYeuVwYhuiw==}
++  '@rolldown/binding-win32-x64-msvc@1.2.8':
++    resolution: {integrity: sha512-uz2ZvfgXbxqNwijjjbxrnvALwpyODDcgc1T1N8N3rf/DXKQmaFwmB4LX4yyjggpwN2obdQLb2rgirX5ffCWYng==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     cpu: [x64]
+     os: [win32]
+@@ -1008,9 +1005,6 @@ packages:
+   '@speed-highlight/core@1.2.24':
+     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
+ 
+-  '@standard-schema/spec@1.1.0':
+-    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+-
+   '@tokenizer/inflate@0.4.1':
+     resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
+     engines: {node: '>=18'}
+@@ -1042,8 +1036,8 @@ packages:
+   '@types/http-errors@2.0.5':
+     resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
+ 
+-  '@types/node@26.4.1':
+-    resolution: {integrity: sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==}
++  '@types/node@26.5.1':
++    resolution: {integrity: sha512-CzNm2FezW4VR/LjG6yUdiEgLE/rAQ9Slj5gCu/C2VrdcW7I0ahNZ8DRbHT7zOZ6r3ONgd/bsQIeSaoDGrd1C6g==}
+ 
+   '@types/qs@6.15.1':
+     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
+@@ -1051,13 +1045,13 @@ packages:
+   '@types/range-parser@1.2.7':
+     resolution: {integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==}
+ 
+-  '@types/react-dom@19.2.5':
+-    resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
++  '@types/react-dom@19.3.0':
++    resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
+     peerDependencies:
+-      '@types/react': ^19.2.0
++      '@types/react': ^19.3.0
+ 
+-  '@types/react@19.2.18':
+-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
++  '@types/react@19.3.0':
++    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
+ 
+   '@types/send@1.2.1':
+     resolution: {integrity: sha512-arsCikDvlU99zl1g69TcAB3mzZPpxgw0UQnaHeC1Nwb015xp8bknZv5rIfri9xTOcMuaVgvabfIRA7PSZVuZIQ==}
+@@ -1238,20 +1232,25 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@vitest/coverage-v8@4.1.11':
+-    resolution: {integrity: sha512-8MVGEFnJIcdGjcbfKmeq8z0pZHH0JlVtoVZH9Q/qwUp6wyFnEJUBMrw9DCaj+ra3vShGmhavjalMIhPNxZAUcw==}
++  '@vitest/coverage-v8@5.0.0':
++    resolution: {integrity: sha512-toMg6PZGCIa/lQNCDoASrfb1ly4hsUKXFtFYC9kD4t78o5Y6LyNJU7AENt8eHPr3quYdxaxK7hj2mnbFfUk9NA==}
+     peerDependencies:
+-      '@vitest/browser': 4.1.11
+-      vitest: 4.1.11
++      '@vitest/browser': 5.0.0
++      vitest: 5.0.0
+     peerDependenciesMeta:
+       '@vitest/browser':
+         optional: true
+ 
+-  '@vitest/expect@4.1.11':
+-    resolution: {integrity: sha512-VX2x5vNJXET47KAFzwERI+KRMtTTCSWTfSMKsW7JsUsXV4psq++e3DvZpuTDOpHcxytiDs6p2nhVb2tVDiiUYw==}
++  '@vitest/istanbul-lib-coverage@1.0.1':
++    resolution: {integrity: sha512-k3DJZ8LhMBK9NS4SclF1ASD3OgXEWDorbIcPTRDK0/Zae6fRvu+fJRxtFdLfHsa9Y24beCdPnoNZ4LviTNstfA==}
++    engines: {node: '>=22'}
++
++  '@vitest/istanbul-lib-report@1.0.1':
++    resolution: {integrity: sha512-1EOLRfsTMnyAr3+kEAsP4o9dhaDlGPpD7H5iLBBeq//YpNB1VIahkPhB+eRp9N2Dkfw8oySROjE3yf9XDeaIkQ==}
++    engines: {node: '>=22'}
+ 
+-  '@vitest/mocker@4.1.11':
+-    resolution: {integrity: sha512-2XJVD55d1o5AZous5CCGKS74g/riOj9odEt2bQpCVZeblHyHdnMeFl4jl0XjU21stf4mbjUkew2eXQZt65g5CQ==}
++  '@vitest/mocker@5.0.0':
++    resolution: {integrity: sha512-66PGTMIiVJP3t4a5yxU9qPtf7MdTBs8jmToMvy+HVflB3Yy13WJZTtPePdvU+wjRV02SKK5doLbSA6o9pwOmiA==}
+     peerDependencies:
+       msw: ^2.4.9
+       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+@@ -1261,155 +1260,143 @@ packages:
+       vite:
+         optional: true
+ 
+-  '@vitest/pretty-format@4.1.11':
+-    resolution: {integrity: sha512-yiZzPbGTS9Sr/JpFl8zHrcIkAofNbFV6k21vIgQN/cY/oxZeXhJv5sc/MBJ5jFKWmWs+oJHw0UXLZjmf931+Vw==}
+-
+-  '@vitest/runner@4.1.11':
+-    resolution: {integrity: sha512-LztvUgdwMNJMIkj3hQnnxiC2Xy1zNxq928W/xhjCLaNCzqTZOudjwbQf6v9IntZGPw132i2Lq2rgTRZHD3JHNw==}
++  '@vitest/spy@5.0.0':
++    resolution: {integrity: sha512-uy+luWBAPw9XfthoHi5AkfHUnuPYEESjl0p/r+meoBnU8bxg5GDQ3Ey8MjcJ6sqahkL4PFyrvfMJJBw7LbU06g==}
+ 
+-  '@vitest/snapshot@4.1.11':
+-    resolution: {integrity: sha512-pN7ikn1ON7h8ee4gIAp4AzyK+zBtJPzVbqOgu5LCEh4VaJVbPQcgYQYJIMGQPXVeJJq1fnfazis7a5pFNPahog==}
+-
+-  '@vitest/spy@4.1.11':
+-    resolution: {integrity: sha512-apNa/prQy2qCeywhnixOHPRCgGNhvg7T4Dapfl1GahLp/R+uhBm5cPyFoNVyqsNd2h1nJxL6BqqdIjiABL60YA==}
+-
+-  '@vitest/utils@4.1.11':
+-    resolution: {integrity: sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ==}
+-
+-  '@yuku-codegen/binding-android-arm64@0.9.3':
+-    resolution: {integrity: sha512-viote6xAyL5cKLquV2X2wRfopSckH+msDYbaI8Hh8JAaogYs8MJZVRUbSrbsY29TaPrIFZwNRwQ8+YSxs0dkGw==}
++  '@yuku-codegen/binding-android-arm64@0.9.5':
++    resolution: {integrity: sha512-jrOY5WM+AaAqkv51fHP1x28ifto4WgcZVzodLUyMU1jMWn5Sq+VciRdk/n8E0Ey5w4p4cWWE+m5GfXWOYh7Kzw==}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@yuku-codegen/binding-darwin-arm64@0.9.3':
+-    resolution: {integrity: sha512-y2PGOLyxc724EJ+Et/5PxGfutQuV1Z2J9cxHo6W1I5CR3nk0i03J4yPrnw6rNJOfrtlISzcc7q0RrSyfPndpIg==}
++  '@yuku-codegen/binding-darwin-arm64@0.9.5':
++    resolution: {integrity: sha512-4O4lkCQIzPZGjiNB1GORSI6hBECbiiSBS/APZXPvNKYH+nhY4uuqv03LNXA+SET3hoBjvr95P5rIhY8KQaQUBA==}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@yuku-codegen/binding-darwin-x64@0.9.3':
+-    resolution: {integrity: sha512-xZ9UpXUOLmsrKVUp7MRXxWU3drNiilRC42OLpjWEhnOehIGVF1bZgzHcqRYJxVyU53RMrkRMsaxplkGd6Qo/ow==}
++  '@yuku-codegen/binding-darwin-x64@0.9.5':
++    resolution: {integrity: sha512-9EvoUO0SEhD6/d8VHdWuPerepPMSR1y84+UEgz8Un1Ope14Oe7xMvePpEQLTLovoIFZ8Zg3iZ8z8E11pZMqC3g==}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@yuku-codegen/binding-freebsd-x64@0.9.3':
+-    resolution: {integrity: sha512-RGCYSZw3VonreVTpur9iOfnbMngR2/f7UOE7gwcDx5WoHjIhtmTK9EIq9qs78ARdMFAPzKp5OzHljl5QMaGJ7g==}
++  '@yuku-codegen/binding-freebsd-x64@0.9.5':
++    resolution: {integrity: sha512-HqT78WwgHTmp8lwujoUa9CrIortX4DdpuiVC18ZPSGvuuJf4ylpIEI6QrQEM78Zwz3muhAWAOXZ5irdiYY+AyA==}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@yuku-codegen/binding-linux-arm-gnu@0.9.3':
+-    resolution: {integrity: sha512-kjIJIw39GSPTF0hnq+jnM0tR+J5WlariAAWetxMtawNskITDT1ZigaK3YF5hMhDz2mAofaM1t+63qtx+7aXjeg==}
++  '@yuku-codegen/binding-linux-arm-gnu@0.9.5':
++    resolution: {integrity: sha512-QJXwIW6Ms3QIawbcBIedmrmXnfdpuAOjZJ/eAABq5XTzWvSxZ7lutu9W5yIHahlaTaFnBo7ikrVMD1szLTpPUw==}
+     cpu: [arm]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-codegen/binding-linux-arm-musl@0.9.3':
+-    resolution: {integrity: sha512-TVHeVdzaS4ub86URrQufiy4t01ZtdyKDZ5sTPqWFKAUbQJ7rQ0o5vIT+/jCeHQbP+Yf9p5peRdmPbcZewoDNiA==}
++  '@yuku-codegen/binding-linux-arm-musl@0.9.5':
++    resolution: {integrity: sha512-eHbFy3IHGb+IYarrYwAo0yWSEQV3eAmEn6VrsKA6I1Wy1YPJxWqSJlV69JhqsHtJuJlljUIF3ex0y46yaKIu9w==}
+     cpu: [arm]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-codegen/binding-linux-arm64-gnu@0.9.3':
+-    resolution: {integrity: sha512-9aQeeLh1qaCa2GcyzHnwLKGfFrsI+KOyhnh4+fICSq5kyhzCWQfXVCCK4RTEZPLcyuVwfN5Id0JEYavRN4oNTQ==}
++  '@yuku-codegen/binding-linux-arm64-gnu@0.9.5':
++    resolution: {integrity: sha512-ByoJMbySTaDhjAXSu8q6Lh7HKg3YoesXpcT72aYk0Aiw4PCznmY4ybpLTq0RCvp0RIPhFm/6yECFiGBwyCC1nw==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-codegen/binding-linux-arm64-musl@0.9.3':
+-    resolution: {integrity: sha512-TLXA5Hd1nr8VSP2MtxcFddsBIHj+DPpyG5eberEGMATndgG7STlKQmle51MV0MZ8UgsdYM6CybIVpzlCPQwP9w==}
++  '@yuku-codegen/binding-linux-arm64-musl@0.9.5':
++    resolution: {integrity: sha512-gD9vfXIoBw1toSxhO9rgmSu/FEfy3PMznJAxVjIuH8DrWEiDKXmJO0pJKfj1Ltbe/TmtWVZR+TjISqeSIGQzMg==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-codegen/binding-linux-x64-gnu@0.9.3':
+-    resolution: {integrity: sha512-tk0BFbF3Clb9k9biPH3qmr+Qwk24rRM26+HY91hYXmZlzlepZG0scQ6OffZFWtzwKE5JjlZpMdcWj1lTiHbEjA==}
++  '@yuku-codegen/binding-linux-x64-gnu@0.9.5':
++    resolution: {integrity: sha512-BARvdnvqMGjOr5Iel2JH+9H5vAIE0R6H0Z2fsT02xrvmI/1ZXNB8lkuX+ZGevPhZb3zJ9WeC/R8JZstrsUOK5g==}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-codegen/binding-linux-x64-musl@0.9.3':
+-    resolution: {integrity: sha512-xo+pXshsCXruEEkDMbwHqkeTyC4XHb6A6oXr6x2YK3jOMcS5kZz0e26BmTCr40J0nY/K3ysmwG9R1xHygtiuwQ==}
++  '@yuku-codegen/binding-linux-x64-musl@0.9.5':
++    resolution: {integrity: sha512-x8flcevS1fbb7ESrmpOY/pON4eInSaE/7Ktjqx2udOE2W33BNSZmJuwpyUgo54AoHNqrcaM7szqydyJn5fNvew==}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-codegen/binding-win32-arm64@0.9.3':
+-    resolution: {integrity: sha512-70gAQo6HZzMgIJTjeMZOEO2XaRj4GcNGP/n81R9tXQv0x8d4ZHnZDv+ygeWfHo+xchAUPwpnrVZA4p6RhJa3GQ==}
++  '@yuku-codegen/binding-win32-arm64@0.9.5':
++    resolution: {integrity: sha512-KOL/rBatWqH4ZpCNoF8ZtSNdOJbAxBJLmk/VeRciepGROPTbPum1A9t67GpFgOU7qrkUWlPJdJ+KHKbvbmOt+w==}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@yuku-codegen/binding-win32-x64@0.9.3':
+-    resolution: {integrity: sha512-7Hz3NGlq6qBBR8zMEk6GMZivofNjnYZpMXSoUwUgz9Ur2LaivuP23HQh0ern+T6HVkTJEvilw4VJrg1rX1Ugcg==}
++  '@yuku-codegen/binding-win32-x64@0.9.5':
++    resolution: {integrity: sha512-FxENahEjWSan59Syh/us/Kf4wNq8qrJLFJ3R2N4Oiwtb6yNdz/rWLNTIoNSssnsp7IoWJdUP6o/Z8ppg7lXMcg==}
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@yuku-parser/binding-android-arm64@0.9.3':
+-    resolution: {integrity: sha512-z3tDGTaUXD5Q4IuebFOY/QHxhR/SqujMhkMv9C5bh25upyFEXdafp0MsXQIIheWhVZzn5VMOniyxFni/7s9LgQ==}
++  '@yuku-parser/binding-android-arm64@0.9.5':
++    resolution: {integrity: sha512-A2JCFCSHfnficqYEw4Iujpx7XrkMM3UfFcgJFmYpZSo9zM4nyhmdIIE0FogSduuU60lhM0/UcfuUBXIVNBMlGQ==}
+     cpu: [arm64]
+     os: [android]
+ 
+-  '@yuku-parser/binding-darwin-arm64@0.9.3':
+-    resolution: {integrity: sha512-hzKvKSKS7z3ufnu1VkQYEoxmS6A5uNnkwukKnc2atxpWdq648nLVOqut4h1jUXjbM2WcoTfuZLF6AHAGFf8cmg==}
++  '@yuku-parser/binding-darwin-arm64@0.9.5':
++    resolution: {integrity: sha512-3PiyU+Eare4YuKaQ22N98/yAiROPY5o/NQJHraICzDvk4pgS+m+bgLKOvkGBRn33OnV95Vdv1Mn38b+MQHpULQ==}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@yuku-parser/binding-darwin-x64@0.9.3':
+-    resolution: {integrity: sha512-OM2PiVlPATvzlj/KGHNlu+t8FC3YzM5joVNjhsz/EaigQ8x2UUQ1Q0agQLiv5GZ2L8TSzrLUwBCZ7YOvP8q+tw==}
++  '@yuku-parser/binding-darwin-x64@0.9.5':
++    resolution: {integrity: sha512-blFMAFI7AInI83XaiOF8cIeiRM46Nz9EfpZtZPRLbKxSA9aAr5v8aHYpmfN6NoyXxAv/10pwS4gsAuc1W6fy5Q==}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@yuku-parser/binding-freebsd-x64@0.9.3':
+-    resolution: {integrity: sha512-WMn9M4LHNVysGNwsAJ9gpRPqQIW2lcPrDNGcyk0agx3IYqCJq1MQugh6Be8Otc5U08eGdE39o8Kx9YWJmXz7GA==}
++  '@yuku-parser/binding-freebsd-x64@0.9.5':
++    resolution: {integrity: sha512-TsNuL4qsZdO0tHp5GW43Y5fHeLPpPHA675wdcPNTcdq2ZO5AvsQWFFoiDg8CH4oBktfsQ9tdvKhjLnLYwKvp4g==}
+     cpu: [x64]
+     os: [freebsd]
+ 
+-  '@yuku-parser/binding-linux-arm-gnu@0.9.3':
+-    resolution: {integrity: sha512-vqKjwiyW1FWvbykYMEQIcAJwA17WxK3rxxqDuyCvQwcNVaLEUxI4BXiUdlF3kHucc7MnoFQhoRPkySgOzlLM+Q==}
++  '@yuku-parser/binding-linux-arm-gnu@0.9.5':
++    resolution: {integrity: sha512-b0afYK5gHeV8RdmOcqAlgM8ONsye4cax4DMnIBaoJyPMd1UTGvTbpkqQcPVdhmHlcfcGVGMV1laeVovlr/dscw==}
+     cpu: [arm]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-parser/binding-linux-arm-musl@0.9.3':
+-    resolution: {integrity: sha512-qohilhYOT+zkt2gYzym4F1T6BzRdvPqS9/sFB03pmnVV8LrvjOXVsGwEBAa3CEvzJKhAZjdTmVz7zsVdjyHWLg==}
++  '@yuku-parser/binding-linux-arm-musl@0.9.5':
++    resolution: {integrity: sha512-fD3lKzl+r6j6n8DwiMY53qnh5DLqD8KJjCp+NbVud54Nnh3Q9Wprqss3YzyMHP3NSJk663Wlg1E1X5qOuFVFig==}
+     cpu: [arm]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-parser/binding-linux-arm64-gnu@0.9.3':
+-    resolution: {integrity: sha512-tvTIyUvTGkeee68i4JIo9o27As+Ug6LXOZvElGgFbTs6+KBdb5LGhvugaIQljdfIsm2XnIbOLG6OnQSXHMLB9w==}
++  '@yuku-parser/binding-linux-arm64-gnu@0.9.5':
++    resolution: {integrity: sha512-aRU/aCphV1MWCl/lvI6NX8LgucHQ68Fx+vz7NBb/5MEr2EuzCxiPOQqeFcMdWh+2AED/p0AvAREch0c+cSnlhA==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-parser/binding-linux-arm64-musl@0.9.3':
+-    resolution: {integrity: sha512-OWZBHW1wuChBpFlrF+On1yiBcFPMRrj2g0VKsM/PCBGffu1OM0ORkS+vLS3Snu6wYwndM5Dd9Ctvux6eUlrQjA==}
++  '@yuku-parser/binding-linux-arm64-musl@0.9.5':
++    resolution: {integrity: sha512-5+Guro0l8H473YXlEjVNBRLN/IbPbJdnQh1zo0OLt49xxnON+XMJRRaEyTOTfkn9QSRg0+BhEKGR4W9Gu2uZJQ==}
+     cpu: [arm64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-parser/binding-linux-x64-gnu@0.9.3':
+-    resolution: {integrity: sha512-/tbk1h0dlADOCngbiQO9V3SHwBIJkoGBq8BDEraSw2CC3nGxPEPTCCYUDp5738Ij2FxVwy1FWVuhFkHvpMrPbQ==}
++  '@yuku-parser/binding-linux-x64-gnu@0.9.5':
++    resolution: {integrity: sha512-pwwSyV9q+GlvzSXlsMZBMlgk22L5bud714/vqZCdeUTivzeUVltQzUaf3IQXOGXdpc59JYTeuMCtbGquaAUoCA==}
+     cpu: [x64]
+     os: [linux]
+     libc: [glibc]
+ 
+-  '@yuku-parser/binding-linux-x64-musl@0.9.3':
+-    resolution: {integrity: sha512-u3+0sCso/mcjDvtc3866D2giV7l34PDyDVBkMesAWa3DWbIWPlybehi2SSnmScgArV22ctqSSgUzdBBVJ6zYAg==}
++  '@yuku-parser/binding-linux-x64-musl@0.9.5':
++    resolution: {integrity: sha512-z18j6JN3lBHH8vzN7gG1M8fI0nlgItSfnC9PfbmUbt97iHViKfw2iA2G9fGwRMe5LyPRZBrejIlapbygPbpdaw==}
+     cpu: [x64]
+     os: [linux]
+     libc: [musl]
+ 
+-  '@yuku-parser/binding-win32-arm64@0.9.3':
+-    resolution: {integrity: sha512-xnGEvdhyjRkXozHtpXVpEEkyGZWAxJ3RoILv7XRV5SvTEztaTCk5GQyfcOzI9An/EJtcL4ERCI8QmS0TpDPJiA==}
++  '@yuku-parser/binding-win32-arm64@0.9.5':
++    resolution: {integrity: sha512-s6Gwttb1dQvtPX6Bgkw+UPC9IO3UBDXc6Zezog8MMgvu3UfJBBB9TQqKBX/2quu0Eyh+lLSAyNlIyyecaagUPg==}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@yuku-parser/binding-win32-x64@0.9.3':
+-    resolution: {integrity: sha512-N5eShGcuwnrXEprePFmEjtng6acZmtnC4zgazK9xxkavcx1q1uX8Nz8lU5RS973EMlNr902cIc6Cd2D4tqZDBg==}
++  '@yuku-parser/binding-win32-x64@0.9.5':
++    resolution: {integrity: sha512-FrERt9YWatY3bJfSUdi4YWY+6iQcyo3MzCC821BxlWM5TFZEHijnpz/bknR79VHlXY/9CvXz8ZlaAGPsTtN3nw==}
+     cpu: [x64]
+     os: [win32]
+ 
+-  '@yuku-toolchain/types@0.9.3':
+-    resolution: {integrity: sha512-rFE+5P4g2wxko5C85MugJOlVjBHEQq87dIkhLkniLXLp63PEtgaFjD954i5HXlfnyzLxPcZHsSOVDVgmo1HToA==}
++  '@yuku-toolchain/types@0.9.5':
++    resolution: {integrity: sha512-KiuLNNgX9uNealaWAR+G3/cMXnRk9x4TY2EkYe/KIag+UPdwiA0RRf1hr1WAxzTP8KGzCTkqUdLPvqh32sEO3w==}
+ 
+   accepts@2.0.0:
+     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
+@@ -1424,8 +1411,8 @@ packages:
+     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
+     engines: {node: '>=12'}
+ 
+-  ast-v8-to-istanbul@1.0.5:
+-    resolution: {integrity: sha512-UPAgKJFSEGMWSDr3LX4tqnAb4f7KGT8O40Tyx8wbYmmZ/yn58lNCm8h3svs3eXgiGd5AXxz8NDOvXWvicq+rJA==}
++  ast-v8-to-istanbul@1.0.6:
++    resolution: {integrity: sha512-fvpl29helSO2w/z7utIbrkNXILdrLwDwAMH2I/zPKlGf5244+gf+B4cyS1sANcrPY2h+hWCGSgC8N61s/+AF9A==}
+ 
+   automd@0.4.3:
+     resolution: {integrity: sha512-5WJNEiaNpFm8h0OmQzhnESthadUQhJwQfka/TmmJpMudZ8qU9MZao9p0G1g7WYA9pVTz6FMMOSvxnfQ9g8q9vQ==}
+@@ -1455,12 +1442,12 @@ packages:
+       magicast:
+         optional: true
+ 
+-  c12@4.0.0-beta.5:
+-    resolution: {integrity: sha512-yWGCPCQGJeFq4R0mFg5HOhC3Rg+B0PCdM+ldXWUhughoGgeeq8/tjRmXh4/lmhKWyhf+KOFxB/JMXf0Yv1Fd5A==}
++  c12@4.0.0-rc.1:
++    resolution: {integrity: sha512-08UYGAVLTLqgiCzWNMNdBHdiWKzhIVwcapySI11mFTBacL5bP0dj1Vr7IcwOH0wcUTgMzm1VCh+by922viKWig==}
+     peerDependencies:
+       chokidar: ^5
+       dotenv: '*'
+-      giget: '*'
++      giget: '>=3.1.0'
+       jiti: '*'
+       magicast: '*'
+     peerDependenciesMeta:
+@@ -1507,6 +1494,9 @@ packages:
+   confbox@0.2.4:
+     resolution: {integrity: sha512-ysOGlgTFbN2/Y6Cg3Iye8YKulHw+R2fNXHrgSmXISQdMnomY6eNDprVdW9R5xBguEqI954+S6709UyiO7B+6OQ==}
+ 
++  confbox@0.3.1:
++    resolution: {integrity: sha512-cKUSoKa8YxFZZSmraVi7onONx3amu77ngK3kGpsYHDH7drPwCRkQE1RYMPlLRrMtnciRj274XNRxcHxnKmDSnA==}
++
+   connect@3.7.0:
+     resolution: {integrity: sha512-ZqRXc+tZukToSNmh5C2iWMSoV3X1YUcPbqEM4DkEG5tNQXrQUZCNVGGv3IuicnkMtPfGf3Xtp8WCXs295iQ1pQ==}
+     engines: {node: '>= 0.10.0'}
+@@ -1530,9 +1520,6 @@ packages:
+   convert-gitmoji@0.1.5:
+     resolution: {integrity: sha512-4wqOafJdk2tqZC++cjcbGcaJ13BZ3kwldf06PTiAQRAB76Z1KJwZNL1SaRZMi2w1FM9RYTgZ6QErS8NUl/GBmQ==}
+ 
+-  convert-source-map@2.0.0:
+-    resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+-
+   cookie-es@3.1.1:
+     resolution: {integrity: sha512-UaXxwISYJPTr9hwQxMFYZ7kNhSXboMXP+Z3TRX6f1/NyaGPfuNUZOWP1pUEb75B2HjfklIYLVRfWiFZJyC6Npg==}
+ 
+@@ -1683,8 +1670,8 @@ packages:
+     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
+     engines: {node: '>= 0.6'}
+ 
+-  exact-mirror@1.2.4:
+-    resolution: {integrity: sha512-lNLw824fkSqcHSxNIh8skA7gHO5X5Q8UUllXuRedtJCU8cJwKOT3XPQY8GfhveatFMO4nCK8+oEXsLGErMWC/Q==}
++  exact-mirror@1.2.6:
++    resolution: {integrity: sha512-EGx81nhFP1GE94coJsz94FLzdxWrnkNCJdfdX44rbd7pVcAotWzDlBJUC7yy1Ae7d7dYKpoTtZ1jCAIz2IVtfA==}
+     peerDependencies:
+       typebox: '>= 1.1.0'
+     peerDependenciesMeta:
+@@ -1721,8 +1708,8 @@ packages:
+   fetchdts@0.2.0:
+     resolution: {integrity: sha512-PJb4ZTGT2/wK78RmVrxZITStWabhZlKBsL52VOgq+c7clEkdHdEB+0rtzrXCbZJqeYJj+IwNWYqB5/G6vouA6A==}
+ 
+-  file-type@22.0.2:
+-    resolution: {integrity: sha512-0H8TsCUGBLx+V5adH3EY52hTAcyLKbV1D4gq5cIOJ6DnQAHeV9Z2Hhuc5CoBX4YmvB2oL+JIC84z0qO7JsCoNw==}
++  file-type@22.1.0:
++    resolution: {integrity: sha512-fbvf9u6jnHWr1EP6V8R99E9iLMhNLXgZkUzWBiPpJ5/89UJ/Atuxjn5YXR+XaZWo2hc2/8mGfTez+NDAgOcpLA==}
+     engines: {node: '>=22'}
+ 
+   finalhandler@1.1.2:
+@@ -1785,8 +1772,8 @@ packages:
+       ocache:
+         optional: true
+ 
+-  h3@2.0.1-rc.30:
+-    resolution: {integrity: sha512-HMXmqihu5EYR6nzXvhI5FBTYONq6z5Haki1sf0Jxbc1QTJUmozu0oe74NUMrfaaaC1mH5XTzjcW7S1tNNVZo0A==}
++  h3@2.0.1-rc.31:
++    resolution: {integrity: sha512-AG7qZzF99a0BSYoXT3evJgIhwSIUKow7R+hwkLRZS06WJ9nbSb7QXUDgs1ByBjp6svTvl++N/GKA7I9YPz9cQQ==}
+     engines: {node: '>=20.11.1'}
+     hasBin: true
+     peerDependencies:
+@@ -1798,14 +1785,10 @@ packages:
+       ocache:
+         optional: true
+ 
+-  happy-dom@20.13.2:
+-    resolution: {integrity: sha512-VC9HoEaT3Jf3K/1g/GjMYGAZCCg+ULgGVcXJlAeSzdTj8mIoPJRp14KVclP5gpUcF/kauuaVB2ri2/WxXbl4vg==}
++  happy-dom@20.14.5:
++    resolution: {integrity: sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ==}
+     engines: {node: '>=20.0.0'}
+ 
+-  has-flag@4.0.0:
+-    resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
+-    engines: {node: '>=8'}
+-
+   has-symbols@1.1.0:
+     resolution: {integrity: sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ==}
+     engines: {node: '>= 0.4'}
+@@ -1814,13 +1797,10 @@ packages:
+     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
+     engines: {node: '>= 0.4'}
+ 
+-  hono@4.13.5:
+-    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
++  hono@4.13.7:
++    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
+     engines: {node: '>=16.9.0'}
+ 
+-  html-escaper@2.0.2:
+-    resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
+-
+   http-errors@2.0.1:
+     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
+     engines: {node: '>= 0.8'}
+@@ -1864,18 +1844,6 @@ packages:
+     resolution: {integrity: sha512-e6rvdUCiQCAuumZslxRJWR/Doq4VpPR82kqclvcS0efgt430SlGIk05vdCN58+VrzgtIcfNODjozVielycD4Sw==}
+     engines: {node: '>=16'}
+ 
+-  istanbul-lib-coverage@3.2.2:
+-    resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
+-    engines: {node: '>=8'}
+-
+-  istanbul-lib-report@3.0.1:
+-    resolution: {integrity: sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==}
+-    engines: {node: '>=10'}
+-
+-  istanbul-reports@3.2.0:
+-    resolution: {integrity: sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==}
+-    engines: {node: '>=8'}
+-
+   jiti@2.7.0:
+     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
+     hasBin: true
+@@ -1966,15 +1934,11 @@ packages:
+   magic-string@0.30.21:
+     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+ 
+-  magic-string@1.2.3:
+-    resolution: {integrity: sha512-Bpb0W2TbLKOZ7vJnOUnVRGq3WL2p+ISV29M6hYPL1AFCpyKZpdr5ytiXoTSSxRVhg8YW7f65+6gbG8WG6PCa/g==}
+-
+-  magicast@0.5.4:
+-    resolution: {integrity: sha512-llBEhWm1SacoRwgHUoQJYtwp4PBLF4faQi5TCpIGyGs9n4y5+juI0tDgyKIfpqxckRHaHzouUEph3THklWh03w==}
++  magic-string@1.3.1:
++    resolution: {integrity: sha512-rm91zr2Ou+XueDTohjQQjdQEcYM6zVi8KVUCG8Ec3vHwUEKrhSdCNyfuIywkA6hcCAteIn0ZOtAHA6eGpiX+Pg==}
+ 
+-  make-dir@4.0.0:
+-    resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
+-    engines: {node: '>=10'}
++  magicast@0.5.5:
++    resolution: {integrity: sha512-UicdXN8zQ3JHlxVq+28afMXPr1z7WNY6+7EJnzTdQWkTAlMLF5fNCCKxJHBQwGaNGR11581EiQmQzx73+MvszA==}
+ 
+   math-intrinsics@1.1.0:
+     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
+@@ -2032,8 +1996,8 @@ packages:
+   ms@2.1.3:
+     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
+ 
+-  nanoid@3.3.18:
+-    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
++  nanoid@3.3.19:
++    resolution: {integrity: sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==}
+     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+     hasBin: true
+ 
+@@ -2041,6 +2005,9 @@ packages:
+     resolution: {integrity: sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==}
+     engines: {node: '>=18'}
+ 
++  nf3@0.3.24:
++    resolution: {integrity: sha512-HxLK4bo+5jNsEETZp4w3tJblHOA9MCBY14IN9nZJJV8JDxt9yNIYxuBuLMjTAR5GFa3HL61+8VQDUrXv3/C8fw==}
++
+   node-addon-api@7.1.1:
+     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+ 
+@@ -2051,12 +2018,12 @@ packages:
+     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
+     engines: {node: '>= 0.4'}
+ 
+-  obug@2.1.4:
+-    resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
++  obug@2.2.1:
++    resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
+     engines: {node: '>=12.20.0'}
+ 
+-  obuild@0.4.39:
+-    resolution: {integrity: sha512-WwPuvSqDtqu80SqKvRtLJJb5MMFDaNVrBioWx/rKGXqtUWezSpjQBazSXYNG/RkMdYAunomctUBnUjmTgpJnwg==}
++  obuild@0.4.40:
++    resolution: {integrity: sha512-7S9gGoKr0TOUNTpIvppwZ9hAtujcqnED80fVEVzTdZzUyziLUIiyFnH0vU2MO1Q0zDknMRExbXHGAH99LLhc+Q==}
+     hasBin: true
+ 
+   ocache@0.3.0:
+@@ -2086,12 +2053,12 @@ packages:
+   openapi-types@12.1.3:
+     resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
+ 
+-  oxc-parser@0.147.0:
+-    resolution: {integrity: sha512-5xaug6t7GfV3BO5Iv+xHW1rmQkDEQ3BEu3L8g3InsvWO5i8CYGc4tCZ2X985QcwWNycFJam+aOns6Nr2XAThTA==}
++  oxc-parser@0.149.0:
++    resolution: {integrity: sha512-iuirONeHJBp6dFuuZKvkCfFvBiF0uFmojIQooGtazR9+GvcwoayGMtal1+cvDUnEw2k435GBish01HOn5iyVqQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+ 
+-  oxfmt@0.65.0:
+-    resolution: {integrity: sha512-SgS5VgnP42T0zl3zWD+xoH8FCqg1SAFnSRoOT/qeoa6gxcYIqrDMOmcXIg/EWSN92Du4ogB4riuKhKd6Y4CGhw==}
++  oxfmt@0.67.0:
++    resolution: {integrity: sha512-vV7sSiPsaO0mSxdoUdayipVDFPzW/UQ+hrezEHa20+Tx1dnMdZLSRHMT0PdS67FFbhd74M1n08asW21aLGeCrA==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     hasBin: true
+     peerDependencies:
+@@ -2103,8 +2070,8 @@ packages:
+       vite-plus:
+         optional: true
+ 
+-  oxlint@1.81.0:
+-    resolution: {integrity: sha512-HyrJYqeoOCL0iqaLEzGewGT48ZX99P3hxYh8udAF9RGGIghSamkXE4ClUyBpEDNqasamThgmlPbuMOe7SAZmHg==}
++  oxlint@1.82.0:
++    resolution: {integrity: sha512-+iFM1BGw1ntYJt3QngbJmjbrGxPaKMUADOXOijpWGnYcBPq8YZnQftSS1C+pVcDYy9YxqDVJKQqQkTazTQMboQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     hasBin: true
+     peerDependencies:
+@@ -2143,11 +2110,11 @@ packages:
+   pkg-types@1.3.1:
+     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
+ 
+-  pkg-types@2.3.1:
+-    resolution: {integrity: sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg==}
++  pkg-types@2.3.3:
++    resolution: {integrity: sha512-j/lCFdcppV0JxWpCEITdbDltBxPP6cHT+yNJ6Go2OgoSA9518X847X9z0p6LtA4Nc16+eQzCZjRrWanTGvHJ5w==}
+ 
+-  postcss@8.5.26:
+-    resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
++  postcss@8.5.28:
++    resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
+     engines: {node: ^10 || ^12 || >=14}
+ 
+   proxy-addr@2.0.7:
+@@ -2166,16 +2133,16 @@ packages:
+     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
+     engines: {node: '>= 0.10'}
+ 
+-  rc9@3.0.1:
+-    resolution: {integrity: sha512-gMDyleLWVE+i6Sgtc0QbbY6pEKqYs97NGi6isHQPqYlLemPoO8dxQ3uGi0f4NiP98c+jMW6cG1Kx9dDwfvqARQ==}
++  rc9@3.1.0:
++    resolution: {integrity: sha512-ufjkNVzbRHKcCOmTahZkmVsyc3W+MSk3jY03m+a7tGHkIsdVMG9l10/3HvFbWkkKzY5VFp3pkRsIo/UYgmFL7Q==}
+ 
+-  react-dom@19.2.8:
+-    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
++  react-dom@19.3.0:
++    resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
+     peerDependencies:
+-      react: ^19.2.8
++      react: ^19.3.0
+ 
+-  react@19.2.8:
+-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
++  react@19.3.0:
++    resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
+     engines: {node: '>=0.10.0'}
+ 
+   readdirp@5.1.1:
+@@ -2185,8 +2152,8 @@ packages:
+   resolve-pkg-maps@1.0.0:
+     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
+ 
+-  rolldown-plugin-dts@0.28.4:
+-    resolution: {integrity: sha512-yNg16bsWNk1MQ0Pkf3bAPFoZRqSWtxhiTHxKKHCoTZIwwyWerA5pX1MOogb1mjjwusVN2/kd4pK08iQ8M8hFIw==}
++  rolldown-plugin-dts@0.28.5:
++    resolution: {integrity: sha512-yYd3C9CeJwqjOc9X23m0Tyxcqic491uLZlfg51szT287S8zCCqLR2uoySoElgqy2CLn7PdXcEo1dlkBs4n1WHg==}
+     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
+     peerDependencies:
+       '@typescript/native-preview': '*'
+@@ -2204,8 +2171,8 @@ packages:
+       vue-tsc:
+         optional: true
+ 
+-  rolldown@1.2.7:
+-    resolution: {integrity: sha512-g0EtLvBjTUB7jhyV0S/TCup3v/XSVl45vUIGbOGU4QPiyjTenCe4mKuFvW9fEgYmS2Fo42AUssRmNuMziXdrig==}
++  rolldown@1.2.8:
++    resolution: {integrity: sha512-Z67nTmhZe7anqnM/EjI392w5i/ANUinjip7QYsOyN37oayduxt3ksdX0hf5OOamkAd53BiIHfbfSzfUmzKFQqQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     hasBin: true
+ 
+@@ -2223,8 +2190,8 @@ packages:
+   safer-buffer@2.1.2:
+     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+ 
+-  scheduler@0.27.0:
+-    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
++  scheduler@0.28.0:
++    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
+ 
+   scule@1.3.0:
+     resolution: {integrity: sha512-6FtHJEvt+pVMIB9IBY+IcCJ6Z5f1iQnytgyfKMhDKgmzYG+TeH/wx1y3l27rshSbLiSanrR9ffZDrEsmjlQF2g==}
+@@ -2273,8 +2240,8 @@ packages:
+     engines: {node: '>=20.16.0'}
+     hasBin: true
+ 
+-  srvx@1.0.2:
+-    resolution: {integrity: sha512-K4wqSN8sF8aJSng0kvGaTYuD6JGD97YW0RlWFhXUfrSBBmE8dUkLOwf3e5OxipPRnLwGWTlaldgFFhAQ2ue/2Q==}
++  srvx@1.0.5:
++    resolution: {integrity: sha512-KvSKRpgPG/oaq3cyT614OQ2bAa7DynuGamivCZeoZzIUULOdbQz6wUtnnVuC4+DCx2Zglzo8v5gBYmWIWYhDxA==}
+     engines: {node: '>=20.16.0'}
+     hasBin: true
+ 
+@@ -2299,12 +2266,9 @@ packages:
+     resolution: {integrity: sha512-ki4hZQfh5rX0QDLLkOCj+h+CVNkqmp/CMf8v8kZpkNVK6jGQooMytqzLZYUVYIZcFZ6yDB70EfD8POcFXiF5oA==}
+     engines: {node: '>=18'}
+ 
+-  supports-color@7.2.0:
+-    resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
+-    engines: {node: '>=8'}
+-
+-  tinybench@2.9.0:
+-    resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
++  tinybench@6.1.4:
++    resolution: {integrity: sha512-9APumHG7r4yOk4X4WlkmE71aZcv1gvin1czO3OQ1U9iJcFA5Ja/ygyb0vPOVHTthFozUYs8CLoLUlM8grb2lTQ==}
++    engines: {node: '>=20.0.0'}
+ 
+   tinyexec@1.3.0:
+     resolution: {integrity: sha512-QKAl9m8gWWGHV8jZcPeym6j+XULi6tOf1mT83WYJ4Lk2ytW/uwAWkrP0uFsdoYMdueVJ0qs26wZ+23xeB4ibNQ==}
+@@ -2314,8 +2278,8 @@ packages:
+     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
+     engines: {node: '>=12.0.0'}
+ 
+-  tinypool@2.1.0:
+-    resolution: {integrity: sha512-Pugqs6M0m7Lv1I7FtxN4aoyToKg1C4tu+/381vH35y8oENM/Ai7f7C4StcoK4/+BSw9ebcS8jRiVrORFKCALLw==}
++  tinypool@2.1.2:
++    resolution: {integrity: sha512-9YodfrxS9g9IbFr/KOjE5bAeJ0p61n3bW6mqvy0jtoeKd1kTW1Cxm0oulm6KX2lyM9Gl6WIe8nEbY7LWv5ZJww==}
+     engines: {node: ^20.0.0 || >=22.0.0}
+ 
+   tinyrainbow@3.1.1:
+@@ -2346,8 +2310,8 @@ packages:
+     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
+     engines: {node: '>=18'}
+ 
+-  undici-types@8.3.0:
+-    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
++  undici-types@8.9.0:
++    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
+ 
+   unpipe@1.0.0:
+     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
+@@ -2365,13 +2329,13 @@ packages:
+     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
+     engines: {node: '>= 0.8'}
+ 
+-  vite@8.2.2:
+-    resolution: {integrity: sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==}
++  vite@8.3.0:
++    resolution: {integrity: sha512-lhZBVvEHefgE+HQZC9O7EBJgCU/nVzFNl7vkS4RE0APtWLP02/8QVIkQtzBxPquh7lq5/78NHipTj7ODQ6XuyQ==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+     hasBin: true
+     peerDependencies:
+       '@types/node': ^20.19.0 || >=22.12.0
+-      '@vitejs/devtools': ^0.4.0 || ^0.5.0
++      '@vitejs/devtools': ^0.7.1
+       esbuild: ^0.27.0 || ^0.28.0
+       jiti: '>=1.21.0'
+       less: ^4.0.0
+@@ -2408,23 +2372,23 @@ packages:
+       yaml:
+         optional: true
+ 
+-  vitest@4.1.11:
+-    resolution: {integrity: sha512-fhACrNXUidIbGSBr5FlbuBkO7VWC1ZyLl0DO4CU2DrQoAPxX84Ysxs+HeGQpii5lZWV1Q4gBZTTu49mF+A6Edw==}
+-    engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
++  vitest@5.0.0:
++    resolution: {integrity: sha512-gpsMNoRhMjMktVxPtstOH4/PJuPyovVaMDr4oDilXaGH1EcqM2OE96SoHT2VIQ6fTGtTjqmHDrEu2X9RQiXf8Q==}
++    engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
+     hasBin: true
+     peerDependencies:
+       '@edge-runtime/vm': '*'
+       '@opentelemetry/api': ^1.9.0
+-      '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
+-      '@vitest/browser-playwright': 4.1.11
+-      '@vitest/browser-preview': 4.1.11
+-      '@vitest/browser-webdriverio': 4.1.11
+-      '@vitest/coverage-istanbul': 4.1.11
+-      '@vitest/coverage-v8': 4.1.11
+-      '@vitest/ui': 4.1.11
++      '@types/node': ^22.0.0 || >=24.0.0
++      '@vitest/browser-playwright': 5.0.0
++      '@vitest/browser-preview': 5.0.0
++      '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
++      '@vitest/coverage-istanbul': 5.0.0
++      '@vitest/coverage-v8': 5.0.0
++      '@vitest/ui': 5.0.0
+       happy-dom: '*'
+       jsdom: '*'
+-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
++      vite: ^6.4.0 || ^7.0.0 || ^8.0.0
+     peerDependenciesMeta:
+       '@edge-runtime/vm':
+         optional: true
+@@ -2477,17 +2441,17 @@ packages:
+     resolution: {integrity: sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw==}
+     engines: {node: '>=18'}
+ 
+-  yuku-ast@0.9.3:
+-    resolution: {integrity: sha512-Kt0PXlPCXdKF1fWFTl7N3DaxsVk6DHF8VAXHJMkwPtJnWYgbx20pYgGSweuC/86mIM7k1NUITQ4JffgOLUWTCw==}
++  yuku-ast@0.9.5:
++    resolution: {integrity: sha512-Q8qW8WwQnN5Cm0ZZivdRIfv0sRLTjUq0YumXJkw8CYN1aCdICH9rk4C47/4n6kA5EqDtlj+F608twoTSV2MwdQ==}
+ 
+-  yuku-codegen@0.9.3:
+-    resolution: {integrity: sha512-7oTWwetHiMSyrVPFb8089lBBqkU1gaeQZyumNBJ0t5hocMQRaWhnMeSXTz7J1xm/rcw9+ePsajORdZbub2C35w==}
++  yuku-codegen@0.9.5:
++    resolution: {integrity: sha512-zGUVyDpSK4b6c9B0yyxi2P0wujn1XZTbG9dCb7d6gyAoP63EMgyLzUwPUvwxPG5jgYqhlI7w+S3oCyapqGr4PA==}
+ 
+-  yuku-parser@0.9.3:
+-    resolution: {integrity: sha512-96wPoHnwaXfkZv7UIOUkDb+s7ZH8lv8Qtg+MxdvHUV1LFa5jV9iKOaams1942YQt+krFQrWiD6lSg2ermv5kHA==}
++  yuku-parser@0.9.5:
++    resolution: {integrity: sha512-IBnAdNVMswWbJcM7woPluOudectJzFjJ1N8jVRxP9Uq4CIv5hZdBIcdmtRbFDYF/Ph2j2gVup4YJ4N9mh0jYFA==}
+ 
+-  zod@4.5.4:
+-    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
++  zod@4.6.4:
++    resolution: {integrity: sha512-AXSD6hvGdvRjajG/l1cC+d6IrhH+sjmPKtYeQdJIK8MFJl3LyClzS+o/YsVC+zQZPupAaeH5skwwm8YqYH7BqA==}
+ 
+ snapshots:
+ 
+@@ -2588,10 +2552,10 @@ snapshots:
+   '@esbuild/win32-x64@0.28.2':
+     optional: true
+ 
+-  '@happy-dom/global-registrator@20.13.2':
++  '@happy-dom/global-registrator@20.14.5':
+     dependencies:
+-      '@types/node': 26.4.1
+-      happy-dom: 20.13.2
++      '@types/node': 26.5.1
++      happy-dom: 20.14.5
+     transitivePeerDependencies:
+       - bufferutil
+       - utf-8-validate
+@@ -2607,179 +2571,177 @@ snapshots:
+ 
+   '@mitata/counters@0.0.8': {}
+ 
+-  '@oxc-parser/binding-android-arm-eabi@0.147.0':
++  '@oxc-parser/binding-android-arm-eabi@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-android-arm64@0.147.0':
++  '@oxc-parser/binding-android-arm64@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-darwin-arm64@0.147.0':
++  '@oxc-parser/binding-darwin-arm64@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-darwin-x64@0.147.0':
++  '@oxc-parser/binding-darwin-x64@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-freebsd-x64@0.147.0':
++  '@oxc-parser/binding-freebsd-x64@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-arm-gnueabihf@0.147.0':
++  '@oxc-parser/binding-linux-arm-gnueabihf@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-arm-musleabihf@0.147.0':
++  '@oxc-parser/binding-linux-arm-musleabihf@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-arm64-gnu@0.147.0':
++  '@oxc-parser/binding-linux-arm64-gnu@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-arm64-musl@0.147.0':
++  '@oxc-parser/binding-linux-arm64-musl@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-ppc64-gnu@0.147.0':
++  '@oxc-parser/binding-linux-ppc64-gnu@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-riscv64-gnu@0.147.0':
++  '@oxc-parser/binding-linux-riscv64-gnu@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-riscv64-musl@0.147.0':
++  '@oxc-parser/binding-linux-riscv64-musl@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-s390x-gnu@0.147.0':
++  '@oxc-parser/binding-linux-s390x-gnu@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-x64-gnu@0.147.0':
++  '@oxc-parser/binding-linux-x64-gnu@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-linux-x64-musl@0.147.0':
++  '@oxc-parser/binding-linux-x64-musl@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-openharmony-arm64@0.147.0':
++  '@oxc-parser/binding-openharmony-arm64@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-win32-arm64-msvc@0.147.0':
++  '@oxc-parser/binding-win32-arm64-msvc@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-win32-ia32-msvc@0.147.0':
++  '@oxc-parser/binding-win32-ia32-msvc@0.149.0':
+     optional: true
+ 
+-  '@oxc-parser/binding-win32-x64-msvc@0.147.0':
++  '@oxc-parser/binding-win32-x64-msvc@0.149.0':
+     optional: true
+ 
+-  '@oxc-project/types@0.147.0': {}
++  '@oxc-project/types@0.149.0': {}
+ 
+-  '@oxc-project/types@0.148.0': {}
+-
+-  '@oxfmt/binding-android-arm-eabi@0.65.0':
++  '@oxfmt/binding-android-arm-eabi@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-android-arm64@0.65.0':
++  '@oxfmt/binding-android-arm64@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-darwin-arm64@0.65.0':
++  '@oxfmt/binding-darwin-arm64@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-darwin-x64@0.65.0':
++  '@oxfmt/binding-darwin-x64@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-freebsd-x64@0.65.0':
++  '@oxfmt/binding-freebsd-x64@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-arm-gnueabihf@0.65.0':
++  '@oxfmt/binding-linux-arm-gnueabihf@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-arm-musleabihf@0.65.0':
++  '@oxfmt/binding-linux-arm-musleabihf@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-arm64-gnu@0.65.0':
++  '@oxfmt/binding-linux-arm64-gnu@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-arm64-musl@0.65.0':
++  '@oxfmt/binding-linux-arm64-musl@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-ppc64-gnu@0.65.0':
++  '@oxfmt/binding-linux-ppc64-gnu@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-riscv64-gnu@0.65.0':
++  '@oxfmt/binding-linux-riscv64-gnu@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-riscv64-musl@0.65.0':
++  '@oxfmt/binding-linux-riscv64-musl@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-s390x-gnu@0.65.0':
++  '@oxfmt/binding-linux-s390x-gnu@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-x64-gnu@0.65.0':
++  '@oxfmt/binding-linux-x64-gnu@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-linux-x64-musl@0.65.0':
++  '@oxfmt/binding-linux-x64-musl@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-openharmony-arm64@0.65.0':
++  '@oxfmt/binding-openharmony-arm64@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-win32-arm64-msvc@0.65.0':
++  '@oxfmt/binding-win32-arm64-msvc@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-win32-ia32-msvc@0.65.0':
++  '@oxfmt/binding-win32-ia32-msvc@0.67.0':
+     optional: true
+ 
+-  '@oxfmt/binding-win32-x64-msvc@0.65.0':
++  '@oxfmt/binding-win32-x64-msvc@0.67.0':
+     optional: true
+ 
+-  '@oxlint/binding-android-arm-eabi@1.81.0':
++  '@oxlint/binding-android-arm-eabi@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-android-arm64@1.81.0':
++  '@oxlint/binding-android-arm64@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-darwin-arm64@1.81.0':
++  '@oxlint/binding-darwin-arm64@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-darwin-x64@1.81.0':
++  '@oxlint/binding-darwin-x64@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-freebsd-x64@1.81.0':
++  '@oxlint/binding-freebsd-x64@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-arm-gnueabihf@1.81.0':
++  '@oxlint/binding-linux-arm-gnueabihf@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-arm-musleabihf@1.81.0':
++  '@oxlint/binding-linux-arm-musleabihf@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-arm64-gnu@1.81.0':
++  '@oxlint/binding-linux-arm64-gnu@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-arm64-musl@1.81.0':
++  '@oxlint/binding-linux-arm64-musl@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-ppc64-gnu@1.81.0':
++  '@oxlint/binding-linux-ppc64-gnu@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-riscv64-gnu@1.81.0':
++  '@oxlint/binding-linux-riscv64-gnu@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-riscv64-musl@1.81.0':
++  '@oxlint/binding-linux-riscv64-musl@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-s390x-gnu@1.81.0':
++  '@oxlint/binding-linux-s390x-gnu@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-x64-gnu@1.81.0':
++  '@oxlint/binding-linux-x64-gnu@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-linux-x64-musl@1.81.0':
++  '@oxlint/binding-linux-x64-musl@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-openharmony-arm64@1.81.0':
++  '@oxlint/binding-openharmony-arm64@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-win32-arm64-msvc@1.81.0':
++  '@oxlint/binding-win32-arm64-msvc@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-win32-ia32-msvc@1.81.0':
++  '@oxlint/binding-win32-ia32-msvc@1.82.0':
+     optional: true
+ 
+-  '@oxlint/binding-win32-x64-msvc@1.81.0':
++  '@oxlint/binding-win32-x64-msvc@1.82.0':
+     optional: true
+ 
+   '@parcel/watcher-android-arm64@2.6.0':
+@@ -2838,49 +2800,49 @@ snapshots:
+       '@parcel/watcher-win32-arm64': 2.6.0
+       '@parcel/watcher-win32-x64': 2.6.0
+ 
+-  '@rolldown/binding-android-arm-eabi@1.2.7':
++  '@rolldown/binding-android-arm-eabi@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-android-arm64@1.2.7':
++  '@rolldown/binding-android-arm64@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-darwin-arm64@1.2.7':
++  '@rolldown/binding-darwin-arm64@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-darwin-x64@1.2.7':
++  '@rolldown/binding-darwin-x64@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-freebsd-x64@1.2.7':
++  '@rolldown/binding-freebsd-x64@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-arm-gnueabihf@1.2.7':
++  '@rolldown/binding-linux-arm-gnueabihf@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-arm64-gnu@1.2.7':
++  '@rolldown/binding-linux-arm64-gnu@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-arm64-musl@1.2.7':
++  '@rolldown/binding-linux-arm64-musl@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-ppc64-gnu@1.2.7':
++  '@rolldown/binding-linux-ppc64-gnu@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-s390x-gnu@1.2.7':
++  '@rolldown/binding-linux-s390x-gnu@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-x64-gnu@1.2.7':
++  '@rolldown/binding-linux-x64-gnu@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-linux-x64-musl@1.2.7':
++  '@rolldown/binding-linux-x64-musl@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-openharmony-arm64@1.2.7':
++  '@rolldown/binding-openharmony-arm64@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-win32-arm64-msvc@1.2.7':
++  '@rolldown/binding-win32-arm64-msvc@1.2.8':
+     optional: true
+ 
+-  '@rolldown/binding-win32-x64-msvc@1.2.7':
++  '@rolldown/binding-win32-x64-msvc@1.2.8':
+     optional: true
+ 
+   '@rolldown/pluginutils@1.0.1': {}
+@@ -2889,11 +2851,9 @@ snapshots:
+ 
+   '@speed-highlight/core@1.2.24': {}
+ 
+-  '@standard-schema/spec@1.1.0': {}
+-
+-  '@tokenizer/inflate@0.4.1(supports-color@7.2.0)':
++  '@tokenizer/inflate@0.4.1':
+     dependencies:
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       token-types: 6.1.2
+     transitivePeerDependencies:
+       - supports-color
+@@ -2903,7 +2863,7 @@ snapshots:
+   '@types/body-parser@1.19.6':
+     dependencies:
+       '@types/connect': 3.4.38
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   '@types/chai@5.2.3':
+     dependencies:
+@@ -2912,7 +2872,7 @@ snapshots:
+ 
+   '@types/connect@3.4.38':
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   '@types/deep-eql@4.0.2': {}
+ 
+@@ -2920,7 +2880,7 @@ snapshots:
+ 
+   '@types/express-serve-static-core@5.1.3':
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+       '@types/qs': 6.15.1
+       '@types/range-parser': 1.2.7
+       '@types/send': 1.2.1
+@@ -2933,36 +2893,36 @@ snapshots:
+ 
+   '@types/http-errors@2.0.5': {}
+ 
+-  '@types/node@26.4.1':
++  '@types/node@26.5.1':
+     dependencies:
+-      undici-types: 8.3.0
++      undici-types: 8.9.0
+ 
+   '@types/qs@6.15.1': {}
+ 
+   '@types/range-parser@1.2.7': {}
+ 
+-  '@types/react-dom@19.2.5(@types/react@19.2.18)':
++  '@types/react-dom@19.3.0(@types/react@19.3.0)':
+     dependencies:
+-      '@types/react': 19.2.18
++      '@types/react': 19.3.0
+ 
+-  '@types/react@19.2.18':
++  '@types/react@19.3.0':
+     dependencies:
+       csstype: 3.2.3
+ 
+   '@types/send@1.2.1':
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   '@types/serve-static@2.2.0':
+     dependencies:
+       '@types/http-errors': 2.0.5
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   '@types/whatwg-mimetype@3.0.2': {}
+ 
+   '@types/ws@8.18.1':
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260707.2':
+     optional: true
+@@ -3055,134 +3015,108 @@ snapshots:
+   '@typescript/typescript-win32-x64@7.0.2':
+     optional: true
+ 
+-  '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
++  '@vitest/coverage-v8@5.0.0(vitest@5.0.0)':
+     dependencies:
+       '@bcoe/v8-coverage': 1.0.2
+-      '@vitest/utils': 4.1.11
+-      ast-v8-to-istanbul: 1.0.5
+-      istanbul-lib-coverage: 3.2.2
+-      istanbul-lib-report: 3.0.1
+-      istanbul-reports: 3.2.0
+-      magicast: 0.5.4
+-      obug: 2.1.4
++      '@vitest/istanbul-lib-coverage': 1.0.1
++      '@vitest/istanbul-lib-report': 1.0.1
++      ast-v8-to-istanbul: 1.0.6
++      magicast: 0.5.5
++      obug: 2.2.1
+       std-env: 4.2.0
+       tinyrainbow: 3.1.1
+-      vitest: 4.1.11(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.13.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0))
++      vitest: 5.0.0(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(happy-dom@20.14.5)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0))
+ 
+-  '@vitest/expect@4.1.11':
++  '@vitest/istanbul-lib-coverage@1.0.1': {}
++
++  '@vitest/istanbul-lib-report@1.0.1':
+     dependencies:
+-      '@standard-schema/spec': 1.1.0
+-      '@types/chai': 5.2.3
+-      '@vitest/spy': 4.1.11
+-      '@vitest/utils': 4.1.11
+-      chai: 6.2.2
+-      tinyrainbow: 3.1.1
++      '@vitest/istanbul-lib-coverage': 1.0.1
+ 
+-  '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0))':
++  '@vitest/mocker@5.0.0(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0))':
+     dependencies:
+-      '@vitest/spy': 4.1.11
++      '@jridgewell/trace-mapping': 0.3.31
++      '@vitest/spy': 5.0.0
+       estree-walker: 3.0.3
+-      magic-string: 0.30.21
++      magic-string: 1.3.1
+     optionalDependencies:
+-      vite: 8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)
+-
+-  '@vitest/pretty-format@4.1.11':
+-    dependencies:
+-      tinyrainbow: 3.1.1
++      vite: 8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)
+ 
+-  '@vitest/runner@4.1.11':
+-    dependencies:
+-      '@vitest/utils': 4.1.11
+-      pathe: 2.0.3
++  '@vitest/spy@5.0.0': {}
+ 
+-  '@vitest/snapshot@4.1.11':
+-    dependencies:
+-      '@vitest/pretty-format': 4.1.11
+-      '@vitest/utils': 4.1.11
+-      magic-string: 0.30.21
+-      pathe: 2.0.3
+-
+-  '@vitest/spy@4.1.11': {}
+-
+-  '@vitest/utils@4.1.11':
+-    dependencies:
+-      '@vitest/pretty-format': 4.1.11
+-      convert-source-map: 2.0.0
+-      tinyrainbow: 3.1.1
+-
+-  '@yuku-codegen/binding-android-arm64@0.9.3':
++  '@yuku-codegen/binding-android-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-darwin-arm64@0.9.3':
++  '@yuku-codegen/binding-darwin-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-darwin-x64@0.9.3':
++  '@yuku-codegen/binding-darwin-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-freebsd-x64@0.9.3':
++  '@yuku-codegen/binding-freebsd-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-arm-gnu@0.9.3':
++  '@yuku-codegen/binding-linux-arm-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-arm-musl@0.9.3':
++  '@yuku-codegen/binding-linux-arm-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-arm64-gnu@0.9.3':
++  '@yuku-codegen/binding-linux-arm64-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-arm64-musl@0.9.3':
++  '@yuku-codegen/binding-linux-arm64-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-x64-gnu@0.9.3':
++  '@yuku-codegen/binding-linux-x64-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-linux-x64-musl@0.9.3':
++  '@yuku-codegen/binding-linux-x64-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-win32-arm64@0.9.3':
++  '@yuku-codegen/binding-win32-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-codegen/binding-win32-x64@0.9.3':
++  '@yuku-codegen/binding-win32-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-android-arm64@0.9.3':
++  '@yuku-parser/binding-android-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-darwin-arm64@0.9.3':
++  '@yuku-parser/binding-darwin-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-darwin-x64@0.9.3':
++  '@yuku-parser/binding-darwin-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-freebsd-x64@0.9.3':
++  '@yuku-parser/binding-freebsd-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-arm-gnu@0.9.3':
++  '@yuku-parser/binding-linux-arm-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-arm-musl@0.9.3':
++  '@yuku-parser/binding-linux-arm-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-arm64-gnu@0.9.3':
++  '@yuku-parser/binding-linux-arm64-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-arm64-musl@0.9.3':
++  '@yuku-parser/binding-linux-arm64-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-x64-gnu@0.9.3':
++  '@yuku-parser/binding-linux-x64-gnu@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-linux-x64-musl@0.9.3':
++  '@yuku-parser/binding-linux-x64-musl@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-win32-arm64@0.9.3':
++  '@yuku-parser/binding-win32-arm64@0.9.5':
+     optional: true
+ 
+-  '@yuku-parser/binding-win32-x64@0.9.3':
++  '@yuku-parser/binding-win32-x64@0.9.5':
+     optional: true
+ 
+-  '@yuku-toolchain/types@0.9.3': {}
++  '@yuku-toolchain/types@0.9.5': {}
+ 
+   accepts@2.0.0:
+     dependencies:
+@@ -3193,16 +3127,16 @@ snapshots:
+ 
+   assertion-error@2.0.1: {}
+ 
+-  ast-v8-to-istanbul@1.0.5:
++  ast-v8-to-istanbul@1.0.6:
+     dependencies:
+       '@jridgewell/trace-mapping': 0.3.31
+       estree-walker: 3.0.3
+       js-tokens: 10.0.0
+ 
+-  automd@0.4.3(magicast@0.5.4):
++  automd@0.4.3(magicast@0.5.5):
+     dependencies:
+       '@parcel/watcher': 2.6.0
+-      c12: 3.3.4(magicast@0.5.4)
++      c12: 3.3.4(magicast@0.5.5)
+       citty: 0.2.2
+       consola: 3.4.2
+       defu: 6.1.7
+@@ -3214,18 +3148,18 @@ snapshots:
+       ofetch: 1.5.1
+       pathe: 2.0.3
+       perfect-debounce: 2.1.0
+-      pkg-types: 2.3.1
++      pkg-types: 2.3.3
+       scule: 1.3.0
+       tinyglobby: 0.2.17
+       untyped: 2.0.0
+     transitivePeerDependencies:
+       - magicast
+ 
+-  body-parser@2.3.0(supports-color@7.2.0):
++  body-parser@2.3.0:
+     dependencies:
+       bytes: 3.1.2
+       content-type: 2.1.0
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       http-errors: 2.0.1
+       iconv-lite: 0.7.3
+       on-finished: 2.4.1
+@@ -3237,7 +3171,7 @@ snapshots:
+ 
+   buffer-image-size@0.6.4:
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+ 
+   bundle-name@4.1.0:
+     dependencies:
+@@ -3245,7 +3179,7 @@ snapshots:
+ 
+   bytes@3.1.2: {}
+ 
+-  c12@3.3.4(magicast@0.5.4):
++  c12@3.3.4(magicast@0.5.5):
+     dependencies:
+       chokidar: 5.0.0
+       confbox: 0.2.4
+@@ -3257,25 +3191,25 @@ snapshots:
+       ohash: 2.0.12
+       pathe: 2.0.3
+       perfect-debounce: 2.1.0
+-      pkg-types: 2.3.1
+-      rc9: 3.0.1
++      pkg-types: 2.3.3
++      rc9: 3.1.0
+     optionalDependencies:
+-      magicast: 0.5.4
++      magicast: 0.5.5
+ 
+-  c12@4.0.0-beta.5(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.4):
++  c12@4.0.0-rc.1(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.5):
+     dependencies:
+-      confbox: 0.2.4
++      confbox: 0.3.1
+       defu: 6.1.7
+       exsolve: 1.1.1
+       pathe: 2.0.3
+-      pkg-types: 2.3.1
+-      rc9: 3.0.1
++      pkg-types: 2.3.3
++      rc9: 3.1.0
+     optionalDependencies:
+       chokidar: 5.0.0
+       dotenv: 17.4.2
+       giget: 3.3.1
+       jiti: 2.7.0
+-      magicast: 0.5.4
++      magicast: 0.5.5
+ 
+   call-bind-apply-helpers@1.0.2:
+     dependencies:
+@@ -3289,9 +3223,9 @@ snapshots:
+ 
+   chai@6.2.2: {}
+ 
+-  changelogen@0.6.2(magicast@0.5.4):
++  changelogen@0.6.2(magicast@0.5.5):
+     dependencies:
+-      c12: 3.3.4(magicast@0.5.4)
++      c12: 3.3.4(magicast@0.5.5)
+       confbox: 0.2.4
+       consola: 3.4.2
+       convert-gitmoji: 0.1.5
+@@ -3300,7 +3234,7 @@ snapshots:
+       ofetch: 1.5.1
+       open: 10.2.0
+       pathe: 2.0.3
+-      pkg-types: 2.3.1
++      pkg-types: 2.3.3
+       scule: 1.3.0
+       semver: 7.8.5
+       std-env: 3.10.0
+@@ -3321,10 +3255,12 @@ snapshots:
+ 
+   confbox@0.2.4: {}
+ 
+-  connect@3.7.0(supports-color@7.2.0):
++  confbox@0.3.1: {}
++
++  connect@3.7.0:
+     dependencies:
+-      debug: 2.6.9(supports-color@7.2.0)
+-      finalhandler: 1.1.2(supports-color@7.2.0)
++      debug: 2.6.9
++      finalhandler: 1.1.2
+       parseurl: 1.3.3
+       utils-merge: 1.0.1
+     transitivePeerDependencies:
+@@ -3340,8 +3276,6 @@ snapshots:
+ 
+   convert-gitmoji@0.1.5: {}
+ 
+-  convert-source-map@2.0.0: {}
+-
+   cookie-es@3.1.1: {}
+ 
+   cookie-signature@1.2.2: {}
+@@ -3350,23 +3284,19 @@ snapshots:
+ 
+   cookie@1.1.1: {}
+ 
+-  crossws@0.4.12(srvx@1.0.2):
++  crossws@0.4.12(srvx@1.0.5):
+     optionalDependencies:
+-      srvx: 1.0.2
++      srvx: 1.0.5
+ 
+   csstype@3.2.3: {}
+ 
+-  debug@2.6.9(supports-color@7.2.0):
++  debug@2.6.9:
+     dependencies:
+       ms: 2.0.0
+-    optionalDependencies:
+-      supports-color: 7.2.0
+ 
+-  debug@4.4.3(supports-color@7.2.0):
++  debug@4.4.3:
+     dependencies:
+       ms: 2.1.3
+-    optionalDependencies:
+-      supports-color: 7.2.0
+ 
+   default-browser-id@5.0.1: {}
+ 
+@@ -3403,13 +3333,13 @@ snapshots:
+ 
+   ee-first@1.1.1: {}
+ 
+-  elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.4)(file-type@22.0.2(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2):
++  elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.6)(file-type@22.1.0)(openapi-types@12.1.3)(typescript@7.0.2):
+     dependencies:
+       '@sinclair/typebox': 0.34.52
+       cookie: 1.1.1
+-      exact-mirror: 1.2.4
++      exact-mirror: 1.2.6
+       fast-decode-uri-component: 1.0.1
+-      file-type: 22.0.2(supports-color@7.2.0)
++      file-type: 22.1.0
+       memoirist: 0.4.0
+       openapi-types: 12.1.3
+     optionalDependencies:
+@@ -3468,24 +3398,24 @@ snapshots:
+ 
+   etag@1.8.1: {}
+ 
+-  exact-mirror@1.2.4: {}
++  exact-mirror@1.2.6: {}
+ 
+   expect-type@1.4.0: {}
+ 
+-  express@5.2.1(supports-color@7.2.0):
++  express@5.2.1:
+     dependencies:
+       accepts: 2.0.0
+-      body-parser: 2.3.0(supports-color@7.2.0)
++      body-parser: 2.3.0
+       content-disposition: 1.1.0
+       content-type: 1.0.5
+       cookie: 0.7.2
+       cookie-signature: 1.2.2
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       depd: 2.0.0
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       etag: 1.8.1
+-      finalhandler: 2.1.1(supports-color@7.2.0)
++      finalhandler: 2.1.1
+       fresh: 2.0.0
+       http-errors: 2.0.1
+       merge-descriptors: 2.0.0
+@@ -3496,9 +3426,9 @@ snapshots:
+       proxy-addr: 2.0.7
+       qs: 6.16.0
+       range-parser: 1.3.0
+-      router: 2.2.0(supports-color@7.2.0)
+-      send: 1.2.1(supports-color@7.2.0)
+-      serve-static: 2.2.1(supports-color@7.2.0)
++      router: 2.2.0
++      send: 1.2.1
++      serve-static: 2.2.1
+       statuses: 2.0.2
+       type-is: 2.1.0
+       vary: 1.1.2
+@@ -3517,18 +3447,18 @@ snapshots:
+ 
+   fetchdts@0.2.0: {}
+ 
+-  file-type@22.0.2(supports-color@7.2.0):
++  file-type@22.1.0:
+     dependencies:
+-      '@tokenizer/inflate': 0.4.1(supports-color@7.2.0)
++      '@tokenizer/inflate': 0.4.1
+       strtok3: 10.3.5
+       token-types: 6.1.2
+       uint8array-extras: 1.5.0
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  finalhandler@1.1.2(supports-color@7.2.0):
++  finalhandler@1.1.2:
+     dependencies:
+-      debug: 2.6.9(supports-color@7.2.0)
++      debug: 2.6.9
+       encodeurl: 1.0.2
+       escape-html: 1.0.3
+       on-finished: 2.3.0
+@@ -3538,9 +3468,9 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  finalhandler@2.1.1(supports-color@7.2.0):
++  finalhandler@2.1.1:
+     dependencies:
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       on-finished: 2.4.1
+@@ -3586,25 +3516,25 @@ snapshots:
+ 
+   gopd@1.2.0: {}
+ 
+-  h3-nightly@2.0.0-20260903-101917-849fa36(crossws@0.4.12(srvx@1.0.2))(ocache@0.3.0):
++  h3-nightly@2.0.0-20260903-101917-849fa36(crossws@0.4.12(srvx@1.0.5))(ocache@0.3.0):
+     dependencies:
+       rou3: 0.9.2
+-      srvx: 1.0.2
++      srvx: 1.0.5
+     optionalDependencies:
+-      crossws: 0.4.12(srvx@1.0.2)
++      crossws: 0.4.12(srvx@1.0.5)
+       ocache: 0.3.0
+ 
+-  h3@2.0.1-rc.30(crossws@0.4.12(srvx@1.0.2))(ocache@0.3.0):
++  h3@2.0.1-rc.31(crossws@0.4.12(srvx@1.0.5))(ocache@0.3.0):
+     dependencies:
+       rou3: 0.9.2
+-      srvx: 1.0.2
++      srvx: 1.0.5
+     optionalDependencies:
+-      crossws: 0.4.12(srvx@1.0.2)
++      crossws: 0.4.12(srvx@1.0.5)
+       ocache: 0.3.0
+ 
+-  happy-dom@20.13.2:
++  happy-dom@20.14.5:
+     dependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+       '@types/whatwg-mimetype': 3.0.2
+       '@types/ws': 8.18.1
+       buffer-image-size: 0.6.4
+@@ -3615,17 +3545,13 @@ snapshots:
+       - bufferutil
+       - utf-8-validate
+ 
+-  has-flag@4.0.0: {}
+-
+   has-symbols@1.1.0: {}
+ 
+   hasown@2.0.4:
+     dependencies:
+       function-bind: 1.1.2
+ 
+-  hono@4.13.5: {}
+-
+-  html-escaper@2.0.2: {}
++  hono@4.13.7: {}
+ 
+   http-errors@2.0.1:
+     dependencies:
+@@ -3663,19 +3589,6 @@ snapshots:
+     dependencies:
+       is-inside-container: 1.0.0
+ 
+-  istanbul-lib-coverage@3.2.2: {}
+-
+-  istanbul-lib-report@3.0.1:
+-    dependencies:
+-      istanbul-lib-coverage: 3.2.2
+-      make-dir: 4.0.0
+-      supports-color: 7.2.0
+-
+-  istanbul-reports@3.2.0:
+-    dependencies:
+-      html-escaper: 2.0.2
+-      istanbul-lib-report: 3.0.1
+-
+   jiti@2.7.0: {}
+ 
+   js-tokens@10.0.0: {}
+@@ -3737,20 +3650,16 @@ snapshots:
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.6.0
+ 
+-  magic-string@1.2.3:
++  magic-string@1.3.1:
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.6.0
+ 
+-  magicast@0.5.4:
++  magicast@0.5.5:
+     dependencies:
+       '@babel/parser': 7.29.8
+       '@babel/types': 7.29.8
+       source-map-js: 1.2.1
+ 
+-  make-dir@4.0.0:
+-    dependencies:
+-      semver: 7.8.5
+-
+   math-intrinsics@1.1.0: {}
+ 
+   md4w@0.2.7: {}
+@@ -3798,30 +3707,33 @@ snapshots:
+ 
+   ms@2.1.3: {}
+ 
+-  nanoid@3.3.18: {}
++  nanoid@3.3.19: {}
+ 
+   negotiator@1.1.0:
+     dependencies:
+       content-type: 2.1.0
+ 
++  nf3@0.3.24: {}
++
+   node-addon-api@7.1.1: {}
+ 
+   node-fetch-native@1.6.7: {}
+ 
+   object-inspect@1.13.4: {}
+ 
+-  obug@2.1.4: {}
++  obug@2.2.1: {}
+ 
+-  obuild@0.4.39(@typescript/native-preview@7.0.0-dev.20260707.2)(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.4)(typescript@7.0.2):
++  obuild@0.4.40(@typescript/native-preview@7.0.0-dev.20260707.2)(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.5)(typescript@7.0.2):
+     dependencies:
+-      c12: 4.0.0-beta.5(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.4)
++      c12: 4.0.0-rc.1(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.3.1)(jiti@2.7.0)(magicast@0.5.5)
+       consola: 3.4.2
+       defu: 6.1.7
+       exsolve: 1.1.1
+-      magic-string: 1.2.3
++      magic-string: 1.3.1
++      nf3: 0.3.24
+       pathe: 2.0.3
+-      rolldown: 1.2.7
+-      rolldown-plugin-dts: 0.28.4(@typescript/native-preview@7.0.0-dev.20260707.2)(rolldown@1.2.7)(typescript@7.0.2)
++      rolldown: 1.2.8
++      rolldown-plugin-dts: 0.28.5(@typescript/native-preview@7.0.0-dev.20260707.2)(rolldown@1.2.8)(typescript@7.0.2)
+       tinyglobby: 0.2.17
+     transitivePeerDependencies:
+       - '@typescript/native-preview'
+@@ -3866,75 +3778,75 @@ snapshots:
+ 
+   openapi-types@12.1.3: {}
+ 
+-  oxc-parser@0.147.0:
++  oxc-parser@0.149.0:
+     dependencies:
+-      '@oxc-project/types': 0.147.0
++      '@oxc-project/types': 0.149.0
+     optionalDependencies:
+-      '@oxc-parser/binding-android-arm-eabi': 0.147.0
+-      '@oxc-parser/binding-android-arm64': 0.147.0
+-      '@oxc-parser/binding-darwin-arm64': 0.147.0
+-      '@oxc-parser/binding-darwin-x64': 0.147.0
+-      '@oxc-parser/binding-freebsd-x64': 0.147.0
+-      '@oxc-parser/binding-linux-arm-gnueabihf': 0.147.0
+-      '@oxc-parser/binding-linux-arm-musleabihf': 0.147.0
+-      '@oxc-parser/binding-linux-arm64-gnu': 0.147.0
+-      '@oxc-parser/binding-linux-arm64-musl': 0.147.0
+-      '@oxc-parser/binding-linux-ppc64-gnu': 0.147.0
+-      '@oxc-parser/binding-linux-riscv64-gnu': 0.147.0
+-      '@oxc-parser/binding-linux-riscv64-musl': 0.147.0
+-      '@oxc-parser/binding-linux-s390x-gnu': 0.147.0
+-      '@oxc-parser/binding-linux-x64-gnu': 0.147.0
+-      '@oxc-parser/binding-linux-x64-musl': 0.147.0
+-      '@oxc-parser/binding-openharmony-arm64': 0.147.0
+-      '@oxc-parser/binding-win32-arm64-msvc': 0.147.0
+-      '@oxc-parser/binding-win32-ia32-msvc': 0.147.0
+-      '@oxc-parser/binding-win32-x64-msvc': 0.147.0
+-
+-  oxfmt@0.65.0:
++      '@oxc-parser/binding-android-arm-eabi': 0.149.0
++      '@oxc-parser/binding-android-arm64': 0.149.0
++      '@oxc-parser/binding-darwin-arm64': 0.149.0
++      '@oxc-parser/binding-darwin-x64': 0.149.0
++      '@oxc-parser/binding-freebsd-x64': 0.149.0
++      '@oxc-parser/binding-linux-arm-gnueabihf': 0.149.0
++      '@oxc-parser/binding-linux-arm-musleabihf': 0.149.0
++      '@oxc-parser/binding-linux-arm64-gnu': 0.149.0
++      '@oxc-parser/binding-linux-arm64-musl': 0.149.0
++      '@oxc-parser/binding-linux-ppc64-gnu': 0.149.0
++      '@oxc-parser/binding-linux-riscv64-gnu': 0.149.0
++      '@oxc-parser/binding-linux-riscv64-musl': 0.149.0
++      '@oxc-parser/binding-linux-s390x-gnu': 0.149.0
++      '@oxc-parser/binding-linux-x64-gnu': 0.149.0
++      '@oxc-parser/binding-linux-x64-musl': 0.149.0
++      '@oxc-parser/binding-openharmony-arm64': 0.149.0
++      '@oxc-parser/binding-win32-arm64-msvc': 0.149.0
++      '@oxc-parser/binding-win32-ia32-msvc': 0.149.0
++      '@oxc-parser/binding-win32-x64-msvc': 0.149.0
++
++  oxfmt@0.67.0:
+     dependencies:
+-      tinypool: 2.1.0
++      tinypool: 2.1.2
+     optionalDependencies:
+-      '@oxfmt/binding-android-arm-eabi': 0.65.0
+-      '@oxfmt/binding-android-arm64': 0.65.0
+-      '@oxfmt/binding-darwin-arm64': 0.65.0
+-      '@oxfmt/binding-darwin-x64': 0.65.0
+-      '@oxfmt/binding-freebsd-x64': 0.65.0
+-      '@oxfmt/binding-linux-arm-gnueabihf': 0.65.0
+-      '@oxfmt/binding-linux-arm-musleabihf': 0.65.0
+-      '@oxfmt/binding-linux-arm64-gnu': 0.65.0
+-      '@oxfmt/binding-linux-arm64-musl': 0.65.0
+-      '@oxfmt/binding-linux-ppc64-gnu': 0.65.0
+-      '@oxfmt/binding-linux-riscv64-gnu': 0.65.0
+-      '@oxfmt/binding-linux-riscv64-musl': 0.65.0
+-      '@oxfmt/binding-linux-s390x-gnu': 0.65.0
+-      '@oxfmt/binding-linux-x64-gnu': 0.65.0
+-      '@oxfmt/binding-linux-x64-musl': 0.65.0
+-      '@oxfmt/binding-openharmony-arm64': 0.65.0
+-      '@oxfmt/binding-win32-arm64-msvc': 0.65.0
+-      '@oxfmt/binding-win32-ia32-msvc': 0.65.0
+-      '@oxfmt/binding-win32-x64-msvc': 0.65.0
+-
+-  oxlint@1.81.0:
++      '@oxfmt/binding-android-arm-eabi': 0.67.0
++      '@oxfmt/binding-android-arm64': 0.67.0
++      '@oxfmt/binding-darwin-arm64': 0.67.0
++      '@oxfmt/binding-darwin-x64': 0.67.0
++      '@oxfmt/binding-freebsd-x64': 0.67.0
++      '@oxfmt/binding-linux-arm-gnueabihf': 0.67.0
++      '@oxfmt/binding-linux-arm-musleabihf': 0.67.0
++      '@oxfmt/binding-linux-arm64-gnu': 0.67.0
++      '@oxfmt/binding-linux-arm64-musl': 0.67.0
++      '@oxfmt/binding-linux-ppc64-gnu': 0.67.0
++      '@oxfmt/binding-linux-riscv64-gnu': 0.67.0
++      '@oxfmt/binding-linux-riscv64-musl': 0.67.0
++      '@oxfmt/binding-linux-s390x-gnu': 0.67.0
++      '@oxfmt/binding-linux-x64-gnu': 0.67.0
++      '@oxfmt/binding-linux-x64-musl': 0.67.0
++      '@oxfmt/binding-openharmony-arm64': 0.67.0
++      '@oxfmt/binding-win32-arm64-msvc': 0.67.0
++      '@oxfmt/binding-win32-ia32-msvc': 0.67.0
++      '@oxfmt/binding-win32-x64-msvc': 0.67.0
++
++  oxlint@1.82.0:
+     optionalDependencies:
+-      '@oxlint/binding-android-arm-eabi': 1.81.0
+-      '@oxlint/binding-android-arm64': 1.81.0
+-      '@oxlint/binding-darwin-arm64': 1.81.0
+-      '@oxlint/binding-darwin-x64': 1.81.0
+-      '@oxlint/binding-freebsd-x64': 1.81.0
+-      '@oxlint/binding-linux-arm-gnueabihf': 1.81.0
+-      '@oxlint/binding-linux-arm-musleabihf': 1.81.0
+-      '@oxlint/binding-linux-arm64-gnu': 1.81.0
+-      '@oxlint/binding-linux-arm64-musl': 1.81.0
+-      '@oxlint/binding-linux-ppc64-gnu': 1.81.0
+-      '@oxlint/binding-linux-riscv64-gnu': 1.81.0
+-      '@oxlint/binding-linux-riscv64-musl': 1.81.0
+-      '@oxlint/binding-linux-s390x-gnu': 1.81.0
+-      '@oxlint/binding-linux-x64-gnu': 1.81.0
+-      '@oxlint/binding-linux-x64-musl': 1.81.0
+-      '@oxlint/binding-openharmony-arm64': 1.81.0
+-      '@oxlint/binding-win32-arm64-msvc': 1.81.0
+-      '@oxlint/binding-win32-ia32-msvc': 1.81.0
+-      '@oxlint/binding-win32-x64-msvc': 1.81.0
++      '@oxlint/binding-android-arm-eabi': 1.82.0
++      '@oxlint/binding-android-arm64': 1.82.0
++      '@oxlint/binding-darwin-arm64': 1.82.0
++      '@oxlint/binding-darwin-x64': 1.82.0
++      '@oxlint/binding-freebsd-x64': 1.82.0
++      '@oxlint/binding-linux-arm-gnueabihf': 1.82.0
++      '@oxlint/binding-linux-arm-musleabihf': 1.82.0
++      '@oxlint/binding-linux-arm64-gnu': 1.82.0
++      '@oxlint/binding-linux-arm64-musl': 1.82.0
++      '@oxlint/binding-linux-ppc64-gnu': 1.82.0
++      '@oxlint/binding-linux-riscv64-gnu': 1.82.0
++      '@oxlint/binding-linux-riscv64-musl': 1.82.0
++      '@oxlint/binding-linux-s390x-gnu': 1.82.0
++      '@oxlint/binding-linux-x64-gnu': 1.82.0
++      '@oxlint/binding-linux-x64-musl': 1.82.0
++      '@oxlint/binding-openharmony-arm64': 1.82.0
++      '@oxlint/binding-win32-arm64-msvc': 1.82.0
++      '@oxlint/binding-win32-ia32-msvc': 1.82.0
++      '@oxlint/binding-win32-x64-msvc': 1.82.0
+ 
+   parseurl@1.3.3: {}
+ 
+@@ -3956,15 +3868,15 @@ snapshots:
+       mlly: 1.8.2
+       pathe: 2.0.3
+ 
+-  pkg-types@2.3.1:
++  pkg-types@2.3.3:
+     dependencies:
+-      confbox: 0.2.4
++      confbox: 0.3.1
+       exsolve: 1.1.1
+       pathe: 2.0.3
+ 
+-  postcss@8.5.26:
++  postcss@8.5.28:
+     dependencies:
+-      nanoid: 3.3.18
++      nanoid: 3.3.19
+       picocolors: 1.1.1
+       source-map-js: 1.2.1
+ 
+@@ -3987,63 +3899,63 @@ snapshots:
+       iconv-lite: 0.7.3
+       unpipe: 1.0.0
+ 
+-  rc9@3.0.1:
++  rc9@3.1.0:
+     dependencies:
+       defu: 6.1.7
+       destr: 2.0.5
+ 
+-  react-dom@19.2.8(react@19.2.8):
++  react-dom@19.3.0(react@19.3.0):
+     dependencies:
+-      react: 19.2.8
+-      scheduler: 0.27.0
++      react: 19.3.0
++      scheduler: 0.28.0
+ 
+-  react@19.2.8: {}
++  react@19.3.0: {}
+ 
+   readdirp@5.1.1: {}
+ 
+   resolve-pkg-maps@1.0.0: {}
+ 
+-  rolldown-plugin-dts@0.28.4(@typescript/native-preview@7.0.0-dev.20260707.2)(rolldown@1.2.7)(typescript@7.0.2):
++  rolldown-plugin-dts@0.28.5(@typescript/native-preview@7.0.0-dev.20260707.2)(rolldown@1.2.8)(typescript@7.0.2):
+     dependencies:
+       dts-resolver: 3.0.0
+       get-tsconfig: 5.0.0-beta.6
+-      obug: 2.1.4
+-      rolldown: 1.2.7
+-      yuku-ast: 0.9.3
+-      yuku-codegen: 0.9.3
+-      yuku-parser: 0.9.3
++      obug: 2.2.1
++      rolldown: 1.2.8
++      yuku-ast: 0.9.5
++      yuku-codegen: 0.9.5
++      yuku-parser: 0.9.5
+     optionalDependencies:
+       '@typescript/native-preview': 7.0.0-dev.20260707.2
+       typescript: 7.0.2
+     transitivePeerDependencies:
+       - oxc-resolver
+ 
+-  rolldown@1.2.7:
++  rolldown@1.2.8:
+     dependencies:
+-      '@oxc-project/types': 0.148.0
++      '@oxc-project/types': 0.149.0
+       '@rolldown/pluginutils': 1.0.1
+     optionalDependencies:
+-      '@rolldown/binding-android-arm-eabi': 1.2.7
+-      '@rolldown/binding-android-arm64': 1.2.7
+-      '@rolldown/binding-darwin-arm64': 1.2.7
+-      '@rolldown/binding-darwin-x64': 1.2.7
+-      '@rolldown/binding-freebsd-x64': 1.2.7
+-      '@rolldown/binding-linux-arm-gnueabihf': 1.2.7
+-      '@rolldown/binding-linux-arm64-gnu': 1.2.7
+-      '@rolldown/binding-linux-arm64-musl': 1.2.7
+-      '@rolldown/binding-linux-ppc64-gnu': 1.2.7
+-      '@rolldown/binding-linux-s390x-gnu': 1.2.7
+-      '@rolldown/binding-linux-x64-gnu': 1.2.7
+-      '@rolldown/binding-linux-x64-musl': 1.2.7
+-      '@rolldown/binding-openharmony-arm64': 1.2.7
+-      '@rolldown/binding-win32-arm64-msvc': 1.2.7
+-      '@rolldown/binding-win32-x64-msvc': 1.2.7
++      '@rolldown/binding-android-arm-eabi': 1.2.8
++      '@rolldown/binding-android-arm64': 1.2.8
++      '@rolldown/binding-darwin-arm64': 1.2.8
++      '@rolldown/binding-darwin-x64': 1.2.8
++      '@rolldown/binding-freebsd-x64': 1.2.8
++      '@rolldown/binding-linux-arm-gnueabihf': 1.2.8
++      '@rolldown/binding-linux-arm64-gnu': 1.2.8
++      '@rolldown/binding-linux-arm64-musl': 1.2.8
++      '@rolldown/binding-linux-ppc64-gnu': 1.2.8
++      '@rolldown/binding-linux-s390x-gnu': 1.2.8
++      '@rolldown/binding-linux-x64-gnu': 1.2.8
++      '@rolldown/binding-linux-x64-musl': 1.2.8
++      '@rolldown/binding-openharmony-arm64': 1.2.8
++      '@rolldown/binding-win32-arm64-msvc': 1.2.8
++      '@rolldown/binding-win32-x64-msvc': 1.2.8
+ 
+   rou3@0.9.2: {}
+ 
+-  router@2.2.0(supports-color@7.2.0):
++  router@2.2.0:
+     dependencies:
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       depd: 2.0.0
+       is-promise: 4.0.0
+       parseurl: 1.3.3
+@@ -4055,15 +3967,15 @@ snapshots:
+ 
+   safer-buffer@2.1.2: {}
+ 
+-  scheduler@0.27.0: {}
++  scheduler@0.28.0: {}
+ 
+   scule@1.3.0: {}
+ 
+   semver@7.8.5: {}
+ 
+-  send@1.2.1(supports-color@7.2.0):
++  send@1.2.1:
+     dependencies:
+-      debug: 4.4.3(supports-color@7.2.0)
++      debug: 4.4.3
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       etag: 1.8.1
+@@ -4077,12 +3989,12 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  serve-static@2.2.1(supports-color@7.2.0):
++  serve-static@2.2.1:
+     dependencies:
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       parseurl: 1.3.3
+-      send: 1.2.1(supports-color@7.2.0)
++      send: 1.2.1
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -4122,7 +4034,7 @@ snapshots:
+ 
+   srvx@0.11.22: {}
+ 
+-  srvx@1.0.2: {}
++  srvx@1.0.5: {}
+ 
+   stackback@0.0.2: {}
+ 
+@@ -4138,11 +4050,7 @@ snapshots:
+     dependencies:
+       '@tokenizer/token': 0.3.0
+ 
+-  supports-color@7.2.0:
+-    dependencies:
+-      has-flag: 4.0.0
+-
+-  tinybench@2.9.0: {}
++  tinybench@6.1.4: {}
+ 
+   tinyexec@1.3.0: {}
+ 
+@@ -4151,7 +4059,7 @@ snapshots:
+       fdir: 6.5.0(picomatch@4.0.7)
+       picomatch: 4.0.7
+ 
+-  tinypool@2.1.0: {}
++  tinypool@2.1.2: {}
+ 
+   tinyrainbow@3.1.1: {}
+ 
+@@ -4196,7 +4104,7 @@ snapshots:
+ 
+   uint8array-extras@1.5.0: {}
+ 
+-  undici-types@8.3.0: {}
++  undici-types@8.9.0: {}
+ 
+   unpipe@1.0.0: {}
+ 
+@@ -4212,45 +4120,39 @@ snapshots:
+ 
+   vary@1.1.2: {}
+ 
+-  vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0):
++  vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0):
+     dependencies:
+       lightningcss: 1.33.0
+       picomatch: 4.0.7
+-      postcss: 8.5.26
+-      rolldown: 1.2.7
++      postcss: 8.5.28
++      rolldown: 1.2.8
+       tinyglobby: 0.2.17
+     optionalDependencies:
+-      '@types/node': 26.4.1
++      '@types/node': 26.5.1
+       esbuild: 0.28.2
+       fsevents: 2.3.3
+       jiti: 2.7.0
+ 
+-  vitest@4.1.11(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.13.2)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)):
++  vitest@5.0.0(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(happy-dom@20.14.5)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)):
+     dependencies:
+-      '@vitest/expect': 4.1.11
+-      '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0))
+-      '@vitest/pretty-format': 4.1.11
+-      '@vitest/runner': 4.1.11
+-      '@vitest/snapshot': 4.1.11
+-      '@vitest/spy': 4.1.11
+-      '@vitest/utils': 4.1.11
++      '@types/chai': 5.2.3
++      '@vitest/mocker': 5.0.0(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0))
++      chai: 6.2.2
+       es-module-lexer: 2.3.2
+       expect-type: 1.4.0
+-      magic-string: 0.30.21
+-      obug: 2.1.4
+-      pathe: 2.0.3
++      magic-string: 1.3.1
++      obug: 2.2.1
+       picomatch: 4.0.7
+       std-env: 4.2.0
+-      tinybench: 2.9.0
++      tinybench: 6.1.4
+       tinyexec: 1.3.0
+       tinyglobby: 0.2.17
+-      tinyrainbow: 3.1.1
+-      vite: 8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)
++      vite: 8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)
+       why-is-node-running: 2.3.0
+     optionalDependencies:
+-      '@types/node': 26.4.1
+-      '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
+-      happy-dom: 20.13.2
++      '@types/node': 26.5.1
++      '@vitest/coverage-v8': 5.0.0(vitest@5.0.0)
++      happy-dom: 20.14.5
+     transitivePeerDependencies:
+       - msw
+ 
+@@ -4269,43 +4171,43 @@ snapshots:
+     dependencies:
+       is-wsl: 3.1.1
+ 
+-  yuku-ast@0.9.3:
++  yuku-ast@0.9.5:
+     dependencies:
+-      '@yuku-toolchain/types': 0.9.3
++      '@yuku-toolchain/types': 0.9.5
+ 
+-  yuku-codegen@0.9.3:
++  yuku-codegen@0.9.5:
+     dependencies:
+-      '@yuku-toolchain/types': 0.9.3
++      '@yuku-toolchain/types': 0.9.5
+     optionalDependencies:
+-      '@yuku-codegen/binding-android-arm64': 0.9.3
+-      '@yuku-codegen/binding-darwin-arm64': 0.9.3
+-      '@yuku-codegen/binding-darwin-x64': 0.9.3
+-      '@yuku-codegen/binding-freebsd-x64': 0.9.3
+-      '@yuku-codegen/binding-linux-arm-gnu': 0.9.3
+-      '@yuku-codegen/binding-linux-arm-musl': 0.9.3
+-      '@yuku-codegen/binding-linux-arm64-gnu': 0.9.3
+-      '@yuku-codegen/binding-linux-arm64-musl': 0.9.3
+-      '@yuku-codegen/binding-linux-x64-gnu': 0.9.3
+-      '@yuku-codegen/binding-linux-x64-musl': 0.9.3
+-      '@yuku-codegen/binding-win32-arm64': 0.9.3
+-      '@yuku-codegen/binding-win32-x64': 0.9.3
+-
+-  yuku-parser@0.9.3:
++      '@yuku-codegen/binding-android-arm64': 0.9.5
++      '@yuku-codegen/binding-darwin-arm64': 0.9.5
++      '@yuku-codegen/binding-darwin-x64': 0.9.5
++      '@yuku-codegen/binding-freebsd-x64': 0.9.5
++      '@yuku-codegen/binding-linux-arm-gnu': 0.9.5
++      '@yuku-codegen/binding-linux-arm-musl': 0.9.5
++      '@yuku-codegen/binding-linux-arm64-gnu': 0.9.5
++      '@yuku-codegen/binding-linux-arm64-musl': 0.9.5
++      '@yuku-codegen/binding-linux-x64-gnu': 0.9.5
++      '@yuku-codegen/binding-linux-x64-musl': 0.9.5
++      '@yuku-codegen/binding-win32-arm64': 0.9.5
++      '@yuku-codegen/binding-win32-x64': 0.9.5
++
++  yuku-parser@0.9.5:
+     dependencies:
+-      '@yuku-toolchain/types': 0.9.3
+-      yuku-ast: 0.9.3
++      '@yuku-toolchain/types': 0.9.5
++      yuku-ast: 0.9.5
+     optionalDependencies:
+-      '@yuku-parser/binding-android-arm64': 0.9.3
+-      '@yuku-parser/binding-darwin-arm64': 0.9.3
+-      '@yuku-parser/binding-darwin-x64': 0.9.3
+-      '@yuku-parser/binding-freebsd-x64': 0.9.3
+-      '@yuku-parser/binding-linux-arm-gnu': 0.9.3
+-      '@yuku-parser/binding-linux-arm-musl': 0.9.3
+-      '@yuku-parser/binding-linux-arm64-gnu': 0.9.3
+-      '@yuku-parser/binding-linux-arm64-musl': 0.9.3
+-      '@yuku-parser/binding-linux-x64-gnu': 0.9.3
+-      '@yuku-parser/binding-linux-x64-musl': 0.9.3
+-      '@yuku-parser/binding-win32-arm64': 0.9.3
+-      '@yuku-parser/binding-win32-x64': 0.9.3
+-
+-  zod@4.5.4: {}
++      '@yuku-parser/binding-android-arm64': 0.9.5
++      '@yuku-parser/binding-darwin-arm64': 0.9.5
++      '@yuku-parser/binding-darwin-x64': 0.9.5
++      '@yuku-parser/binding-freebsd-x64': 0.9.5
++      '@yuku-parser/binding-linux-arm-gnu': 0.9.5
++      '@yuku-parser/binding-linux-arm-musl': 0.9.5
++      '@yuku-parser/binding-linux-arm64-gnu': 0.9.5
++      '@yuku-parser/binding-linux-arm64-musl': 0.9.5
++      '@yuku-parser/binding-linux-x64-gnu': 0.9.5
++      '@yuku-parser/binding-linux-x64-musl': 0.9.5
++      '@yuku-parser/binding-win32-arm64': 0.9.5
++      '@yuku-parser/binding-win32-x64': 0.9.5
++
++  zod@4.6.4: {}
+diff --git a/src/error.ts b/src/error.ts
+index b0ede61..fb8b6aa 100644
+--- a/src/error.ts
++++ b/src/error.ts
+@@ -119,12 +119,17 @@ export class HTTPError<DataT = unknown> extends Error implements ErrorBody<DataT
+   readonly unhandled: boolean | undefined;
+ 
+   /**
+-   * Check if the input is an instance of HTTPError using its constructor name.
++   * Check if the input is an instance of HTTPError using its constructor name and status.
+    *
+    * It is safer than using `instanceof` because it works across different contexts (e.g., if the error was thrown in a different module).
++   *
++   * Requiring a `status` rejects unrelated errors named `HTTPError` (e.g. from fetch clients like `ky` or `got`), while
++   * still accepting HTTPError-shaped errors from other packages (e.g. srvx `BodyTooLargeError`).
+    */
+   static override isError(input: any): input is HTTPError {
+-    return input instanceof Error && input?.name === "HTTPError";
++    return (
++      input instanceof Error && input?.name === "HTTPError" && (input as HTTPError).status > 99
++    );
+   }
+ 
+   /**
+diff --git a/src/handler.ts b/src/handler.ts
+index 1146bcc..c389c9e 100644
+--- a/src/handler.ts
++++ b/src/handler.ts
+@@ -13,6 +13,7 @@ import type {
+   EventHandlerWithFetch,
+   FetchableObject,
+   HTTPHandler,
++  ResolvedRequest,
+ } from "./types/handler.ts";
+ import type { StandardSchemaV1, InferOutput } from "./utils/internal/standard-schema.ts";
+ import { NoHandler, type H3Core } from "./h3.ts";
+@@ -143,16 +144,18 @@ export function dynamicEventHandler(initial?: EventHandler | FetchableObject): D
+ 
+ type MaybePromise<T> = T | Promise<T>;
+ 
+-export function defineLazyEventHandler(
+-  loader: () => MaybePromise<HTTPHandler>,
+-): EventHandlerWithFetch {
+-  let handler: EventHandler | undefined;
+-  let promise: Promise<EventHandler> | undefined;
++export function defineLazyEventHandler<
++  _RequestT extends EventHandlerRequestShape = EventHandlerRequest,
++>(
++  loader: () => MaybePromise<HTTPHandler<_RequestT>>,
++): EventHandlerWithFetch<ResolvedRequest<_RequestT>> {
++  let handler: EventHandler<ResolvedRequest<_RequestT>> | undefined;
++  let promise: Promise<EventHandler<ResolvedRequest<_RequestT>>> | undefined;
+   return defineHandler(function lazyHandler(event) {
+     return handler
+       ? handler(event)
+       : (promise ??= Promise.resolve(loader()).then(function resolveLazyHandler(r: any) {
+-          handler = toEventHandler(r) || toEventHandler(r.default);
++          handler = toEventHandler<_RequestT>(r) || toEventHandler<_RequestT>(r.default);
+           if (typeof handler !== "function") {
+             throw new TypeError("Invalid lazy handler", { cause: { resolved: r } });
+           }
+@@ -163,15 +166,17 @@ export function defineLazyEventHandler(
+ 
+ // --- normalization utils ---
+ 
+-export function toEventHandler(handler: HTTPHandler | undefined): EventHandler | undefined {
++export function toEventHandler<_RequestT extends EventHandlerRequestShape = EventHandlerRequest>(
++  handler: HTTPHandler<_RequestT> | undefined,
++): EventHandler<ResolvedRequest<_RequestT>> | undefined {
+   if (typeof handler === "function") {
+-    return handler;
++    return handler as EventHandler<ResolvedRequest<_RequestT>>;
+   }
+   if (typeof (handler as H3Core)?.handler === "function" && (handler as any).constructor?.["~h3"]) {
+-    return (handler as H3Core).handler;
++    return (handler as H3Core).handler as EventHandler<ResolvedRequest<_RequestT>>;
+   }
+   if (typeof (handler as FetchableObject)?.fetch === "function") {
+-    return function _fetchHandler(event: H3Event) {
++    return function _fetchHandler(event) {
+       return (handler as FetchableObject).fetch!(event.req);
+     };
+   }
+diff --git a/src/index.ts b/src/index.ts
+index 0783420..8042633 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -8,6 +8,7 @@ export type {
+   HTTPMethod,
+   PreparedResponse,
+   RouteOptions,
++  RouteRegistrar,
+   MiddlewareOptions,
+   RouterContext,
+   MatchedRoute,
+@@ -81,6 +82,7 @@ export type {
+   HTTPHandler,
+   TypedServerRequest,
+ } from "./types/handler.ts";
++export type { TypedHeaders } from "fetchdts";
+ 
+ export {
+   defineHandler,
+@@ -219,6 +221,7 @@ export { type CacheConditions, handleCacheHeaders } from "./utils/cache.ts";
+ export {
+   type ResolveDotSegmentsOptions,
+   isCanonicalPath,
++  normalizeRoute,
+   resolveDotSegments,
+ } from "./utils/path.ts";
+ 
+diff --git a/src/rules/cache.ts b/src/rules/cache.ts
+index 6571f6d..5b9447d 100644
+--- a/src/rules/cache.ts
++++ b/src/rules/cache.ts
+@@ -25,7 +25,13 @@ export interface OcacheRuleHandlerOptions {
+    * cache rule this handler serves. Defaults to one lazily created memory store.
+    */
+   storage?: StorageOption;
+-  /** Default ocache options. Rule options take precedence. */
++  /**
++   * Default ocache options. Rule options take precedence.
++   *
++   * A `shouldBypassCache` hook passed here is resolved inside the cache, so a
++   * request it bypasses is still dispatched by the rule and does not continue
++   * the middleware chain the way an uncacheable method or `Range` request does.
++   */
+   defaults?: CachedEventHandlerOptions;
+   /** Stable cache-key scope. Set this when sharing persistent storage across processes. */
+   id?: string;
+@@ -126,6 +132,18 @@ function moveVolatileHeaders(res: Response, event: H3Event): Response {
+   return res;
+ }
+ 
++/**
++ * Requests ocache never reads or writes an entry for (`isBypassedMethod`): it
++ * runs the handler live and returns, so the rule has nothing to contribute and
++ * passes them down the middleware chain instead of dispatching the route.
++ * A `Range` request is bypassed there because a partial response must not
++ * become the stored entry for the whole resource.
++ */
++function isBypassedRequest(event: H3Event): boolean {
++  const method = event.req.method;
++  return (method !== "GET" && method !== "HEAD") || event.req.headers.has("range");
++}
++
+ // Never dispatch credentials under a cache key that does not vary by them.
+ const CREDENTIAL_HEADERS = ["authorization", "proxy-authorization"] as const;
+ 
+@@ -276,6 +294,7 @@ export function createOcacheRuleHandler(opts?: OcacheRuleHandlerOptions): RuleHa
+     opts?.storage ??
+     (id === undefined ? () => (memoryStorage ??= createMemoryStorage()) : () => idStorage(id));
+   return createCacheRuleHandler({
++    shouldBypass: isBypassedRequest,
+     defineCachedHandler: (handler, cachedOpts) => {
+       const allowCredentials = cachedOpts.allowAuthorization === true;
+       const strip: readonly string[] = allowCredentials ? [] : CREDENTIAL_HEADERS;
+diff --git a/src/rules/handlers/cache.ts b/src/rules/handlers/cache.ts
+index 0807922..d04af7a 100644
+--- a/src/rules/handlers/cache.ts
++++ b/src/rules/handlers/cache.ts
+@@ -10,6 +10,14 @@ export type DefineCachedHandler = (handler: EventHandler, opts: CacheRuleOptions
+ export interface CacheRuleHandlerOptions {
+   /** Creates the cached wrapper for a matched route handler. */
+   defineCachedHandler: DefineCachedHandler;
++  /**
++   * Requests the implementation never reads or writes a cache entry for.
++   * The rule continues the middleware chain for them instead of dispatching the
++   * matched route itself, so an uncacheable request reaches the rest of the app
++   * the way a CDN passes one through to its origin. Without it, *every* request
++   * to a matched route terminates the chain, whether or not it is cached.
++   */
++  shouldBypass?: (event: H3Event) => boolean;
+   /** Default options merged into every cache rule (rule options win). */
+   defaults?: CacheRuleOptions;
+   /**
+@@ -51,12 +59,18 @@ let scopeCounter = 0;
+  * Register `routeRules()` after every global middleware that must run for a
+  * cached route: this handler dispatches the matched route handler itself rather
+  * than calling `next()`, so global middleware registered after `routeRules()` is
+- * skipped on *every* request to a `cache`-matched route — misses included, not
+- * only hits. Per-route middleware is unaffected (it is part of the dispatched
+- * `~composed` pair).
++ * skipped on *every* cacheable request to a `cache`-matched route — misses
++ * included, not only hits. Per-route middleware is unaffected (it is part of the
++ * dispatched `~composed` pair).
++ *
++ * Requests the implementation reports as uncacheable through
++ * {@link CacheRuleHandlerOptions.shouldBypass} continue down the chain instead
++ * of being dispatched from inside the rule, so which global middleware runs for
++ * a matched route can depend on the request.
+  */
+ export function createCacheRuleHandler(opts: CacheRuleHandlerOptions): RuleHandler<"cache"> {
+   const defineCached = opts.defineCachedHandler;
++  const shouldBypass = opts.shouldBypass;
+   const defaults = opts.defaults;
+   const id = opts.id;
+   const cachedHandlers = new WeakMap<
+@@ -72,6 +86,12 @@ export function createCacheRuleHandler(opts: CacheRuleHandlerOptions): RuleHandl
+     order: 3,
+     handler: (m) =>
+       function cacheRouteRule(event, next) {
++        // Nothing would be read from or written to the cache: continue the chain
++        // so the rest of the app runs, instead of dispatching the route from
++        // inside a cache that contributes nothing to this request.
++        if (shouldBypass?.(event)) {
++          return next();
++        }
+         const matchedRoute = event.context.matchedRoute;
+         if (!matchedRoute) {
+           return next();
+@@ -85,9 +105,10 @@ export function createCacheRuleHandler(opts: CacheRuleHandlerOptions): RuleHandl
+         // response is body-less by definition: sharing the entry lets a single
+         // anonymous `HEAD` store an empty body that every later `GET` is then
+         // served for the whole TTL. Only the two cacheable methods are told
+-        // apart — every other method bypasses caching, so one shared bucket for
+-        // them keeps an `app.all()` route from growing a wrapper per arbitrary
+-        // method token a client invents.
++        // apart — an implementation without a `shouldBypass` may still be asked
++        // to cache another method, and one shared bucket for the rest keeps an
++        // `app.all()` route from growing a wrapper per arbitrary method token a
++        // client invents.
+         const method = event.req.method;
+         const key = `${method === "GET" || method === "HEAD" ? method : "*"}:${m.route}:${matchedRoute.route}`;
+         let entry = cachedHandlers.get(handler);
+diff --git a/src/tracing.ts b/src/tracing.ts
+index b65adfc..e6c4610 100644
+--- a/src/tracing.ts
++++ b/src/tracing.ts
+@@ -87,7 +87,7 @@ export function tracingPlugin(traceOpts?: TracingPluginOptions): H3Plugin {
+     if ("on" in h3 && typeof h3.on === "function") {
+       const originalOn = h3.on;
+ 
+-      h3.on = (...args) => {
++      h3.on = (...args: Parameters<H3["on"]>) => {
+         const instance = originalOn.apply(h3, args);
+         // Since it uses route push, we can wrap the last route handler added
+         // Wrapping the handler at the arg level is problematic because we need the `event` to be passed to the tracePromise.
+diff --git a/src/types/h3.ts b/src/types/h3.ts
+index 0eb731c..8e642a0 100644
+--- a/src/types/h3.ts
++++ b/src/types/h3.ts
+@@ -1,5 +1,11 @@
+ import type { H3EventContext } from "./context.ts";
+-import type { HTTPHandler, EventHandler, Middleware } from "./handler.ts";
++import type {
++  HTTPHandler,
++  EventHandler,
++  EventHandlerRequest,
++  EventHandlerRequestShape,
++  Middleware,
++} from "./handler.ts";
+ import type { HTTPError } from "../error.ts";
+ import type { MaybePromise } from "./_utils.ts";
+ import type { FetchHandler, ServerRequest } from "srvx";
+@@ -154,6 +160,17 @@ export declare class H3Core {
+   "~addRoute"(_route: H3Route): void;
+ }
+ 
++/**
++ * Registers a route handler, inferring the handler request type when it has one.
++ */
++export interface RouteRegistrar<T> {
++  <_RequestT extends EventHandlerRequestShape = EventHandlerRequest>(
++    route: string,
++    handler: HTTPHandler<_RequestT>,
++    opts?: RouteOptions,
++  ): T;
++}
++
+ export declare class H3 extends H3Core {
+   /** @internal */
+   "~rou3": RouterContext;
+@@ -180,10 +197,10 @@ export declare class H3 extends H3Core {
+   /**
+    * Register a route handler for the specified HTTP method and route.
+    */
+-  on(
++  on<_RequestT extends EventHandlerRequestShape = EventHandlerRequest>(
+     method: HTTPMethod | Lowercase<HTTPMethod> | "",
+     route: string,
+-    handler: HTTPHandler,
++    handler: HTTPHandler<_RequestT>,
+     opts?: RouteOptions,
+   ): this;
+ 
+@@ -204,16 +221,15 @@ export declare class H3 extends H3Core {
+   /**
+    * Register a route handler for all HTTP methods.
+    */
+-  all(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-
+-  get(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  post(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  put(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  delete(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  patch(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  head(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  options(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  connect(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  trace(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
+-  query(route: string, handler: HTTPHandler, opts?: RouteOptions): this;
++  all: RouteRegistrar<this>;
++  get: RouteRegistrar<this>;
++  post: RouteRegistrar<this>;
++  put: RouteRegistrar<this>;
++  delete: RouteRegistrar<this>;
++  patch: RouteRegistrar<this>;
++  head: RouteRegistrar<this>;
++  options: RouteRegistrar<this>;
++  connect: RouteRegistrar<this>;
++  trace: RouteRegistrar<this>;
++  query: RouteRegistrar<this>;
+ }
+diff --git a/src/types/handler.ts b/src/types/handler.ts
+index 37263c4..f6239e6 100644
+--- a/src/types/handler.ts
++++ b/src/types/handler.ts
+@@ -1,11 +1,19 @@
+ import type { ServerRequest } from "srvx";
+-import type { TypedRequest, TypedResponse, ResponseHeaderMap } from "fetchdts";
++import type { RequestHeaderMap, ResponseHeaderMap, TypedRequest, TypedResponse } from "fetchdts";
+ import type { H3Event, HTTPEvent } from "../event.ts";
+ import type { MaybePromise } from "./_utils.ts";
+ import type { H3RouteMeta } from "./h3.ts";
+ import type { H3Core } from "../h3.ts";
+ 
+-export type HTTPHandler = EventHandler<any, any> | FetchableObject | H3Core;
++export type HTTPHandler<_RequestT extends EventHandlerRequestShape = any> =
++  | EventHandler<_RequestT>
++  | FetchableObject
++  | H3Core;
++
++/** Collapses the `any` request type of a bare {@link HTTPHandler} to the default request shape. */
++export type ResolvedRequest<_RequestT extends EventHandlerRequestShape> = 0 extends 1 & _RequestT
++  ? EventHandlerRequest
++  : _RequestT;
+ 
+ //  --- event handler ---
+ 
+@@ -43,7 +51,7 @@ export type EventHandlerResponse<T = unknown> = T | Promise<T>;
+ export type TypedServerRequest<_RequestT extends EventHandlerRequestShape = EventHandlerRequest> =
+   Omit<ServerRequest, "json" | "headers" | "clone"> &
+     Pick<
+-      TypedRequest<NonNullable<_RequestT["body"]>, Record<keyof ResponseHeaderMap, string>>,
++      TypedRequest<NonNullable<_RequestT["body"]>, Record<keyof RequestHeaderMap, string>>,
+       "json" | "headers" | "clone"
+     >;
+ 
+diff --git a/src/utils/base.ts b/src/utils/base.ts
+index f447069..001a6e4 100644
+--- a/src/utils/base.ts
++++ b/src/utils/base.ts
+@@ -1,4 +1,9 @@
+-import type { EventHandler, HTTPHandler } from "../types/handler.ts";
++import type {
++  EventHandler,
++  EventHandlerRequest,
++  HTTPHandler,
++  ResolvedRequest,
++} from "../types/handler.ts";
+ import { toEventHandler } from "../handler.ts";
+ import { withoutBase, withoutTrailingSlash } from "./internal/path.ts";
+ 
+@@ -14,7 +19,10 @@ import { withoutBase, withoutTrailingSlash } from "./internal/path.ts";
+  * @param base The base path to prefix.
+  * @param handler The event handler to use with the adapted path.
+  */
+-export function withBase(base: string, input: HTTPHandler): EventHandler {
++export function withBase<_RequestT extends EventHandlerRequest = EventHandlerRequest>(
++  base: string,
++  input: HTTPHandler<_RequestT>,
++): EventHandler<ResolvedRequest<_RequestT>> {
+   base = withoutTrailingSlash(base);
+ 
+   const handler = toEventHandler(input);
+diff --git a/src/utils/path.ts b/src/utils/path.ts
+index b47309c..b0e9a58 100644
+--- a/src/utils/path.ts
++++ b/src/utils/path.ts
+@@ -1,3 +1,5 @@
++import { normalizeRoute as _normalizeRoute } from "./internal/path.ts";
++
+ export interface ResolveDotSegmentsOptions {
+   /**
+    * Also decode percent-encoded path separators (`%2f`, `%5c`) into real `/`
+@@ -212,3 +214,32 @@ export function isCanonicalPath(path: string, opts?: ResolveDotSegmentsOptions):
+     !TRIGGER_RES[(opts?.decodeSlashes ? 1 : 0) | (opts?.mergeSlashes ? 2 : 0)]!.test(path)
+   );
+ }
++
++/**
++ * Normalize a route pattern into the canonical form h3 registers it under — the
++ * same shape as the `event.url.pathname` it will be matched against.
++ *
++ * `app.on()`, `app.use(route, …)`, `app.mount()` and `removeRoute()` all apply
++ * this to the pattern they receive. Use it when registering patterns into a
++ * router of your own (e.g. a build-time compiled rou3 router) that is then
++ * matched against h3's `event.url.pathname`, so both sides agree on the string —
++ * a pattern that normalized differently could leave a route reachable while a
++ * guard registered with the same source string matches nothing.
++ *
++ * A leading `/` is added if missing (`about` → `/about`), characters a request
++ * pathname always carries percent-encoded are encoded (`/café/**` →
++ * `/caf%C3%A9/**`), needless escapes are decoded the way h3 decodes them in the
++ * request pathname (`/%40handle` → `/@handle`; `%2F` and `%25` stay encoded), and
++ * `.`/`..` segments are resolved (`/a/b/../c` → `/a/c`). rou3 pattern syntax
++ * (`?`, `{`, `}`, `^`, `\`) is left verbatim — spell one percent-encoded to match
++ * it literally.
++ *
++ * Idempotent. Throws on an absolute URL (`http://…`): a route pattern is a
++ * pathname, never a URL.
++ *
++ * @example
++ * normalizeRoute("/について/**"); // "/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6/**"
++ */
++export function normalizeRoute(route: string): string {
++  return _normalizeRoute(route);
++}
+diff --git a/test/body-limit.test.ts b/test/body-limit.test.ts
+index 2ee3c11..a9554c4 100644
+--- a/test/body-limit.test.ts
++++ b/test/body-limit.test.ts
+@@ -4,11 +4,17 @@ import {
+   bodyLimit,
+   defineJsonRpcHandler,
+   defineValidatedHandler,
++  HTTPError,
++  onError,
+   readBody,
+ } from "../src/index.ts";
++import { createBodyTooLargeError, limitRequestBody } from "srvx/body-limit";
+ import { describeMatrix } from "./_setup.ts";
+ 
+-describeMatrix("body limit", (t, { it, expect }) => {
++import type { Middleware } from "../src/index.ts";
++import type { ServerRequest } from "srvx";
++
++describeMatrix("body limit", (t, { describe, it, expect }) => {
+   it("allows a body within the limit", async () => {
+     t.app.post("/", async (event) => readBody(event), { middleware: [bodyLimit(1024)] });
+     const res = await t.fetch("/", { method: "POST", body: JSON.stringify({ hello: "world" }) });
+@@ -97,8 +103,114 @@ describeMatrix("body limit", (t, { it, expect }) => {
+     expect(res.status).toBe(200);
+     expect(await res.text()).toBe("ok");
+   });
++
++  // Server-level `maxRequestBodySize` (srvx on Node/Deno) rejects body reads with srvx's own
++  // `BodyTooLargeError`, which carries the `HTTPError` shape so h3 handles it as a 413 (#1548).
++  describe("server-level limit (srvx BodyTooLargeError)", () => {
++    it("is recognized as an HTTPError", () => {
++      expect(HTTPError.isError(createBodyTooLargeError(4))).toBe(true);
++    });
++
++    it("renders a thrown error as a handled 413", async () => {
++      t.app.post("/", () => {
++        throw createBodyTooLargeError(4);
++      });
++      const res = await t.fetch("/", { method: "POST" });
++      expect(res.status).toBe(413);
++      expect(await res.json()).toMatchObject({
++        status: 413,
++        message: "Request body exceeds the maximum allowed size of 4 bytes.",
++      });
++      expect(t.errors).toHaveLength(1);
++      expect(t.errors[0].unhandled).toBeFalsy();
++    });
++
++    it("rejects an oversized readBody with 413", async () => {
++      t.app.post("/", async (event) => readBody(event), { middleware: [serverLimit(4)] });
++      const res = await t.fetch("/", {
++        method: "POST",
++        body: streamOf(["chunk-one", "chunk-two"]),
++        // @ts-expect-error duplex is required for a streaming body
++        duplex: "half",
++      });
++      expect(res.status).toBe(413);
++    });
++
++    it("passes a handled 413 to onError middleware", async () => {
++      let hookError: HTTPError | undefined;
++      t.app.post("/", async (event) => readBody(event), {
++        middleware: [
++          onError((error) => {
++            hookError = error;
++          }),
++          serverLimit(4),
++        ],
++      });
++      const res = await t.fetch("/", {
++        method: "POST",
++        body: streamOf(["chunk-one", "chunk-two"]),
++        // @ts-expect-error duplex is required for a streaming body
++        duplex: "half",
++      });
++      expect(res.status).toBe(413);
++      expect(hookError?.status).toBe(413);
++      expect(hookError?.unhandled).toBeFalsy();
++    });
++
++    it("maps an oversized body in a validated handler to 413 (not 400)", async () => {
++      const handler = defineValidatedHandler({
++        validate: { body: z.object({ value: z.string() }) },
++        handler: async (event) => event.req.json(),
++      });
++      t.app.post("/validated", handler as unknown as () => unknown, {
++        middleware: [serverLimit(4)],
++      });
++      const res = await t.fetch("/validated", {
++        method: "POST",
++        body: streamOf(['{"value":"', "way more than four bytes", '"}']),
++        // @ts-expect-error duplex is required for a streaming body
++        duplex: "half",
++      });
++      expect(res.status).toBe(413);
++    });
++
++    it("maps an oversized body in a JSON-RPC handler to 413 (not a parse error)", async () => {
++      t.app.post("/rpc", defineJsonRpcHandler({ methods: { echo: (params: unknown) => params } }), {
++        middleware: [serverLimit(4)],
++      });
++      const res = await t.fetch("/rpc", {
++        method: "POST",
++        headers: { "content-type": "application/json" },
++        body: streamOf(['{"jsonrpc":"2.0","id":1,', '"method":"echo","params":[1,2,3]}']),
++        // @ts-expect-error duplex is required for a streaming body
++        duplex: "half",
++      });
++      expect(res.status).toBe(413);
++    });
++
++    // Real transport only, see the `assertBodySize` formData test above.
++    it.skipIf(t.target === "web")(
++      "maps an oversized readBody formData to 413 (not 400)",
++      async () => {
++        t.app.post("/upload", async (event) => readBody(event, { type: "formData" }), {
++          middleware: [serverLimit(4)],
++        });
++        const form = new FormData();
++        form.append("field", "a value that is definitely longer than four bytes");
++        const res = await t.fetch("/upload", { method: "POST", body: form });
++        expect(res.status).toBe(413);
++      },
++    );
++  });
+ });
+ 
++// Mimics srvx's server-level `maxRequestBodySize`: limits the body with srvx's default error.
++function serverLimit(limit: number): Middleware {
++  return (event) => {
++    (event as { req: ServerRequest }).req = limitRequestBody(event.req, limit);
++  };
++}
++
+ function streamOf(parts: string[]): ReadableStream<Uint8Array> {
+   return new ReadableStream<string>({
+     start(controller) {
+diff --git a/test/errors.test.ts b/test/errors.test.ts
+index 1cfcddf..694d676 100644
+--- a/test/errors.test.ts
++++ b/test/errors.test.ts
+@@ -276,6 +276,24 @@ describeMatrix("errors", (t, { it, expect, describe }) => {
+       t.errors = [];
+     });
+ 
++    // Fetch clients (ky, got) throw their own errors named `HTTPError`, without `status`, whose
++    // message carries the upstream request URL. They must not pass as h3 `HTTPError`s.
++    it("foreign error named HTTPError without status is unhandled", async () => {
++      class UpstreamHTTPError extends Error {
++        override name = "HTTPError";
++      }
++      const foreign = new UpstreamHTTPError("Request failed: GET https://internal/?token=secret");
++      expect(HTTPError.isError(foreign)).toBe(false);
++      t.app.use(() => {
++        throw foreign;
++      });
++      const res = await t.fetch("/");
++      expect(res.status).toBe(500);
++      expect(await res.json()).toMatchObject({ unhandled: true, message: "HTTPError" });
++      expect(t.errors[0].unhandled).toBe(true);
++      t.errors = [];
++    });
++
+     it("onError receives the wrapped error", async () => {
+       const onError = vi.fn();
+       const app = new H3({ onError, silent: true });
+diff --git a/test/rules/cache.test.ts b/test/rules/cache.test.ts
+index a155809..1e21259 100644
+--- a/test/rules/cache.test.ts
++++ b/test/rules/cache.test.ts
+@@ -869,6 +869,32 @@ describe("cache rule (core defineCachedHandler injection)", () => {
+     expect(seen).toEqual(["downstream:/uncached"]);
+   });
+ 
++  it("passes bypassed requests to the rest of the chain (`shouldBypass`)", async () => {
++    // The generic factory has no cache policy of its own: an implementation
++    // declares what it never caches, and those requests keep going instead of
++    // being dispatched from inside the rule.
++    const seen: string[] = [];
++    const defineCachedHandler = vi.fn((handler: EventHandler): EventHandler => handler);
++    const app = createInjectedApp(
++      { "/cached-bypass/**": { cache: { maxAge: 60 } } },
++      { defineCachedHandler, shouldBypass: (event) => event.req.method === "POST" },
++    );
++    app.use((event, next) => {
++      seen.push(`downstream:${event.req.method}`);
++      return next();
++    });
++    app.get("/cached-bypass/x", () => "get");
++    app.post("/cached-bypass/x", () => "post");
++
++    expect(await (await app.fetch(new Request("http://test/cached-bypass/x"))).text()).toBe("get");
++    const post = await app.fetch(new Request("http://test/cached-bypass/x", { method: "POST" }));
++    expect(await post.text()).toBe("post");
++    // Only the bypassed request reached the middleware after `routeRules()`,
++    // and it was never wrapped.
++    expect(seen).toEqual(["downstream:POST"]);
++    expect(defineCachedHandler).toHaveBeenCalledTimes(1);
++  });
++
+   it("wraps same-path routes of different methods separately (F3)", async () => {
+     const defineCachedHandler = vi.fn((handler: EventHandler): EventHandler => handler);
+     const app = createInjectedApp(
+@@ -1017,3 +1043,71 @@ describe("cache rule (re-entrancy)", () => {
+     expect(innerHandler).toHaveBeenCalledTimes(1);
+   });
+ });
++
++describe("cache rule (uncacheable requests pass through)", () => {
++  // ocache runs the handler live for anything it will not store — every method
++  // but GET/HEAD, and any `Range` request. Terminating the middleware chain for
++  // those buys nothing: the rule must pass them through, the way a CDN sends an
++  // uncacheable request to its origin.
++  const createPassthroughApp = () => {
++    const seen: string[] = [];
++    let calls = 0;
++    const app = createApp({ "/pass/**": { cache: { maxAge: 300 } } }, cache);
++    app.use((event, next) => {
++      seen.push(`${event.req.method} ${event.url.pathname}`);
++      return next();
++    });
++    const body = (event: { req: Request }) => ({
++      calls: ++calls,
++      auth: event.req.headers.get("authorization"),
++    });
++    app.get("/pass/res", body);
++    app.post("/pass/res", body);
++    return { app, seen };
++  };
++
++  it("a non-GET request reaches middleware registered after routeRules()", async () => {
++    const { app, seen } = createPassthroughApp();
++    const first = await app.fetch(new Request("http://test/pass/res", { method: "POST" }));
++    expect(await first.json()).toMatchObject({ calls: 1 });
++    const second = await app.fetch(new Request("http://test/pass/res", { method: "POST" }));
++    // Never cached, so the handler runs every time — and so does the chain.
++    expect(await second.json()).toMatchObject({ calls: 2 });
++    expect(seen).toEqual(["POST /pass/res", "POST /pass/res"]);
++  });
++
++  it("a `Range` GET passes through with its credentials intact", async () => {
++    // Stripping unkeyed credentials protects a *shared entry*; a bypassed
++    // request has none, so the handler must still see the caller's own header.
++    const { app, seen } = createPassthroughApp();
++    const res = await app.fetch(
++      new Request("http://test/pass/res", {
++        headers: { range: "bytes=0-1", authorization: "Bearer secret" },
++      }),
++    );
++    expect(await res.json()).toEqual({ calls: 1, auth: "Bearer secret" });
++    expect(seen).toEqual(["GET /pass/res"]);
++  });
++
++  it("a plain GET is still cached with the chain short-circuited", async () => {
++    const { app, seen } = createPassthroughApp();
++    const first = await app.fetch(new Request("http://test/pass/res"));
++    expect(await first.json()).toEqual({ calls: 1, auth: null });
++    const second = await app.fetch(new Request("http://test/pass/res"));
++    expect(await second.json()).toEqual({ calls: 1, auth: null });
++    // Cached, so the rule dispatches the route itself and the middleware
++    // registered after `routeRules()` never runs — miss included.
++    expect(seen).toEqual([]);
++  });
++
++  it("a HEAD request is cached and short-circuits like a GET", async () => {
++    const { app, seen } = createPassthroughApp();
++    expect((await app.fetch(new Request("http://test/pass/res", { method: "HEAD" }))).status).toBe(
++      200,
++    );
++    expect((await app.fetch(new Request("http://test/pass/res", { method: "HEAD" }))).status).toBe(
++      200,
++    );
++    expect(seen).toEqual([]);
++  });
++});
+diff --git a/test/unit/package.test.ts b/test/unit/package.test.ts
+index da088a3..f1ad0a2 100644
+--- a/test/unit/package.test.ts
++++ b/test/unit/package.test.ts
+@@ -97,6 +97,7 @@ describe("h3 package", () => {
+         "lazyEventHandler",
+         "mockEvent",
+         "noContent",
++        "normalizeRoute",
+         "onDispose",
+         "onError",
+         "onRequest",
+diff --git a/test/unit/route-normalize.test.ts b/test/unit/route-normalize.test.ts
+index 2243241..9613937 100644
+--- a/test/unit/route-normalize.test.ts
++++ b/test/unit/route-normalize.test.ts
+@@ -1,7 +1,9 @@
+ import { describe, expect, it } from "vitest";
++import { addRoute, createRouter, findRoute } from "rou3";
+ import { H3 } from "../../src/h3.ts";
++import { mockEvent } from "../../src/utils/event.ts";
+ import { removeRoute } from "../../src/utils/route.ts";
+-import { normalizeRoute } from "../../src/utils/internal/path.ts";
++import { normalizeRoute } from "../../src/utils/path.ts";
+ 
+ // `on()` used to normalize a route pattern with `new URL(route, "http://_")`
+ // while `use(route, mw)` normalized it with `canonicalPathname` alone. The two
+@@ -91,6 +93,24 @@ describe("route registration", () => {
+     );
+   });
+ 
++  // A framework that registers into its own rou3 router (e.g. a build-time
++  // compiled one) and matches it against `event.url.pathname` must normalize
++  // patterns the way `on()` does, or literal routes like `/café` never match.
++  it("an external rou3 router matches what h3 matches once patterns are normalized", async () => {
++    const literals = ["/について", "/café/x", "/hello world", '/a"b', "/tag/<x>", "/%40handle"];
++    const app = new H3();
++    const router = createRouter<string>();
++    for (const route of literals) {
++      app.get(route, () => "ok");
++      addRoute(router, "GET", normalizeRoute(route), route);
++    }
++    for (const route of literals) {
++      expect((await app.request(route)).status, `h3: ${route}`).toBe(200);
++      const { pathname } = mockEvent(`http://localhost${route}`).url;
++      expect(findRoute(router, "GET", pathname)?.data, `rou3: ${route}`).toBe(route);
++    }
++  });
++
+   it.each(CASES)("removeRoute(%j) removes the route registered as %j", (source, registered) => {
+     const app = new H3();
+     app.get(source, () => "ok");
+diff --git a/test/unit/types.test-d.ts b/test/unit/types.test-d.ts
+index 5f4c587..60d5a97 100644
+--- a/test/unit/types.test-d.ts
++++ b/test/unit/types.test-d.ts
+@@ -4,6 +4,10 @@ import type {
+   InferRouteHandlerSuccessResponse,
+   RouteContract,
+   RouteRules,
++  EventHandler,
++  EventHandlerRequest,
++  HTTPHandler,
++  TypedHeaders,
+   WebSocketResponse,
+ } from "../../src/index.ts";
+ import { H3 } from "../../src/index.ts";
+@@ -17,6 +21,9 @@ import {
+   defineValidatedHandler,
+   defineRouteHandler,
+   defineWebSocketHandler,
++  defineLazyEventHandler,
++  toEventHandler,
++  withBase,
+ } from "../../src/index.ts";
+ import {
+   appendHeaders,
+@@ -27,6 +34,20 @@ import {
+ import { z } from "zod";
+ 
+ describe("types", () => {
++  it("exports TypedHeaders", () => {
++    type RequestHeaders = TypedHeaders<{ authorization: string }>;
++    const getAuthorization = (headers: RequestHeaders) => headers.get("authorization");
++    expectTypeOf(getAuthorization).returns.toEqualTypeOf<string | null>();
++  });
++
++  it("event.req.headers uses request header names", () => {
++    type HeaderName = Parameters<H3Event["req"]["headers"]["delete"]>[0];
++    expectTypeOf<Extract<HeaderName, "Authorization">>().toEqualTypeOf<"Authorization">();
++    expectTypeOf<Extract<HeaderName, "X-Powered-By">>().toBeNever();
++  });
++
++  type ReqOf<H> = H extends (event: H3Event<infer R>) => any ? R : never;
++
+   describe("eventHandler", () => {
+     it("return type (inferred)", () => {
+       const handler = defineHandler(() => {
+@@ -278,8 +299,6 @@ describe("types", () => {
+   });
+ 
+   describe("defineValidatedHandler", () => {
+-    type ReqOf<H> = H extends (event: H3Event<infer R>) => any ? R : never;
+-
+     it("returned handler exposes validated body, query and headers", () => {
+       const handler = defineValidatedHandler({
+         validate: {
+@@ -332,6 +351,70 @@ describe("types", () => {
+     });
+   });
+ 
++  describe("routes", () => {
++    it("types the event of an inline method handler", () => {
++      new H3().get("/", (event) => {
++        expectTypeOf(event).toEqualTypeOf<H3Event<EventHandlerRequest>>();
++        return "ok";
++      });
++    });
++
++    it("types the event of an inline `on` handler", () => {
++      new H3().on("GET", "/", (event) => {
++        expectTypeOf(event).toEqualTypeOf<H3Event<EventHandlerRequest>>();
++        return "ok";
++      });
++    });
++
++    it("accepts a handler with a concrete request type in an untyped slot", () => {
++      expectTypeOf<EventHandler<{ body: { id: string } }>>().toExtend<HTTPHandler>();
++    });
++  });
++
++  describe("handler passthrough", () => {
++    const handler = defineValidatedHandler({
++      validate: { body: z.object({ title: z.string() }) },
++      handler: () => "ok",
++    });
++
++    it("keeps the request type through toEventHandler", () => {
++      const normalized = toEventHandler(handler)!;
++      expectTypeOf<ReqOf<typeof normalized>["body"]>().toEqualTypeOf<{ title: string }>();
++    });
++
++    it("keeps the request type through withBase", () => {
++      const based = withBase("/api", handler);
++      expectTypeOf<ReqOf<typeof based>["body"]>().toEqualTypeOf<{ title: string }>();
++    });
++
++    it("keeps the request type through defineLazyEventHandler", () => {
++      const lazy = defineLazyEventHandler(() => handler);
++      expectTypeOf<ReqOf<typeof lazy>["body"]>().toEqualTypeOf<{ title: string }>();
++    });
++
++    it("does not leak any for a plain HTTPHandler", () => {
++      const plain = handler as HTTPHandler;
++
++      const normalized = toEventHandler(plain)!;
++      expectTypeOf<ReqOf<typeof normalized>>().not.toBeAny();
++      expectTypeOf<ReqOf<typeof normalized>>().toEqualTypeOf<EventHandlerRequest>();
++
++      const based = withBase("/api", plain);
++      expectTypeOf<ReqOf<typeof based>>().not.toBeAny();
++      expectTypeOf<ReqOf<typeof based>>().toEqualTypeOf<EventHandlerRequest>();
++
++      const lazy = defineLazyEventHandler(() => plain);
++      expectTypeOf<ReqOf<typeof lazy>>().not.toBeAny();
++      expectTypeOf<ReqOf<typeof lazy>>().toEqualTypeOf<EventHandlerRequest>();
++    });
++
++    it("uses the default request type for an H3 instance", () => {
++      const normalized = toEventHandler(new H3())!;
++      expectTypeOf<ReqOf<typeof normalized>>().not.toBeAny();
++      expectTypeOf<ReqOf<typeof normalized>>().toEqualTypeOf<EventHandlerRequest>();
++    });
++  });
++
+   describe("getQuery", () => {
+     it("untyped", () => {
+       defineHandler((event) => {
+diff --git a/vitest.config.mjs b/vitest.config.mjs
+index 6d6a919..a01db40 100644
+--- a/vitest.config.mjs
++++ b/vitest.config.mjs
+@@ -1,8 +1,15 @@
+-import { defineConfig } from "vitest/config";
++import { configDefaults, defineConfig } from "vitest/config";
+ 
+ export default defineConfig({
+   test: {
+-    typecheck: { enabled: !process.argv.includes("bench") },
++    typecheck: {
++      enabled: !process.argv.includes("bench"),
++      // `test/rules/*.test-d.ts` are flat assertion sheets: module augmentation
++      // and ambient declarations cannot nest inside a test, so they declare no
++      // suite — and vitest v5 fails any `.test-d.ts` file with zero tests.
++      // `pnpm typecheck` (tsc over `src` + `test`) already validates them.
++      exclude: [...configDefaults.typecheck.exclude, "test/rules/*.test-d.ts"],
++    },
+     coverage: {
+       include: ["src/**/*.ts"],
+       exclude: ["src/types/**", "src/_deprecated.ts", "src/_entries/**"],

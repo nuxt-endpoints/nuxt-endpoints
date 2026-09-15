@@ -1,14 +1,11 @@
 import { z } from 'zod'
-import { defineRouteHandler } from '../../../../../src/runtime'
-
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: z.object({ ok: z.literal(true) }),
-      404: {
-        body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
-        contentType: 'application/problem+json',
-      },
+import { defineEndpoint } from '../../../../../src/runtime'
+export default defineEndpoint({
+  responses: {
+    200: z.object({ ok: z.literal(true) }),
+    404: {
+      body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
+      contentType: 'application/problem+json',
     },
   },
   handler: (event) =>

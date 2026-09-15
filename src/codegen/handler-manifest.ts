@@ -3,6 +3,7 @@ import { toImportPath } from './shared'
 export type EndpointHandlerManifestDescriptor = {
   handler: string
   route: string
+  sourceRoute?: string
   method: string
 }
 
@@ -17,7 +18,7 @@ export function generateEndpointHandlerManifest(
 
   const entries = handlers.map(
     (handler) => `  {
-    route: ${JSON.stringify(handler.route)},
+    route: ${JSON.stringify(handler.route)},${handler.sourceRoute ? `\n    sourceRoute: ${JSON.stringify(handler.sourceRoute)},` : ''}
     method: ${JSON.stringify(handler.method)},
     load: () => import(${JSON.stringify(toImportPath(handler.handler))}).then((module) => module.default),
   }`,

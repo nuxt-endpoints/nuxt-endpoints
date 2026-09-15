@@ -1188,7 +1188,7 @@ packages:
       typescript: ^5.9.3
 
   '@nuxt/nitro-server@file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz':
-    resolution: {integrity: sha512-xMuFOgL99yLiBdrg32rcU/NX6m09O02pIvoescUIbNXvzd8SsgvCuNUOgy5MAT/U4yyx3Q8JN/r5oJLjJ0bfNQ==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
+    resolution: {integrity: sha512-M7kroi7WQP9wySbImMvg3jSrMFvTNiLTEpR0cYMESBHeWG5E1y3HUevgj68nK2l5ArFlepIiXrIIS+os2ZPn/g==, tarball: file:.upstream/nuxt/.prototype-pack/nuxt-nitro-server-5.0.0-0.tgz}
     version: 5.0.0-0
     engines: {node: ^22.19.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:

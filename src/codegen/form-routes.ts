@@ -1,3 +1,4 @@
+import { normalizeRoute } from 'h3'
 import type { EndpointRouteHandler } from './types'
 
 /** One page URL's native-form target, as the bridge middleware needs it. */
@@ -20,13 +21,14 @@ export function generateEndpointFormRoutes(handlers: readonly EndpointRouteHandl
     if (!handler.form || handler.form.method !== 'post' || !handler.route) {
       continue
     }
-    const existing = routes[handler.form.action]
+    const action = normalizeRoute(handler.form.action)
+    const existing = routes[action]
     if (existing) {
       throw new Error(
         `[nuxt-endpoints] Two endpoints declare \`form.action: ${JSON.stringify(handler.form.action)}\`: ${existing.target} and ${handler.route}. A page URL can back one endpoint, because a native submission carries nothing that would tell them apart.`,
       )
     }
-    routes[handler.form.action] = {
+    routes[action] = {
       target: handler.route,
       enctype: handler.form.enctype,
       ...(handler.form.redirect ? { redirect: handler.form.redirect } : {}),

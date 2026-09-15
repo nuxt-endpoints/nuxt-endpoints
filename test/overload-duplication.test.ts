@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-
 // `defineEndpoint` declares its merged overloads twice: once leading, so
 // resolution picks them for a well-formed call, and once trailing, so a failed
 // call is elaborated against a merged signature rather than the contract-only
@@ -14,19 +13,19 @@ const source = readFileSync(
   fileURLToPath(new URL('../src/runtime/endpoint.ts', import.meta.url)),
   'utf8',
 ).split('\n')
-
-type Overload = { line: number; kind: string; body: string }
-
+type Overload = {
+  line: number
+  kind: string
+  body: string
+}
 function overloads(): Overload[] {
   const starts = source
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => /^export function defineEndpoint[(<]/.test(line))
     .map(({ index }) => index)
-
   return starts.map((start, position) => {
     const end = starts[position + 1] ?? source.length
     const body = source.slice(start, end)
-
     // Trailing comments introduce the NEXT declaration, so they are not part of
     // this one and must not count as drift.
     while (
@@ -35,7 +34,6 @@ function overloads(): Overload[] {
     ) {
       body.pop()
     }
-
     const text = body.join('\n')
     const kind = text.startsWith('export function defineEndpoint(')
       ? 'implementation'
@@ -44,15 +42,12 @@ function overloads(): Overload[] {
         : text.includes('HEADER_NAME')
           ? 'merged/idempotent'
           : 'merged/plain'
-
     return { line: start + 1, kind, body: text }
   })
 }
-
 describe('defineEndpoint overload declarations', () => {
   it('declares each merged shape exactly twice, leading and trailing', () => {
     const kinds = overloads().map((overload) => overload.kind)
-
     expect(kinds).toEqual([
       'merged/idempotent',
       'merged/plain',
@@ -62,13 +57,10 @@ describe('defineEndpoint overload declarations', () => {
       'implementation',
     ])
   })
-
   it('keeps each trailing copy byte-identical to its leading one', () => {
     const declarations = overloads()
-
     for (const kind of ['merged/idempotent', 'merged/plain'] as const) {
       const [lead, tail] = declarations.filter((overload) => overload.kind === kind)
-
       expect(lead, `no leading ${kind} overload`).toBeDefined()
       expect(tail, `no trailing ${kind} overload`).toBeDefined()
       expect(
@@ -78,7 +70,6 @@ describe('defineEndpoint overload declarations', () => {
       ).toBe(lead!.body)
     }
   })
-
   it('gives every overload the same arity, which is what lets a trailing copy own the error', () => {
     // TypeScript elaborates a failed call against the last candidate that
     // PASSED the arity check, not the last declaration. A copy taking a
@@ -91,7 +82,6 @@ describe('defineEndpoint overload declarations', () => {
         /^ {2}options\?: EndpointRuntimeOptions,$/m.test(overload.body),
       ],
     }))
-
     for (const { line, parameters } of shapes) {
       expect(
         parameters,

@@ -59,20 +59,20 @@ Two ordinary route contracts are the low-level API. The trigger adds a static
 relation:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   polling: {
     monitor: { path: '/api/operations/:id', method: 'get' },
     locationHeader: 'Location',
   },
-  validate: {
+  request: {
     body: ExportRequest,
-    response: {
-      202: {
-        body: z.undefined(),
-        headers: { location: Location, 'retry-after': RetryAfter.optional() },
-      },
-      201: Export,
+  },
+  responses: {
+    202: {
+      body: z.undefined(),
+      headers: { location: Location, 'retry-after': RetryAfter.optional() },
     },
+    201: Export,
   },
   handler: async (event) => {
     const operation = await enqueueExport(event.validated.body)

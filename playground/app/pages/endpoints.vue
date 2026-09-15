@@ -61,7 +61,7 @@
             <article class="article -stage">
               <header class="header">
                 <span class="value">Server contract</span>
-                <code class="code">defineRouteHandler</code>
+                <code class="code">defineEndpoint</code>
               </header>
               <pre class="pre"><code>{{ selectedScenario.contract }}</code></pre>
             </article>
@@ -261,24 +261,24 @@ type TryOperation = {
   confirmations: string[]
 }
 
-const getUserContract = `export default defineRouteHandler({
-  params: z.object({ id: z.string() }),
-  validate: {
+const getUserContract = `export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.string() }),
     query: z.object({ includeAge: z.coerce.boolean().optional() }),
     headers: z.object({ 'x-client-version': z.string().min(1) }),
-    response: { 200: User, 404: ErrorResponse },
   },
+  responses: { 200: User, 404: ErrorResponse },
   handler: (event) => findUser(event.validated.params.id),
 })`
 
-const createUserContract = `export default defineRouteHandler({
-  validate: {
+const createUserContract = `export default defineEndpoint({
+  request: {
     body: z.object({
       name: z.string().min(1),
       age: z.number().int().nonnegative().optional(),
     }),
-    response: { 201: User },
   },
+  responses: { 201: User },
   handler: (event) => event.respond(201, createUser(event.validated.body)),
 })`
 
@@ -362,8 +362,8 @@ if (result.status === 201) result.body.id`,
       'Static types know that query input is a string. Runtime validation still protects the HTTP boundary from an out-of-range value.',
     method: 'GET',
     path: '/api/users/search?q=ja&limit=99',
-    contract: `export default defineRouteHandler({
-  validate: {
+    contract: `export default defineEndpoint({
+  request: {
     query: v.object({
       q: v.pipe(v.string(), v.minLength(1)),
       limit: v.optional(v.pipe(
@@ -371,8 +371,8 @@ if (result.status === 201) result.body.id`,
         v.integer(), v.minValue(1), v.maxValue(10),
       )),
     }),
-    response: { 200: SearchResult },
   },
+  responses: { 200: SearchResult },
   handler: (event) => searchUsers(event.validated.query),
 })`,
     client: `const response = await $endpoint('/api/users/search', {

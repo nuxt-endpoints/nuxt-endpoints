@@ -4,6 +4,7 @@
 // JSON serialization and so cannot carry functions, or the connections they
 // close over. Route entries hold only the safe endpoint-specific exceptions;
 // storage, scope, and authorization remain shared application policy.
+import { normalizeRuntimeRouteIdentity } from './platform'
 import type { EndpointDefinition } from './contract'
 import type { EndpointIdempotencyContext } from './endpoint'
 import { validateIdempotencyTtl } from './idempotency'
@@ -177,7 +178,20 @@ export function resolveEndpointRouteRuntime(
   routeTemplate: string,
   method: string,
 ): EndpointRouteRuntime | undefined {
-  return runtime?.routes?.[routeTemplate]?.[method.toLowerCase() as EndpointRuntimeRouteMethod]
+  const identity = normalizeRuntimeRouteIdentity(routeTemplate)
+  let resolved: EndpointRouteRuntime | undefined
+  for (const [path, methods] of Object.entries(runtime?.routes ?? {})) {
+    if (normalizeRuntimeRouteIdentity(path) !== identity) continue
+    const candidate = methods[method.toLowerCase() as EndpointRuntimeRouteMethod]
+    if (!candidate) continue
+    if (resolved) {
+      throw new TypeError(
+        `defineEndpointRuntime(): multiple entries resolve to ${method.toLowerCase()} ${identity}.`,
+      )
+    }
+    resolved = candidate
+  }
+  return resolved
 }
 
 function validateEndpointRouteRuntimeMap(value: unknown): void {

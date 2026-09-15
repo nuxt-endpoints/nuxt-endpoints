@@ -24,7 +24,7 @@ export const cursorPaginationDefaults = {
 
 /**
  * Constructs the complete request/response contract for cursor pagination.
- * The item schema belongs here rather than in `validate.response`, leaving one
+ * The item schema belongs here rather than in `responses`, leaving one
  * source of truth for the generated page envelope.
  */
 export type EndpointCursorPaginationContract<ITEM extends ValidatorSchema = ValidatorSchema> = {
@@ -113,8 +113,8 @@ export type PaginationContractConstraint<PAGINATION, QUERY, RESPONSES> =
     ? [PaginationQueryCollision<QUERY>] extends [never]
       ? [PaginationResponseCollision<RESPONSES>] extends [never]
         ? unknown
-        : PaginationRefusal<'pagination owns response status 200; remove validate.response[200].'>
-      : PaginationRefusal<'pagination owns query.cursor and query.limit; remove them from validate.query.'>
+        : PaginationRefusal<'pagination owns response status 200; remove responses[200].'>
+      : PaginationRefusal<'pagination owns query.cursor and query.limit; remove them from request.query.'>
     : unknown
 
 export type ApplyPaginationQuery<QUERY, PAGINATION> =
@@ -151,7 +151,7 @@ export function assertPaginationSourcesDoNotOverlap(
     const output = inspectValidatorOutputObject(query)
     if (!input.inspectable || !output.inspectable) {
       throw new TypeError(
-        'Cursor pagination can only be combined with a JSON-Schema-convertible object in validate.query, so ownership of cursor and limit can be checked.',
+        'Cursor pagination can only be combined with a JSON-Schema-convertible object in request.query, so ownership of cursor and limit can be checked.',
       )
     }
     const duplicate = ['cursor', 'limit'].find(
@@ -159,14 +159,14 @@ export function assertPaginationSourcesDoNotOverlap(
     )
     if (duplicate) {
       throw new TypeError(
-        `Cursor pagination owns validate.query.${duplicate}; remove the duplicate declaration and configure pagination instead.`,
+        `Cursor pagination owns request.query.${duplicate}; remove the duplicate declaration and configure pagination instead.`,
       )
     }
   }
 
   if (responses && (200 in responses || '200' in responses)) {
     throw new TypeError(
-      'Cursor pagination owns validate.response[200]; remove the duplicate response declaration and configure pagination instead.',
+      'Cursor pagination owns responses[200]; remove the duplicate response declaration and configure pagination instead.',
     )
   }
 }
@@ -189,7 +189,7 @@ function createCursorPaginationQuerySchema(
           if (!result.success) return { issues: result.issues }
           if (!isRecord(result.value)) {
             return {
-              issues: [issue([], 'validate.query must produce an object', 'invalid_type')],
+              issues: [issue([], 'request.query must produce an object', 'invalid_type')],
             }
           }
           value = result.value

@@ -1,14 +1,12 @@
 import { z } from 'zod'
-import { defineRouteHandler } from '../../../../../src/runtime'
-
+import { defineEndpoint } from '../../../../../src/runtime'
 const Article = z.object({ id: z.number(), title: z.string() })
 const articles = [
   { id: 1, title: 'One' },
   { id: 2, title: 'Two' },
   { id: 3, title: 'Three' },
 ]
-
-export default defineRouteHandler({
+export default defineEndpoint({
   pagination: { kind: 'cursor', item: Article },
   handler: (event) => {
     const start = event.validated.query.cursor ? Number(event.validated.query.cursor) : 0

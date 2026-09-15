@@ -17,6 +17,34 @@ import {
 import { formOf } from '../src/runtime'
 
 describe('Nitro route contract provider', () => {
+  it.each([
+    ['/について', '/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6'],
+    ['/hello world', '/hello%20world'],
+    ['/%40handle', '/@handle'],
+    ['/a/%2e%2e/c', '/c'],
+  ])(
+    'uses the canonical identity for %s and preserves its authored path',
+    async (route, canonical) => {
+      const handler = { handler: '/project/server/api/normalized.get.ts', route, method: 'get' }
+      const contracts = indexRouteContracts([{ ...handler, contract: { responses: {} } }])
+      await expect(composeHandlers([handler], contracts)).resolves.toMatchObject([
+        { route: canonical, sourceRoute: route, method: 'get' },
+      ])
+    },
+  )
+
+  it('rejects endpoint routes that collide after normalization', async () => {
+    const handlers = ['/%40handle', '/@handle'].map((route, i) => ({
+      handler: `/project/server/api/normalized-${i}.get.ts`,
+      route,
+      method: 'get',
+    }))
+    const contracts = indexRouteContracts(
+      handlers.map((handler) => ({ ...handler, contract: { responses: {} } })),
+    )
+    await expect(composeHandlers(handlers, contracts)).rejects.toThrow(/same route identity/)
+  })
+
   it('projects a declared endpoint name into generated client metadata', async () => {
     const handler = {
       handler: '/project/server/api/users/[id].get.ts',
@@ -295,7 +323,7 @@ describe('Nitro route contract provider', () => {
           contract: { form: { action: '/search', method: 'get' }, responses: {} },
         },
       ]),
-    ).toThrow(/GET form needs `validate.query`/)
+    ).toThrow(/GET form needs `request.query`/)
   })
 
   it('rejects a redirect placeholder absent from a successful response', () => {

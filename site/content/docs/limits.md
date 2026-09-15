@@ -17,7 +17,7 @@ Contracts come from Nitro's build-time contract macro and its `getRouteContracts
 
 ### Endpoint discovery fails closed
 
-The macro accepts only a direct default-exported `defineRouteHandler({...})` call with an object literal. Spreads, computed properties, and mutable bindings at that boundary fail with a source diagnostic instead of yielding a partial contract, because a partial contract could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes are ignored rather than rejected.
+The macro accepts only a direct default-exported `defineEndpoint({...})` call with an object literal. Spreads, computed properties, and mutable bindings at that boundary fail with a source diagnostic instead of yielding a partial contract, because a partial contract could make client types, runtime metadata, and OpenAPI disagree. Ordinary Nitro routes are ignored rather than rejected.
 
 ### Catch-all and optional-parameter routes cannot declare endpoints
 

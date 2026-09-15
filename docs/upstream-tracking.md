@@ -9,7 +9,8 @@ Stable repository ownership and per-feature implementation status live in the
 [`$endpoint` responsibility map](./endpoint-responsibilities.md). Keep that
 classification separate from this moving watchlist.
 
-Last verified: 2026-09-03.
+Issue and PR states last verified: 2026-09-10. Prototype baselines last
+verified: 2026-09-03.
 
 ## Tracking policy
 
@@ -22,9 +23,10 @@ Last verified: 2026-09-03.
 - Routine dependency, documentation, and unrelated runtime fixes are not
   listed.
 
-At the last verification, the local prototype branches were based on the
-current official code in Nuxt, H3, and fetchdts. Nitro official `main` had three
-additional documentation-only commits and no code change to port.
+At the prototype-baseline verification, the local prototype branches were
+based on the current official code in Nuxt, H3, and fetchdts. Nitro official
+`main` had three additional documentation-only commits and no code change to
+port.
 
 | Upstream | Prototype merge-base with official `main` | Official code commits to review |
 | -------- | ----------------------------------------- | ------------------------------: |
@@ -33,26 +35,78 @@ additional documentation-only commits and no code change to port.
 | H3       | `d78281bc7f48`                            |                               0 |
 | fetchdts | `f48bb95919d5`                            |                               0 |
 
+## Route normalization update — 2026-09-15
+
+h3 rc.32 and [Nitro #4600](https://github.com/nitrojs/nitro/pull/4600) are now
+incorporated locally through tracked patches over the existing fork pins.
+Nuxt normalizes handler and contract patterns before segment generation, and
+NE aligns generated paths and runtime identities while preserving authored
+response scopes. See [the integration report](./route-normalization-readiness.md)
+for reproduction steps, test results, and standalone Nitro limitations.
+
 ## Active watchlist
 
-| Area          | Upstream item                                                                                           | State | Why it matters to Nuxt Endpoints                                                                                                        | Review trigger                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| H3 contracts  | [h3#1437 — richer validated-routing core and types](https://github.com/h3js/h3/issues/1437)             | Open  | Owns the broader direction for params, response contracts, per-method routing, validation errors, and contract introspection.           | A maintainer narrows the accepted contract surface or asks for an implementation slice.        |
-| H3 params     | [h3#1501 — params validation in `defineValidatedHandler`](https://github.com/h3js/h3/pull/1501)         | Open  | Can replace part of the local request-validation implementation and affects where validated params live.                                | The PR is updated, reviewed by an H3 maintainer, merged, or superseded.                        |
-| Nitro OpenAPI | [nitro#4560 — infer request and response schemas](https://github.com/nitrojs/nitro/pull/4560)           | Open  | Adds request/response JSON Schema to route metadata. It is adjacent to the local contract provider and may offer reusable OpenAPI work. | The metadata shape changes, the PR receives maintainer direction, or it merges.                |
-| Nuxt Content  | [content#3770 — Nuxt 5 `#imports` compatibility](https://github.com/nuxt/content/issues/3770)           | Open  | Tracks server-side dependencies on an alias no longer supplied by Nitro 3.                                                              | A module-side explicit-import fix or a documented Nuxt adapter compatibility boundary appears. |
-| Nuxt Content  | [content#3772 — unresolved `nitropack/runtime` on Nitro 3](https://github.com/nuxt/content/issues/3772) | Open  | Blocks a clean Nuxt 5 documentation-site prerender with the currently published Content runtime.                                        | A Nitro 3 compatible Content release or migration PR appears.                                  |
+| Area              | Upstream item                                                                                           | State | Why it matters to Nuxt Endpoints                                                                                                        | Review trigger                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| H3 contracts      | [h3#1437 — richer validated-routing core and types](https://github.com/h3js/h3/issues/1437)             | Open  | Owns the broader direction for params, response contracts, per-method routing, validation errors, and contract introspection.           | A maintainer narrows the accepted contract surface or asks for an implementation slice.        |
+| H3 params         | [h3#1501 — params validation in `defineValidatedHandler`](https://github.com/h3js/h3/pull/1501)         | Open  | Can replace part of the local request-validation implementation and affects where validated params live.                                | The PR is updated, reviewed by an H3 maintainer, merged, or superseded.                        |
+| H3 context        | [h3#1502 — per-event typed `H3EventContext`](https://github.com/h3js/h3/pull/1502)                      | Draft | Explores carrying coerced params and, later, query/header values on a typed event context; currently stacked on #1501.                  | #1501 merges and the context design receives maintainer direction.                             |
+| Nitro OpenAPI     | [nitro#4560 — infer request and response schemas](https://github.com/nitrojs/nitro/pull/4560)           | Open  | Adds request/response JSON Schema to route metadata. It is adjacent to the local contract provider and may offer reusable OpenAPI work. | The metadata shape changes, the PR receives maintainer direction, or it merges.                |
+| fetchdts metadata | [fetchdts#195 — support consumer-owned route metadata](https://github.com/unjs/fetchdts/pull/195)       | Open  | Carries NE-owned contract metadata through the generic route compiler without making fetchdts status-aware.                             | Maintainer review, requested changes, or merge.                                                |
+| Nuxt Content      | [content#3770 — Nuxt 5 `#imports` compatibility](https://github.com/nuxt/content/issues/3770)           | Open  | Tracks server-side dependencies on an alias no longer supplied by Nitro 3.                                                              | A module-side explicit-import fix or a documented Nuxt adapter compatibility boundary appears. |
+| Nuxt Content      | [content#3772 — unresolved `nitropack/runtime` on Nitro 3](https://github.com/nuxt/content/issues/3772) | Open  | Blocks a clean Nuxt 5 documentation-site prerender with the currently published Content runtime.                                        | A Nitro 3 compatible Content release or migration PR appears.                                  |
 
 `@nuxt/content@3.16.0`, the latest published version at the last verification,
 still contains server runtime imports that are incompatible with the Nitro 3
 prototype. This is a documentation-site release blocker, not a blocker for the
 Nuxt Endpoints runtime, generated types, or browser integration.
 
+## Contribution queue (handoff)
+
+| Priority | Item                                                                                                   | Current action                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| 1        | [nitro#4560](https://github.com/nitrojs/nitro/pull/4560)                                               | Comment with the route-module-evaluation reproducer below. Follow response/status-map design after that.              |
+| 2        | [h3#1501](https://github.com/h3js/h3/pull/1501)                                                        | Exercise params validation, coercion, strictness, and inferred handler input against NE.                              |
+| 3        | [h3#1502](https://github.com/h3js/h3/pull/1502)                                                        | After #1501 direction settles, check whether coerced params/query/headers remain accurately typed in `event.context`. |
+| Observe  | [h3#1437](https://github.com/h3js/h3/issues/1437)                                                      | No additional comment until maintainer direction or an implementation result creates new evidence.                    |
+| Wait     | [fetchdts#195](https://github.com/unjs/fetchdts/pull/195)                                              | Consumer-owned metadata PR is open; wait for maintainer feedback.                                                     |
+| Low      | [nitro#3542](https://github.com/nitrojs/nitro/issues/3542)                                             | Keep as the v2-era validator/OpenAPI reference; #4560 is the active v3 implementation.                                |
+| Done     | [h3#1538](https://github.com/h3js/h3/pull/1538), [nuxt#36238](https://github.com/nuxt/nuxt/pull/36238) | Merged; no comment needed.                                                                                            |
+| Closed   | [nitro#2758](https://github.com/nitrojs/nitro/issues/2758)                                             | Closed as not planned after typed-fetch ownership moved to Nuxt/fetchdts; no follow-up.                               |
+
+### Nitro #4560 verification
+
+Verified PR head `92a85ef4` (fetched 2026-09-10) against representative NE
+routes:
+
+- The PR's two unit tests and Vite OpenAPI integration test pass.
+- TypeScript response inference produces the expected schema for an NE
+  single-method route, including an absolute handler discovered from a custom
+  scan directory.
+- A status-declared NE route still yields only its successful body as the
+  inferred default `200` schema. The PR has no per-status response model.
+- An NE multi-method route yields no inferred response schema because one
+  exported dispatcher does not provide one method-specific return type.
+- Request inference recognizes only a direct
+  `export default defineValidatedHandler(...)`; `defineEndpoint(...)` is not a
+  recognized macro, so NE request schemas are not projected.
+- Explicit OpenAPI `parameters`, `requestBody`, and `responses` replace the
+  corresponding inferred fields rather than merging with them. This is the
+  documented behavior, but it is not sufficient for NE's additive status and
+  media metadata.
+- Opening `/_openapi.json` dynamically imports every recognized validated
+  route to read `module.default.validate`. A regression fixture with an
+  otherwise-unrequested route-level counter observed `0` before the OpenAPI
+  request and `1` afterwards. This is the strongest focused upstream review
+  comment: schema generation should not execute route-module top-level code,
+  or the runtime-evaluation behavior should be an explicit accepted boundary.
+
 ## Related, non-blocking
 
-| Area       | Upstream item                                                                                   | State | Local impact                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------ |
-| H3 headers | [h3#1542 — re-export typed request/response header types](https://github.com/h3js/h3/pull/1542) | Open  | May simplify public type imports later; it does not change contract extraction or validation behavior. |
+| Area                    | Upstream item                                                                                   | State    | Local impact                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| H3 headers              | [h3#1542 — re-export typed request/response header types](https://github.com/h3js/h3/pull/1542) | Open     | May simplify public type imports later; it does not change contract extraction or validation behavior. |
+| Nitro validator OpenAPI | [nitro#3542 — validator definitions in OpenAPI](https://github.com/nitrojs/nitro/issues/3542)   | Open; v2 | Earlier problem statement now substantially overlapped by the v3 work in #4560.                        |
 
 ## Resolved or incorporated references
 

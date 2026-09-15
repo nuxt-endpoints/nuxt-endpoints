@@ -50,6 +50,9 @@ jobs:
           test "$(git -C .upstream/nitro rev-parse HEAD)" = cc9f56fcf2cc1bc8b19d1c81408853df8b1c7b07
           test "$(git -C .upstream/nuxt rev-parse HEAD)" = d9dab5edf132eb2ba7882966ff21e6ca1c427a32
 
+      - name: Apply route normalization updates
+        run: node scripts/apply-upstream-patches.mjs
+
       - name: Build fetchdts prototype
         working-directory: .upstream/fetchdts
         run: vp install --frozen-lockfile && vp run build

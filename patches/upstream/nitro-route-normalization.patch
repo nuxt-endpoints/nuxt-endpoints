@@ -1,0 +1,341 @@
+diff --git a/package.json b/package.json
+index 1b6d2ffb..e42b494c 100644
+--- a/package.json
++++ b/package.json
+@@ -74,13 +74,13 @@
+     "crossws": "^0.4.12",
+     "db0": "^0.4.1",
+     "env-runner": "^0.2.1",
+-    "h3": "^2.0.1-rc.31",
++    "h3": "^2.0.1-rc.32",
+     "hookable": "^6.1.1",
+     "nf3": "^0.3.24",
+     "ocache": "^0.3.0",
+     "rolldown": "^1.2.7",
+     "rou3": "^0.9.2",
+-    "srvx": "^1.0.3",
++    "srvx": "^1.0.5",
+     "unenv": "^2.0.0-rc.24",
+     "unstorage": "^2.0.0-alpha.10"
+   },
+diff --git a/src/build/route-contracts.ts b/src/build/route-contracts.ts
+index 9cbd21d9..a34fc3f7 100644
+--- a/src/build/route-contracts.ts
++++ b/src/build/route-contracts.ts
+@@ -1,3 +1,4 @@
++import { normalizeRoute } from "h3";
+ import { mkdir, writeFile } from "node:fs/promises";
+ import { pathToFileURL } from "node:url";
+ import { isAbsolute, join } from "pathe";
+@@ -59,7 +60,7 @@ export default [
+ ${handlers
+   .map(
+     (handler) =>
+-      `{ route: ${JSON.stringify(handler.route)}, method: ${JSON.stringify(
++      `{ route: ${JSON.stringify(normalizeRoute(handler.route!))}, method: ${JSON.stringify(
+         handler.method?.toLowerCase()
+       )}, handlerMethod: ${JSON.stringify(handler.method?.toLowerCase())}, handler: ${JSON.stringify(
+         handler.handler
+diff --git a/src/build/virtual/routing-contracts.ts b/src/build/virtual/routing-contracts.ts
+index 116a5262..caa711e7 100644
+--- a/src/build/virtual/routing-contracts.ts
++++ b/src/build/virtual/routing-contracts.ts
+@@ -1,3 +1,4 @@
++import { normalizeRoute } from "h3";
+ import type { Nitro } from "nitro/types";
+ 
+ export default function routingContracts(nitro: Nitro) {
+@@ -21,7 +22,7 @@ export const routeContracts = [
+ ${handlers
+   .map(
+     (handler) =>
+-      `{ route: ${JSON.stringify(handler.route)}, method: ${JSON.stringify(
++      `{ route: ${JSON.stringify(normalizeRoute(handler.route!))}, method: ${JSON.stringify(
+         handler.method?.toLowerCase()
+       )}, contract: ${handler._importHash}Contract }`
+   )
+diff --git a/src/presets/vercel/utils.ts b/src/presets/vercel/utils.ts
+index d16fe54e..15dc84fe 100644
+--- a/src/presets/vercel/utils.ts
++++ b/src/presets/vercel/utils.ts
+@@ -97,7 +97,9 @@ export async function generateFunctionFiles(nitro: Nitro) {
+   const hasRouteFunctionConfig = functionRules && Object.keys(functionRules).length > 0;
+   let routeFuncRouter: Router<VercelServerlessFunctionConfig> | undefined;
+   if (hasRouteFunctionConfig) {
+-    routeFuncRouter = new Router<VercelServerlessFunctionConfig>();
++    // Looked up with route *patterns* (a `routeRules` key, a Vercel `src` regex),
++    // not with a request path, so the patterns stay exactly as authored.
++    routeFuncRouter = new Router<VercelServerlessFunctionConfig>(undefined, { normalize: false });
+     routeFuncRouter._update(
+       Object.entries(functionRules).map(([route, data]) => ({
+         route,
+diff --git a/src/routing.ts b/src/routing.ts
+index 5c262b1f..09e2006b 100644
+--- a/src/routing.ts
++++ b/src/routing.ts
+@@ -4,6 +4,7 @@ import type { RouterCompilerOptions } from "rou3/compiler";
+ 
+ import { join } from "pathe";
+ import { runtimeDir } from "nitro/meta";
++import { normalizeRoute } from "h3";
+ import { addRoute, createRouter, findRoute, findAllRoutes } from "rou3";
+ import { compileRouterToString } from "rou3/compiler";
+ import { hash } from "./utils/hash.ts";
+@@ -29,7 +30,12 @@ export function initNitroRouting(nitro: Nitro) {
+     nitro.options.baseURL
+   );
+ 
+-  const routeRules = new Router<NitroRouteRules & { _route: string }>(nitro.options.baseURL);
++  // Matched with route *patterns* at build time (presets), never with a request
++  // path — the runtime rules matcher is compiled from `options.routeRules` by
++  // `h3/rules`, which normalizes in the opposite direction (patterns decoded).
++  const routeRules = new Router<NitroRouteRules & { _route: string }>(nitro.options.baseURL, {
++    normalize: false,
++  });
+ 
+   const globalMiddleware: (NitroEventHandler & { _importHash: string })[] = [];
+ 
+@@ -134,6 +140,21 @@ export interface Route<T = unknown> {
+   data: T;
+ }
+ 
++export interface RouterOptions {
++  /**
++   * Normalize each pattern into the shape of the `event.url.pathname` it will be
++   * matched against (percent-encoding, needless-escape decoding, dot segments),
++   * mirroring what h3 does in its own `on()`.
++   *
++   * Turn this off for a router that is matched with another *pattern* rather
++   * than with a request path — the two sides would otherwise normalize
++   * differently and stop matching.
++   *
++   * @default true
++   */
++  normalize?: boolean;
++}
++
+ export class Router<T> {
+   _routes?: Route<T>[];
+   _router?: RouterContext<T>;
+@@ -147,10 +168,12 @@ export class Router<T> {
+    */
+   _compiled?: string;
+   _baseURL: string;
++  _normalize: boolean;
+ 
+-  constructor(baseURL?: string) {
++  constructor(baseURL?: string, opts?: RouterOptions) {
++    this._normalize = opts?.normalize !== false;
+     this._update([]);
+-    this._baseURL = baseURL || "";
++    this._baseURL = baseURL ? (this._normalize ? normalizeRoute(baseURL) : baseURL) : "";
+     if (this._baseURL.endsWith("/")) {
+       this._baseURL = this._baseURL.slice(0, -1);
+     }
+@@ -165,7 +188,8 @@ export class Router<T> {
+     this._router = createRouter<T>();
+     this._compiled = undefined;
+     for (const route of routes) {
+-      addRoute(this._router, route.method, this._baseURL + route.route, route.data);
++      const pattern = this._normalize ? normalizeRoute(route.route) : route.route;
++      addRoute(this._router, route.method, this._baseURL + pattern, route.data);
+     }
+     if (opts?.merge) {
+       mergeCatchAll(this._router, this._baseURL);
+diff --git a/test/unit/route-pattern.test.ts b/test/unit/route-pattern.test.ts
+new file mode 100644
+index 00000000..da076b86
+--- /dev/null
++++ b/test/unit/route-pattern.test.ts
+@@ -0,0 +1,76 @@
++import { describe, expect, it } from "vitest";
++import { H3, mockEvent } from "h3";
++
++import { Router } from "../../src/routing.ts";
++
++// A pattern that reaches a handler in a plain h3 app must reach one through
++// Nitro's compiled rou3 router too.
++const cases: [pattern: string, normalized: string][] = [
++  ["/about", "/about"],
++  ["/について", "/%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"],
++  ["/café/**", "/caf%C3%A9/**"],
++  ["/emoji/🎉", "/emoji/%F0%9F%8E%89"],
++  ["/hello world", "/hello%20world"],
++  ['/a"b', "/a%22b"],
++  ["/tag/<x>", "/tag/%3Cx%3E"],
++  ["/a`b", "/a%60b"],
++  ["/%61dmin", "/admin"],
++  ["/%40handle", "/@handle"],
++  ["/a/./b", "/a/b"],
++  ["/a/b/../c", "/a/c"],
++  ["about", "/about"],
++  // rou3 syntax is never encoded, even where the URL serializer would encode it
++  ["/user/:id", "/user/:id"],
++  ["/user/:id?", "/user/:id?"],
++  ["/x/{y}", "/x/{y}"],
++  ["/user/:id(\\d+)", "/user/:id(\\d+)"],
++  ["/**", "/**"],
++  ["/**:slug", "/**:slug"],
++];
++
++describe("Router", () => {
++  it("normalizes a non-ASCII baseURL and preserves encoded separators", () => {
++    const router = new Router<string>("/日本語/");
++    router._update([{ route: "/a%2Fb", method: "GET", data: "encoded" }]);
++    expect(router.match("GET", eventPathname("/日本語/a%2Fb"))).toBe("encoded");
++    expect(router.match("GET", eventPathname("/日本語/a/b"))).toBeUndefined();
++  });
++
++  it("matches a normalized pattern against a wire pathname", () => {
++    for (const [pattern] of cases) {
++      if (/[?:*{}\\]/.test(pattern)) continue;
++      const router = new Router<string>();
++      router._update([{ route: pattern, method: "", data: pattern }]);
++      expect(router.match("", eventPathname(pattern)), pattern).toBe(pattern);
++    }
++  });
++
++  it("agrees with h3's own route registration", async () => {
++    const app = new H3();
++    const router = new Router<string>();
++    const literals = ["/について", "/café/x", "/hello world", '/a"b', "/tag/<x>", "/%40handle"];
++    for (const route of literals) {
++      app.get(route, () => "ok");
++    }
++    router._update(literals.map((route) => ({ route, method: "GET", data: route })));
++
++    for (const route of literals) {
++      const res = await app.fetch(new Request(`http://localhost${route}`));
++      expect(res.status, `h3: ${route}`).toBe(200);
++      expect(router.match("GET", eventPathname(route)), `nitro: ${route}`).toBeDefined();
++    }
++  });
++
++  it("leaves patterns untouched with `normalize: false`", () => {
++    const router = new Router<string>(undefined, { normalize: false });
++    router._update([{ route: "/について/**", method: "", data: "rules" }]);
++    // Preset code looks these up with another pattern, not a request path.
++    expect(router.match("", "/について/x")).toBe("rules");
++  });
++});
++
++// The pathname Nitro's compiled router is handed: h3 canonicalizes it on the
++// `H3Event` before anything can match on it (`/%40handle` -> `/@handle`).
++function eventPathname(route: string): string {
++  return mockEvent(new URL(route, "http://localhost").href).url.pathname;
++}
+diff --git a/test/vite/route-pattern-fixture/nitro.config.ts b/test/vite/route-pattern-fixture/nitro.config.ts
+new file mode 100644
+index 00000000..a5adb314
+--- /dev/null
++++ b/test/vite/route-pattern-fixture/nitro.config.ts
+@@ -0,0 +1,24 @@
++import { defineConfig } from "nitro";
++
++// Route patterns whose literal spelling differs from the `event.url.pathname`
++// they are matched against. Registered via `handlers` (rather than as file
++// names) so the patterns stay literal without odd filenames in the repo.
++export const routes = [
++  "/について", // non-ASCII
++  "/café/menu", // non-ASCII, mid-path
++  "/hello world", // space
++  "/tag/<x>", // WHATWG-encoded ASCII
++  "/%40handle", // needless escape, reaches h3 as `/@handle`
++];
++
++export default defineConfig({
++  prerender: { routes: ["/について"] },
++  // `routeRules` keys are *not* normalized: h3 compiles them itself and
++  // decodes patterns instead of encoding them.
++  routeRules: { "/について": { headers: { "x-route-rule": "hit" } } },
++  handlers: routes.map((route) => ({
++    route,
++    handler: "./routes/handler.ts",
++    method: "GET",
++  })),
++});
+diff --git a/test/vite/route-pattern-fixture/routes/handler.ts b/test/vite/route-pattern-fixture/routes/handler.ts
+new file mode 100644
+index 00000000..10db2429
+--- /dev/null
++++ b/test/vite/route-pattern-fixture/routes/handler.ts
+@@ -0,0 +1 @@
++export default () => "ok";
+diff --git a/test/vite/route-pattern-fixture/vite.config.ts b/test/vite/route-pattern-fixture/vite.config.ts
+new file mode 100644
+index 00000000..dc884054
+--- /dev/null
++++ b/test/vite/route-pattern-fixture/vite.config.ts
+@@ -0,0 +1,6 @@
++import { defineConfig } from "vite";
++import { nitro } from "nitro/vite";
++
++export default defineConfig({
++  plugins: [nitro()],
++});
+diff --git a/test/vite/route-pattern.test.ts b/test/vite/route-pattern.test.ts
+new file mode 100644
+index 00000000..7f93d55f
+--- /dev/null
++++ b/test/vite/route-pattern.test.ts
+@@ -0,0 +1,60 @@
++import { fileURLToPath } from "node:url";
++import { join } from "node:path";
++import { rm, mkdir, readFile } from "node:fs/promises";
++import { beforeAll, describe, expect, it } from "vitest";
++import { createNitro, build, prepare } from "nitro/builder";
++
++import { routes } from "./route-pattern-fixture/nitro.config.ts";
++
++const fixtureDir = fileURLToPath(new URL("./route-pattern-fixture", import.meta.url));
++const tmpDir = join(fixtureDir, ".tmp");
++
++async function buildFixture(preset: string) {
++  const outDir = join(tmpDir, preset);
++  await rm(outDir, { recursive: true, force: true });
++  await mkdir(outDir, { recursive: true });
++  const nitro = await createNitro({
++    rootDir: fixtureDir,
++    preset,
++    output: { dir: outDir },
++    builder: "vite",
++  });
++  try {
++    await prepare(nitro);
++    await build(nitro);
++  } finally {
++    await nitro.close();
++  }
++  return outDir;
++}
++
++describe("route patterns needing normalization", () => {
++  describe("standard preset", () => {
++    let fetchServer: (req: Request) => Promise<Response>;
++
++    beforeAll(async () => {
++      const outDir = await buildFixture("standard");
++      const entry = await import(join(outDir, "server/index.mjs"));
++      fetchServer = entry.default.fetch;
++    }, 60_000);
++
++    it.each(routes)("serves %j", async (route) => {
++      // The literal route text, exactly as a browser navigation would send it.
++      const response = await fetchServer(new Request(`http://localhost${route}`));
++      expect(response.status).toBe(200);
++      expect(await response.text()).toBe("ok");
++    });
++
++    it("still applies a route rule keyed by a non-ASCII pattern", async () => {
++      const response = await fetchServer(new Request("http://localhost/について"));
++      expect(response.headers.get("x-route-rule")).toBe("hit");
++    });
++  });
++
++  it("prerenders a non-ASCII route under its own literal path", async () => {
++    const outDir = await buildFixture("static");
++    // The handler returns a plain string, so the response is `text/plain` and
++    // the route is written verbatim rather than as `について.html`.
++    expect(await readFile(join(outDir, "public", "について"), "utf8")).toBe("ok");
++  }, 60_000);
++});

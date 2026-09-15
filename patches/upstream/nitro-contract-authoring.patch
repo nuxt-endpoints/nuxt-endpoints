@@ -1,0 +1,409 @@
+diff --git a/src/build/plugins/_route-contract-call.ts b/src/build/plugins/_route-contract-call.ts
+index 36a9701c..d6588ae4 100644
+--- a/src/build/plugins/_route-contract-call.ts
++++ b/src/build/plugins/_route-contract-call.ts
+@@ -1,16 +1,32 @@
+ import type { Node, Program } from "estree";
+ import { dirname, resolve } from "pathe";
+-import { collectPatternNames, fail, MACRO_NAME } from "./_route-contract-utils.ts";
++import { collectPatternNames, fail } from "./_route-contract-utils.ts";
+ 
+ export type RouteHandlerCall = {
+   exportDeclaration: Extract<Node, { type: "ExportDefaultDeclaration" }>;
+   call: Extract<Node, { type: "CallExpression" }>;
++  macroName: string;
+ };
+ 
+ export function findRouteHandlerCall(
+   ast: Program,
+   handlerPath: string,
+   walker: typeof import("oxc-walker"),
++  macroSources: ReadonlyMap<string, ReadonlySet<string>>
++): RouteHandlerCall | undefined {
++  for (const [macroName, sources] of macroSources) {
++    const result = findNamedRouteHandlerCall(ast, handlerPath, walker, macroName, sources);
++    if (result) {
++      return result;
++    }
++  }
++}
++
++function findNamedRouteHandlerCall(
++  ast: Program,
++  handlerPath: string,
++  walker: typeof import("oxc-walker"),
++  macroName: string,
+   macroSources: ReadonlySet<string>
+ ): RouteHandlerCall | undefined {
+   let hasMacroImport = false;
+@@ -28,14 +44,14 @@ export function findRouteHandlerCall(
+               ? specifier.imported.name
+               : String(specifier.imported.value)
+             : undefined;
+-        if (macroSource && imported === MACRO_NAME && specifier.local.name !== MACRO_NAME) {
++        if (macroSource && imported === macroName && specifier.local.name !== macroName) {
+           fail(
+-            `${MACRO_NAME} cannot be aliased in a route contract; use its canonical name`,
++            `${macroName} cannot be aliased in a route contract; use its canonical name`,
+             specifier
+           );
+         }
+-        if (specifier.local.name === MACRO_NAME) {
+-          if (macroSource && imported === MACRO_NAME) {
++        if (specifier.local.name === macroName) {
++          if (macroSource && imported === macroName) {
+             hasMacroImport = true;
+           } else {
+             hasNonMacroBinding = true;
+@@ -48,13 +64,13 @@ export function findRouteHandlerCall(
+       for (const declarator of declaration.declarations) {
+         const names = new Set<string>();
+         collectPatternNames(declarator.id, names);
+-        if (names.has(MACRO_NAME)) {
++        if (names.has(macroName)) {
+           hasNonMacroBinding = true;
+         }
+       }
+     } else if (
+       (declaration?.type === "FunctionDeclaration" || declaration?.type === "ClassDeclaration") &&
+-      declaration.id?.name === MACRO_NAME
++      declaration.id?.name === macroName
+     ) {
+       hasNonMacroBinding = true;
+     }
+@@ -70,9 +86,9 @@ export function findRouteHandlerCall(
+       node.type === "ExportDefaultDeclaration" &&
+       node.declaration.type === "CallExpression" &&
+       node.declaration.callee.type === "Identifier" &&
+-      node.declaration.callee.name === MACRO_NAME
++      node.declaration.callee.name === macroName
+     ) {
+-      result = { exportDeclaration: node, call: node.declaration };
++      result = { exportDeclaration: node, call: node.declaration, macroName };
+       break;
+     }
+   }
+@@ -82,7 +98,7 @@ export function findRouteHandlerCall(
+       if (
+         node.type === "CallExpression" &&
+         node.callee.type === "Identifier" &&
+-        node.callee.name === MACRO_NAME
++        node.callee.name === macroName
+       ) {
+         macroCalls.push(node as Extract<Node, { type: "CallExpression" }>);
+       }
+@@ -90,12 +106,12 @@ export function findRouteHandlerCall(
+   });
+   if (!result && macroCalls.length > 0) {
+     fail(
+-      `${MACRO_NAME}() in ${handlerPath} must be called directly in the default export`,
++      `${macroName}() in ${handlerPath} must be called directly in the default export`,
+       macroCalls[0]
+     );
+   }
+   if (result && macroCalls.length > 1) {
+-    fail(`${MACRO_NAME}() can only be called once in a route module`, macroCalls[1]);
++    fail(`${macroName}() can only be called once in a route module`, macroCalls[1]);
+   }
+   return result;
+ }
+diff --git a/src/build/plugins/_route-contract-definition.ts b/src/build/plugins/_route-contract-definition.ts
+index 4bfcae29..6805d32b 100644
+--- a/src/build/plugins/_route-contract-definition.ts
++++ b/src/build/plugins/_route-contract-definition.ts
+@@ -1,5 +1,5 @@
+ import type { Node } from "estree";
+-import { fail, MACRO_NAME, sliceNode } from "./_route-contract-utils.ts";
++import { fail, sliceNode } from "./_route-contract-utils.ts";
+ 
+ const methodNames = new Set([
+   "get",
+@@ -18,21 +18,22 @@ const runtimeValidationProperties = new Set(["onError"]);
+ export function extractRouteDefinition(
+   source: string,
+   argument: Extract<Node, { type: "ObjectExpression" }>,
+-  handlerPath: string
++  handlerPath: string,
++  macroName: string
+ ): { code: string; references: readonly Node[] } {
+-  assertStaticProperties(argument, handlerPath);
++  assertStaticProperties(argument, handlerPath, macroName);
+   const properties = propertyMap(argument);
+   const single = properties.has("handler");
+   const methods = [...properties.keys()].filter((name) => methodNames.has(name));
+   if (single && methods.length > 0) {
+     fail(
+-      `${MACRO_NAME}() in ${handlerPath} cannot mix a root handler with method entries`,
++      `${macroName}() in ${handlerPath} cannot mix a root handler with method entries`,
+       argument
+     );
+   }
+   if (!single && methods.length === 0) {
+     fail(
+-      `${MACRO_NAME}() in ${handlerPath} must declare a root handler or at least one method`,
++      `${macroName}() in ${handlerPath} must declare a root handler or at least one method`,
+       argument
+     );
+   }
+@@ -52,7 +53,7 @@ export function extractRouteDefinition(
+   const rootValidate = properties.get("validate");
+   if (rootValidate) {
+     fail(
+-      `${MACRO_NAME}() in ${handlerPath} cannot declare a root validate next to method entries; move it into the validate of each method`,
++      `${macroName}() in ${handlerPath} cannot declare a root validate next to method entries; move it into the validate of each method`,
+       rootValidate
+     );
+   }
+@@ -76,7 +77,7 @@ export function extractRouteDefinition(
+     if (property.value.type !== "ObjectExpression") {
+       fail(`Method ${method} in ${handlerPath} must be an object literal or false`, property.value);
+     }
+-    assertStaticProperties(property.value, handlerPath);
++    assertStaticProperties(property.value, handlerPath, macroName);
+     if (!propertyMap(property.value).has("handler")) {
+       fail(`Method ${method} in ${handlerPath} must declare a handler`, property.value);
+     }
+@@ -98,12 +99,13 @@ export function extractRouteDefinition(
+ 
+ function assertStaticProperties(
+   object: Extract<Node, { type: "ObjectExpression" }>,
+-  handlerPath: string
++  handlerPath: string,
++  macroName: string
+ ) {
+   for (const property of object.properties) {
+     if (property.type !== "Property" || property.computed || !propertyName(property)) {
+       fail(
+-        `${MACRO_NAME}() in ${handlerPath} cannot use spread or computed top-level properties`,
++        `${macroName}() in ${handlerPath} cannot use spread or computed top-level properties`,
+         property
+       );
+     }
+@@ -180,7 +182,7 @@ function validationContractProperties(
+   if (property.value.type !== "ObjectExpression") {
+     fail(`validate in ${handlerPath} must be an object literal`, property.value);
+   }
+-  assertStaticProperties(property.value, handlerPath);
++  assertStaticProperties(property.value, handlerPath, "validate");
+   return property.value.properties
+     .filter(isObjectProperty)
+     .filter((item) => !runtimeValidationProperties.has(propertyName(item)!));
+diff --git a/src/build/plugins/_route-contract-module.ts b/src/build/plugins/_route-contract-module.ts
+index c6e0acb3..9ec5c44c 100644
+--- a/src/build/plugins/_route-contract-module.ts
++++ b/src/build/plugins/_route-contract-module.ts
+@@ -61,11 +61,13 @@ export function renderContractModule(
+ 
+ function renderNormalizer(): string {
+   return `function __normalizeRouteContract(definition) {
+-  const { validate = {}, ...metadata } = definition;
+-  const { response, onError: _onError, ...request } = validate;
+-  const responses = response && typeof response === "object" && "~standard" in response
+-    ? { 200: response }
+-    : response;
++  const { validate = {}, request: authoredRequest, responses: authoredResponses, ...metadata } = definition;
++  const { response, onError: _onError, ...validatedRequest } = validate;
++  const request = authoredRequest || validatedRequest;
++  const authoredResponse = authoredResponses === undefined ? response : authoredResponses;
++  const responses = authoredResponse && typeof authoredResponse === "object" && "~standard" in authoredResponse
++    ? { 200: authoredResponse }
++    : authoredResponse;
+   return { ...metadata, ...request, responses };
+ }`;
+ }
+diff --git a/src/build/plugins/_route-contract-utils.ts b/src/build/plugins/_route-contract-utils.ts
+index 03c1bcc3..2085a05e 100644
+--- a/src/build/plugins/_route-contract-utils.ts
++++ b/src/build/plugins/_route-contract-utils.ts
+@@ -1,7 +1,7 @@
+ import { dirname, resolve } from "pathe";
+ import type { ImportDeclaration, Node } from "estree";
+ 
+-export const MACRO_NAME = "defineRouteHandler";
++export const DEFAULT_MACRO_NAME = "defineRouteHandler";
+ 
+ export function collectPatternNames(node: Node, names: Set<string>) {
+   if (node.type === "Identifier") {
+diff --git a/src/build/plugins/route-contract.ts b/src/build/plugins/route-contract.ts
+index 225a7e47..8daeb08b 100644
+--- a/src/build/plugins/route-contract.ts
++++ b/src/build/plugins/route-contract.ts
+@@ -9,7 +9,7 @@ import { findRouteHandlerCall } from "./_route-contract-call.ts";
+ import { extractRouteDefinition } from "./_route-contract-definition.ts";
+ import { renderContractModule } from "./_route-contract-module.ts";
+ import {
+-  MACRO_NAME,
++  DEFAULT_MACRO_NAME,
+   RouteContractCompileError,
+   fail,
+   sourceLocation,
+@@ -19,10 +19,20 @@ const PREFIX = "\0nitro:route-contract:";
+ const BUILTIN_MACRO_SOURCES = ["h3", "nitro/h3", "#imports"];
+ 
+ export async function routeContract(nitro: Nitro) {
+-  const macroSources = new Set([
+-    ...BUILTIN_MACRO_SOURCES,
+-    ...(nitro.options.experimental.routeContractSources || []),
++  const macroSources = new Map<string, Set<string>>([
++    [
++      DEFAULT_MACRO_NAME,
++      new Set([
++        ...BUILTIN_MACRO_SOURCES,
++        ...(nitro.options.experimental.routeContractSources || []),
++      ]),
++    ],
+   ]);
++  for (const macro of nitro.options.experimental.routeContractMacros || []) {
++    const sources = macroSources.get(macro.name) || new Set<string>();
++    sources.add(macro.source);
++    macroSources.set(macro.name, sources);
++  }
+   const [{ transformSync }, walker] = await Promise.all([
+     import("rolldown/utils"),
+     importDep<typeof import("oxc-walker")>({
+@@ -84,11 +94,16 @@ export async function routeContract(nitro: Nitro) {
+           const argument = routeHandler.call.arguments[0];
+           if (!argument || argument.type !== "ObjectExpression") {
+             fail(
+-              `${MACRO_NAME}() must receive an object literal as its first argument`,
++              `${routeHandler.macroName}() must receive an object literal as its first argument`,
+               argument || routeHandler.call
+             );
+           }
+-          const extracted = extractRouteDefinition(source, argument, handlerPath);
++          const extracted = extractRouteDefinition(
++            source,
++            argument,
++            handlerPath,
++            routeHandler.macroName
++          );
+           const contractModule = renderContractModule(
+             source,
+             ast,
+diff --git a/src/types/config.ts b/src/types/config.ts
+index fc5d3aae..3b8ad43e 100644
+--- a/src/types/config.ts
++++ b/src/types/config.ts
+@@ -371,6 +371,13 @@ export interface NitroOptions extends PresetOptions {
+      * @experimental
+      */
+     routeContractSources?: string[];
++    /**
++     * Additional route-contract macros, keyed by their exported identifier and
++     * exact module specifier.
++     *
++     * @experimental
++     */
++    routeContractMacros?: Array<{ name: string; source: string }>;
+     /**
+      * See https://github.com/microsoft/TypeScript/pull/51669
+      */
+diff --git a/src/types/route-contract.ts b/src/types/route-contract.ts
+index db3b27cc..b6dde9fe 100644
+--- a/src/types/route-contract.ts
++++ b/src/types/route-contract.ts
+@@ -1,5 +1,15 @@
+ import type { InferRouteHandlerContract, InferRouteHandlerSuccessResponse } from "h3";
+ 
++type ExplicitRouteContract<Handler, Method extends string> = Handler extends {
++  readonly "~routeContract": infer Contracts;
++}
++  ? Method extends keyof Contracts
++    ? Contracts[Method]
++    : "default" extends keyof Contracts
++      ? Contracts["default"]
++      : never
++  : never;
++
+ /**
+  * The handler-free contract type for one method of a canonical route handler.
+  *
+@@ -7,13 +17,23 @@ import type { InferRouteHandlerContract, InferRouteHandlerSuccessResponse } from
+  * registry into their own generated types. Nitro itself does not generate a
+  * typed-fetch route tree.
+  */
+-export type NitroRouteContractDefinition<
+-  Handler,
+-  Method extends string = "default",
+-> = InferRouteHandlerContract<Handler, Method>;
++export type NitroRouteContractDefinition<Handler, Method extends string = "default"> = [
++  ExplicitRouteContract<Handler, Method>,
++] extends [never]
++  ? InferRouteHandlerContract<Handler, Method>
++  : ExplicitRouteContract<Handler, Method> extends {
++        definition: infer Definition;
++      }
++    ? Definition
++    : InferRouteHandlerContract<Handler, Method>;
+ 
+ /** The successful response body a framework adapter can expose for a contract route. */
+-export type NitroRouteContractSuccessResponse<
+-  Handler,
+-  Method extends string = "default",
+-> = InferRouteHandlerSuccessResponse<Handler, Method>;
++export type NitroRouteContractSuccessResponse<Handler, Method extends string = "default"> = [
++  ExplicitRouteContract<Handler, Method>,
++] extends [never]
++  ? InferRouteHandlerSuccessResponse<Handler, Method>
++  : ExplicitRouteContract<Handler, Method> extends {
++        successResponse: infer SuccessResponse;
++      }
++    ? SuccessResponse
++    : InferRouteHandlerSuccessResponse<Handler, Method>;
+diff --git a/test/unit/route-contracts.test.ts b/test/unit/route-contracts.test.ts
+index 65cd3089..59b5056b 100644
+--- a/test/unit/route-contracts.test.ts
++++ b/test/unit/route-contracts.test.ts
+@@ -269,6 +269,33 @@ export default defineRouteHandler({ operation: "frameworkRoute", handler: () =>
+     ]);
+   });
+ 
++  it("recognizes a registered macro with a framework-owned name and shape", async () => {
++    nitro = await createMacroFixture(
++      `
++import { defineEndpoint } from "framework/runtime";
++export default defineEndpoint({
++  request: { query: { marker: "query" } },
++  responses: { 200: { marker: "response" } },
++  handler: () => "ok",
++});
++`,
++      {},
++      [],
++      [{ name: "defineEndpoint", source: "framework/runtime" }]
++    );
++
++    await expect(nitro.getRouteContracts()).resolves.toMatchObject([
++      {
++        route: "/test",
++        method: "get",
++        contract: {
++          query: { marker: "query" },
++          responses: { 200: { marker: "response" } },
++        },
++      },
++    ]);
++  });
++
+   it("ignores a same-named local helper", async () => {
+     nitro = await createMacroFixture(`
+ const defineRouteHandler = (definition) => definition.handler;
+@@ -378,7 +405,8 @@ export default defineRouteHandler({
+   async function createMacroFixture(
+     source: string,
+     files: Record<string, string> = {},
+-    routeContractSources: string[] = []
++    routeContractSources: string[] = [],
++    routeContractMacros: Array<{ name: string; source: string }> = []
+   ): Promise<Nitro> {
+     const rootDir = await mkdtemp(join(tmpdir(), "nitro-route-contract-macro-"));
+     temporaryRoots.push(rootDir);
+@@ -396,7 +424,7 @@ export default defineRouteHandler({
+       rootDir,
+       serverDir: "server",
+       buildDir: join(rootDir, ".nitro"),
+-      experimental: { routeContracts: true, routeContractSources },
++      experimental: { routeContracts: true, routeContractSources, routeContractMacros },
+     });
+   }
+ });

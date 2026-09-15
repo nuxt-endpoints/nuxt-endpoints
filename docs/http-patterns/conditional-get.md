@@ -55,16 +55,16 @@ both branches and leaves full RFC 9111 metadata merging to the strategy.
 The low-level contract is explicit:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   conditionalGet: { validator: 'etag', status: 200 },
-  validate: {
+  request: {
     headers: z.object({
       'if-none-match': z.string().optional(),
     }),
-    response: {
-      200: { body: Article, headers: { etag: EntityTag } },
-      304: { body: z.undefined(), headers: { etag: EntityTag } },
-    },
+  },
+  responses: {
+    200: { body: Article, headers: { etag: EntityTag } },
+    304: { body: z.undefined(), headers: { etag: EntityTag } },
   },
   handler: async (event) => {
     const article = await readArticle(event.validated.params.id)

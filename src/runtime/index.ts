@@ -118,7 +118,7 @@ export type {
   MemoryIdempotencyStorageOptions,
 } from './idempotency'
 export { createMemoryIdempotencyStorage } from './idempotency'
-export { defineRouteHandler } from './route-handler'
+export { defineEndpoint } from './route-handler'
 export type {
   ApplyEndpointPaginationFromRoute,
   EndpointDefinitionFromRoute,

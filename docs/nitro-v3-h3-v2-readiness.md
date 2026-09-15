@@ -44,11 +44,12 @@ The handler argument exposes both HTTP integration levels:
   the raw `event.req` body can be consumed again after endpoint parsing.
 
 ```ts
-export default defineRouteHandler({
-  validate: { body: RequestBody },
+export default defineEndpoint({
+  request: {
+    body: RequestBody,
+  },
   handler: (event) => {
     const requestId = event.req.headers.get('x-request-id')
-
     return {
       accountId: event.context.user.accountId,
       requestId,

@@ -45,7 +45,7 @@ without hiding the broader roadmap.
 | Application response contract composition                             | Implemented                      | `server/routes.config.ts` adds global, exact-path, trailing-`/**` prefix, and method response schemas to `$endpoint`, `useEndpoint`, Pinia Colada options, raw response types, and OpenAPI. It declares what middleware or infrastructure may return but does not register or inspect middleware; duplicate statuses become body unions and OpenAPI `oneOf`                                                                                                                                                                                                                                         |
 | Framework failure client projection                                   | Implemented                      | Route-reachable validation (`400`/`406`/`415`) and idempotency (`400`/`409`/`422`) defaults are included in the same status union already documented by OpenAPI; custom hook outcomes use the route or application response contract                                                                                                                                                                                                                                                                                                                                                                |
 | Media-type request bodies                                             | Implemented                      | JSON, URL-encoded, multipart, and text/\* members with 415 on mismatch, wire-typed client `mediaType` option, and per-member OpenAPI content. The response side is one media type per status; content negotiation stays out                                                                                                                                                                                                                                                                                                                                                                         |
-| Per-method dispatch                                                   | Implemented                      | Method entries on a method-suffix-free `defineRouteHandler()` call, with derived HEAD/OPTIONS and 405 + Allow. All nine methods are declarable and an explicit `head`/`options` entry wins over the derived behaviour. Each entry carries its own contract, so metadata, idempotency, and media-type bodies work per method                                                                                                                                                                                                                                                                         |
+| Per-method dispatch                                                   | Implemented                      | Method entries on a method-suffix-free `defineEndpoint()` call, with derived HEAD/OPTIONS and 405 + Allow. All nine methods are declarable and an explicit `head`/`options` entry wins over the derived behaviour. Each entry carries its own contract, so metadata, idempotency, and media-type bodies work per method                                                                                                                                                                                                                                                                             |
 | Catch-all route contracts                                             | Designed but deferred            | Build-time rejection shipped instead. Full support needs two recorded decisions: client value shape and slash encoding for `**:param`, and the GitHub-style `{param}` OpenAPI representation despite single-segment path templating in the spec. Implement when real demand appears                                                                                                                                                                                                                                                                                                                 |
 | Optional path-parameter contracts                                     | Rejected                         | OpenAPI has no honest representation for optional path parameters; declare two routes instead. Build-time rejection shipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Non-JSON response declarations                                        | Implemented                      | One door: `{ media: '<type>' or [...], schema? }` keeps XML, CSV, files, streams, and SSE inside `responses` — media type on the wire and in OpenAPI, payload never validated, client stops parsing that route's body. A validated body may still be labelled with a `+json` profile; any other `contentType` there fails the build and names `media`                                                                                                                                                                                                                                               |
@@ -74,22 +74,22 @@ core endpoint handler context.
 
 ## Roadmap summary
 
-| Capability                                  | Decision                           | Priority                                                                                               |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| H3 event in handler context                 | Adopted and implemented            | Complete                                                                                               |
-| Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                                                                      |
-| Shared client extension primitives          | Adopt                              | Foundation work                                                                                        |
-| Pinia Colada integration                    | Adopted and implemented            | Stabilization and compatibility                                                                        |
-| Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API                                                 |
-| Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                                                                    |
-| DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                                                                            |
-| Stream response declarations                | Adopted and implemented            | Complete                                                                                               |
-| Typed stream chunks                         | Keep low-level for now             | Last, after a complete design                                                                          |
-| Progressive form enhancement                | Implemented (Nuxt 5 only)          | Module-registered bridge middleware plus `useEndpointForm`; see [design](./progressive-enhancement.md) |
-| Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                                                                 |
-| Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                                                                      |
-| CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize                                                              |
-| Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics                                                             |
+| Capability                                  | Decision                           | Priority                                                                                                                          |
+| ------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| H3 event in handler context                 | Adopted and implemented            | Complete                                                                                                                          |
+| Typed endpoint context builder              | Conditional adoption               | After real Level 1 usage feedback                                                                                                 |
+| Shared client extension primitives          | Adopt                              | Foundation work                                                                                                                   |
+| Pinia Colada integration                    | Adopted and implemented            | Stabilization and compatibility                                                                                                   |
+| Idempotency-Key replay protection           | Adopted and implemented            | Complete for the initial application-owned storage API                                                                            |
+| Operation-aware tracing, metrics, and hooks | Adopt as narrow integration points | After operation metadata stabilizes                                                                                               |
+| DevTools endpoint inspector                 | Adopt                              | After public APIs stabilize                                                                                                       |
+| Stream response declarations                | Adopted and implemented            | Complete                                                                                                                          |
+| Typed stream chunks                         | Keep low-level for now             | Last, after a complete design                                                                                                     |
+| Progressive form enhancement                | Implemented on both lines          | Shared bridge and `useEndpointForm`; only the middleware continuation adapter differs; see [design](./progressive-enhancement.md) |
+| Auth preset                                 | Delegate                           | Application/Nitro middleware ecosystem                                                                                            |
+| Rate limiting and CSRF presets              | Delegate                           | Nitro/server middleware ecosystem                                                                                                 |
+| CLI endpoint scaffold                       | Low priority                       | After endpoint and adapter APIs stabilize                                                                                         |
+| Grouped action-style namespace              | No immediate need                  | Named operations cover the main ergonomics                                                                                        |
 
 ## Shared client extension track
 
@@ -131,8 +131,10 @@ export default defineEventHandler(async (event) => {
 ```
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
   handler: (event) => findUserForAccount(event.context.user.accountId, event.validated.params.id),
 })
 ```
@@ -168,8 +170,8 @@ const authenticatedEndpoint = createEndpointBuilder()
   .use(tenantMiddleware) // adds { tenant: Tenant }
 
 export const endpoint = authenticatedEndpoint.define({
-  params: ProjectParams,
-  response: Project,
+  request: { params: ProjectParams },
+  responses: { 200: Project },
 })
 
 export default endpoint.handler(({ params, ctx }) => {
@@ -355,7 +357,7 @@ generalize the internal types to accept arbitrary contract shapes.
 
 This works because both sides bottom out in Standard Schema, so the adapter
 rearranges structure rather than translating semantics — a foreign
-`{ params, get: { validate: { query, body, response } } }` maps onto this
+`{ request: { params }, get: { request: { query, body }, responses } }` maps onto this
 module's flat per-method definition without touching the schema values. The
 type helpers that every application-layer adapter already derives from
 `EndpointRouteEntry` therefore keep working unchanged.

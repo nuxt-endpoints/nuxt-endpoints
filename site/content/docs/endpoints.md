@@ -7,33 +7,31 @@ The endpoint definition is the contract for runtime validation, handler context 
 
 ## Basic route
 
-Default-export a `defineRouteHandler()` call. On the Nuxt 5 line it is an explicit
-server import; Nitro 3 no longer supplies server auto-imports. Path params are
-declared at the root, request and response schemas under `validate`, and the
+Default-export a `defineEndpoint()` call. On the Nuxt 5 line it is an explicit
+server import; Nitro 3 no longer supplies server auto-imports. Request schemas
+are declared under `request`, response schemas under `responses`, and the
 handler receives the h3 event with the parsed schema output on
 `event.validated`. Later snippets omit the same import for brevity.
 
 ```ts
-import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+import { defineEndpoint } from 'nuxt-endpoints/runtime'
 import { z } from 'zod'
-
 const User = z.object({
   id: z.number(),
   name: z.string(),
 })
-
-export default defineRouteHandler({
+export default defineEndpoint({
   name: 'getUser',
   summary: 'Get a user',
-  params: z.object({
-    id: z.coerce.number(),
-  }),
-  validate: {
+  request: {
+    params: z.object({
+      id: z.coerce.number(),
+    }),
     query: z.object({
       includePosts: z.coerce.boolean().optional(),
     }),
-    response: { 200: User },
   },
+  responses: { 200: User },
   handler: (event) => {
     const { params, query } = event.validated
     return {
@@ -68,7 +66,7 @@ is derived from that pair. A `name` only removes the path and method from a call
 it does not flatten `params`, `query`, `headers`, or `body`, or create a second
 contract. Names must be unique valid JavaScript identifiers.
 
-## Progressively enhanced forms (Nuxt 5 prototype)
+## Progressively enhanced forms
 
 Add a `form` declaration to a route with a compatible form-encoded body:
 
@@ -82,18 +80,20 @@ form: {
 `action` is the native form submission URL, as in HTML. NE registers a bridge
 at that page URL to call the endpoint; `redirect` names the destination after
 success. `useEndpointForm` derives the HTML attributes and typed fields from
-the contract. See the [complete server and client examples](https://github.com/nuxt-endpoints/nuxt-endpoints/blob/nuxt5/docs/progressive-enhancement.md).
+the contract. See the [complete server and client examples](https://github.com/nuxt-endpoints/nuxt-endpoints/blob/main/docs/progressive-enhancement.md).
 Earlier prototype versions used `from`; replace it with `action`.
 
 ## Validated request parts
 
-`params` sits at the root of the definition, because it describes the route template rather than one method. Everything else the request carries sits under `validate`.
+All request inputs sit under `request`. In a multi-method definition, shared
+`request.params` describes the route template while each method owns its query,
+headers, and body.
 
 - `params`: route params are parsed before the handler runs. Coercion is reflected in handler types.
-- `validate.query`: query string values can be coerced into booleans, numbers, arrays, or richer schemas.
-- `validate.headers`: header schemas are useful for explicit authentication or versioning boundaries.
-- `validate.body`: one schema for a JSON body, or a map from media types to schemas.
-- `validate.response`: one schema for status `200`, or a map from status to response.
+- `request.query`: query string values can be coerced into booleans, numbers, arrays, or richer schemas.
+- `request.headers`: header schemas are useful for explicit authentication or versioning boundaries.
+- `request.body`: one schema for a JSON body, or a map from media types to schemas.
+- `responses`: a map from each HTTP status to its response schema or media declaration.
 
 ## Multiple methods on one route
 
@@ -104,19 +104,21 @@ idempotency all work per method:
 
 ```ts
 // server/api/users/[id].ts — no method suffix
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
   get: {
     name: 'getUser',
-    validate: { response: { 200: User } },
+    responses: { 200: User },
     handler: (event) => findUser(event.validated.params.id),
   },
   put: {
     name: 'updateUser',
-    validate: {
+    request: {
       body: UpdateUser,
-      response: { 200: User, 404: NotFound },
     },
+    responses: { 200: User, 404: NotFound },
     handler: (event) => {
       const { params, body } = event.validated
       return event.respond(200, updateUser(params.id, body))
@@ -159,14 +161,14 @@ and you would rather keep them together.
 
 ## Media-type request bodies
 
-A `validate.body` contract can also be a map from media types to schemas. The
+A `request.body` contract can also be a map from media types to schemas. The
 request's `Content-Type` (parameters such as `charset` stripped, lowercased)
 selects the member to validate against; a request matching no member gets a
 `415` listing the supported types.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     body: {
       'application/json': z.object({ name: z.string() }),
       'multipart/form-data': z.object({
@@ -174,8 +176,8 @@ export default defineRouteHandler({
         avatar: z.instanceof(File),
       }),
     },
-    response: { 201: User },
   },
+  responses: { 201: User },
   handler: (event) => {
     const { body } = event.validated
     const { bodyMediaType } = event
@@ -204,7 +206,7 @@ the runtime knows how to parse. For anything else — XML, a PDF, arbitrary byte
 `Uint8Array`:
 
 ```ts
-validate: {
+request: {
   body: {
     'application/json': z.object({ name: z.string() }),
     'application/pdf': true,
@@ -221,7 +223,7 @@ contract and read the event directly, as [Low-level HTTP](/docs/low-level-http)
 describes.
 
 An empty map, uppercase keys, a malformed media type, or a schema on a family
-the runtime cannot parse all fail when `defineRouteHandler()` runs — that is,
+the runtime cannot parse all fail when `defineEndpoint()` runs — that is,
 when the route module is loaded, not once per request. A media-type map makes
 the body mandatory: requests without a matching `Content-Type` are rejected with
 `415` before the handler runs.
@@ -274,7 +276,6 @@ defaults; a generated route and method can override either hook in the same
 ```ts
 // server/endpoints/runtime.ts
 import { defineEndpointRuntime } from 'nuxt-endpoints/runtime'
-
 export default defineEndpointRuntime({
   validation: {
     // The default is 'development'. Use 'always' at an untyped output boundary.
@@ -380,8 +381,10 @@ export default defineEventHandler(async (event) => {
 The same event and its middleware context reach the endpoint handler:
 
 ```ts
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
   handler: (event) => {
     const requestId = event.req.headers.get('x-request-id')
     return findUser(event.context.user.accountId, event.validated.params.id, requestId)
@@ -406,29 +409,27 @@ declare module 'h3' {
 
 ## Multiple responses
 
-Use a status map in `validate.response` when an endpoint can return multiple statuses. Return a specific status with `event.respond`, and TypeScript checks that the body matches the declared schema.
+Use a status map in `responses` when an endpoint can return multiple statuses. Return a specific status with `event.respond`, and TypeScript checks that the body matches the declared schema.
 
 ```ts
 const ErrorBody = z.object({
   message: z.string(),
 })
-
-export default defineRouteHandler({
-  params: z.object({
-    id: z.coerce.number(),
-  }),
-  validate: {
-    response: {
-      200: User,
-      404: ErrorBody,
-    },
+export default defineEndpoint({
+  request: {
+    params: z.object({
+      id: z.coerce.number(),
+    }),
+  },
+  responses: {
+    200: User,
+    404: ErrorBody,
   },
   handler: (event) => {
     const { params } = event.validated
     if (params.id === 404) {
       return event.respond(404, { message: 'Not found' })
     }
-
     return { id: params.id, name: 'Tom' }
   },
 })
@@ -439,13 +440,13 @@ export default defineRouteHandler({
 A validated response body is always sent as JSON — that is what having a schema for it means. Everything else goes through one door: declare the status by its media type instead of by a schema.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     query: z.object({ delimiter: z.string().optional() }),
-    response: {
-      200: { media: 'text/csv', description: 'CSV export' },
-      404: ErrorBody,
-    },
+  },
+  responses: {
+    200: { media: 'text/csv', description: 'CSV export' },
+    404: ErrorBody,
   },
   handler: (event) => {
     return event.respond(200, toCsvStream(event.validated.query.delimiter ?? ','))
@@ -456,7 +457,7 @@ export default defineRouteHandler({
 The same door covers every case that is not JSON — XML, CSV, a file download, an event stream, arbitrary bytes:
 
 ```ts
-response: {
+responses: {
   200: { media: 'application/xml' },
   200: { media: 'application/pdf' },
   200: { media: 'text/event-stream' },
@@ -469,7 +470,7 @@ The handler may return anything the HTTP layer forwards to the socket as-is: a w
 Nothing about the payload is validated, and that is the whole distinction from `body`. There is no schema to check it against, and a stream cannot be buffered and checked without defeating the reason it is a stream. The media type is required rather than defaulted, because taking this door means knowing what you are sending. An optional `schema` documents the payload — or one chunk of it — in the [generated OpenAPI document](/docs/openapi), and is named `schema` rather than `body` precisely because it never checks anything:
 
 ```ts
-response: {
+responses: {
   200: {
     media: 'application/x-ndjson',
     schema: z.object({ id: z.string(), at: z.string() }),
@@ -480,7 +481,7 @@ response: {
 With several declared media types, key the schema by media type — one schema cannot honestly describe a CSV and a JSON object at once, so a bare schema alongside several types is rejected rather than copied onto each. Types the map omits stay described as opaque bytes:
 
 ```ts
-response: {
+responses: {
   200: {
     media: ['text/csv', 'application/json'],
     schema: { 'application/json': z.object({ id: z.string(), name: z.string() }) },
@@ -493,12 +494,10 @@ response: {
 Give `media` an array and the status has more than one representation. The runtime negotiates from the request's `Accept` header, tells the handler which one to produce, and sends that media type:
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: { media: ['text/csv', 'application/json'], description: 'User export' },
-      404: ErrorBody,
-    },
+export default defineEndpoint({
+  responses: {
+    200: { media: ['text/csv', 'application/json'], description: 'User export' },
+    404: ErrorBody,
   },
   handler: (event) => {
     // narrowed to 'text/csv' | 'application/json'
@@ -542,7 +541,7 @@ An endpoint that negotiates and also uses [`Idempotency-Key`](/docs/idempotency)
 `application/problem+json` and other `+json` profiles are still JSON, so they keep their schema and stay validated. Label them with `contentType` on the validated form, and the header is sent:
 
 ```ts
-response: {
+responses: {
   404: {
     body: z.object({ type: z.string(), title: z.string(), status: z.number() }),
     contentType: 'application/problem+json',
@@ -606,24 +605,20 @@ export default defineEndpointRuntime({
 Use `always` when response values cross an untyped or independently deployed boundary. The value is checked as the schema's output type; HTTP clients see its JSON wire form. `never` disables body and declared-header schema checks in every environment, but still rejects a status absent from the route contract.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: { 200: z.object({ createdAt: z.date() }) },
-  },
-  handler: () => ({ createdAt: new Date() }), // validated as Date, sent as a string
+export default defineEndpoint({
+  responses: { 200: z.object({ createdAt: z.date() }) },
+  handler: () => ({ createdAt: new Date() }),
 })
 ```
 
 A status can also declare the headers it promises, per header name. When response validation is active, those are checked against what is actually being sent, so a declared header the handler forgets — or sets to a value its schema rejects — fails the same way a wrong body does: a `500`, because the server broke its own contract rather than the client sending something wrong. Header names are matched case-insensitively, and a header that was never set validates as `undefined`, so use an optional schema for one that is not always present.
 
 ```ts
-export default defineRouteHandler({
-  validate: {
-    response: {
-      200: {
-        body: z.object({ id: z.number() }),
-        headers: { 'X-Request-Id': z.string().uuid() },
-      },
+export default defineEndpoint({
+  responses: {
+    200: {
+      body: z.object({ id: z.number() }),
+      headers: { 'X-Request-Id': z.string().uuid() },
     },
   },
   handler: (event) =>
@@ -654,12 +649,12 @@ export default defineNuxtConfig({
 
 ```ts
 // server/custom-routes/report.get.ts — outside every scanned directory
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     query: z.object({ id: z.string() }),
-    response: {
-      200: z.object({ id: z.string(), source: z.literal('custom-route') }),
-    },
+  },
+  responses: {
+    200: z.object({ id: z.string(), source: z.literal('custom-route') }),
   },
   handler: (event) => {
     return event.respond(200, { id: event.validated.query.id, source: 'custom-route' })
@@ -677,7 +672,7 @@ The route template is yours to choose and does not have to sit under `/api`. It 
 
 ## Separate contract files
 
-A route declares its contract inline, in one `defineRouteHandler()` call. What can move to another file is the schemas it references:
+A route declares its contract inline, in one `defineEndpoint()` call. What can move to another file is the schemas it references:
 
 ```ts
 // server/api/users/[id].get.endpoint-contract.ts — keep it side-effect free
@@ -692,12 +687,12 @@ export const getUserContract = {
 ```ts
 // server/api/users/[id].get.ts
 import { getUserContract } from './[id].get.endpoint-contract'
-
 const db = await connectToDatabase() // never runs during the build
-
-export default defineRouteHandler({
-  params: getUserContract.params,
-  validate: { response: getUserContract.responses },
+export default defineEndpoint({
+  request: {
+    params: getUserContract.params,
+  },
+  responses: getUserContract.responses,
   handler: (event) => db.users.find(event.validated.params.id),
 })
 ```

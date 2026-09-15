@@ -1,10 +1,9 @@
-import { defineRouteHandler } from '../../../../../src/runtime'
+import { defineEndpoint } from '../../../../../src/runtime'
 import { siblingContract } from './sibling.get.endpoint-contract'
-
-export default defineRouteHandler({
-  validate: {
+export default defineEndpoint({
+  request: {
     query: siblingContract.query,
-    response: siblingContract.responses,
   },
+  responses: siblingContract.responses,
   handler: (event) => ({ name: event.validated.query.name, sibling: true }),
 })

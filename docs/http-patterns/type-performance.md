@@ -13,7 +13,7 @@ node scripts/benchmark-pagination-types.mjs 100 500
 Each client route has a distinct item and 404 body type and is consumed through
 `infiniteQueryOptions()` and Pinia Colada's `useInfiniteQuery()`. Each server
 authoring fixture declares an independent cursor-paginated
-`defineRouteHandler()`. Routes and consumers live in separate files to avoid
+`defineEndpoint()`. Routes and consumers live in separate files to avoid
 TypeScript's unrelated single-module control-flow size limit.
 
 ## Client adapter refactor
@@ -89,7 +89,7 @@ specific: ordinary `$endpoint()` and `useEndpoint()` calls use the same index.
 
 ## Server authoring result
 
-The pagination-specific `defineRouteHandler()` overload was left intact. It
+The pagination-specific `defineEndpoint()` overload was left intact. It
 provides immediate editor feedback for the generated query, page response,
 duplicate ownership, and handler return. The benchmark does not show it to be
 a bottleneck:

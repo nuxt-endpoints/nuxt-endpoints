@@ -53,7 +53,7 @@ until two shipped strategies need it.
 
 ## Nuxt-specific and portable parts
 
-Nuxt/H3-specific edges are contract authoring on `defineRouteHandler`, runtime
+Nuxt/H3-specific edges are NE contract authoring on `defineEndpoint`, runtime
 access to the H3 event, build-time route discovery, and `$endpoint` generation.
 Entity-tag parsing, `Retry-After` parsing, cursor advancement, polling state
 machines, deadlines, and same-origin URL policy can be written against web

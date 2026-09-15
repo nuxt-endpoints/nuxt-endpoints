@@ -9,8 +9,8 @@
 // describes exactly one URL for it. See docs/progressive-enhancement.md.
 //
 // Nitro registers its renderer at `/**` with no method restriction, which is
-// what makes the failure path work - see pi0's closing comment on
-// nitrojs/nitro#1286.
+// what makes the failure path work. The platform seam handles the different
+// continuation mechanics used by Nitro 2 and Nitro 3.
 import type { EndpointNativeSubmission } from './client'
 import {
   endpointNativeSubmissionKey,
@@ -19,6 +19,7 @@ import {
 } from './form-shared'
 import { getFormRoute } from './form-routes-state'
 import {
+  continueRuntimeRendering,
   defineRuntimeMiddleware,
   getRuntimePathname,
   getRuntimeRequestHeaders,
@@ -81,6 +82,15 @@ function submittedValues(form: FormData): Record<string, string> {
   return values
 }
 
+/** Re-encodes every string entry, preserving repeated field names and order. */
+function urlEncodedBody(form: FormData): string {
+  const body = new URLSearchParams()
+  for (const [key, value] of form.entries()) {
+    if (typeof value === 'string') body.append(key, value)
+  }
+  return body.toString()
+}
+
 async function readPayload(response: Response): Promise<Record<string, unknown>> {
   try {
     return (await response.json()) as Record<string, unknown>
@@ -110,9 +120,9 @@ export default defineRuntimeMiddleware(async (event, next) => {
   const values = submittedValues(form)
   const isMultipart = route.enctype.includes('multipart/form-data')
 
-  const response = await runtimeServerFetch(route.target, {
+  const response = await runtimeServerFetch(event, route.target, {
     method: 'POST',
-    body: isMultipart ? form : new URLSearchParams(values).toString(),
+    body: isMultipart ? form : urlEncodedBody(form),
     headers: forwardedHeaders(incoming, isMultipart ? undefined : route.enctype),
   })
 
@@ -120,19 +130,16 @@ export default defineRuntimeMiddleware(async (event, next) => {
 
   if (response.status < 300) {
     return runtimeRedirect(
+      event,
       route.redirect ? resolveFormRedirectTemplate(route.redirect, payload) : pathname,
       303,
     )
   }
 
   // Failure: let the renderer produce this page inside the same event, then
-  // restate the status on the way out.
-  //
-  // Measured: setting `event.res.status` before the renderer runs does not
-  // survive, because the renderer builds its own response. Awaiting `next()`
-  // and rewrapping is what puts the status back under this middleware's
-  // control - and unlike rendering through a second internal request, the
-  // middleware stack still runs exactly once for the browser's one request.
+  // preserve the endpoint status using the platform's continuation mechanics.
+  // Unlike rendering through a second internal request, the middleware stack
+  // still runs exactly once for the browser's one request.
   const submission: EndpointNativeSubmission = {
     route: { method: 'post', path: route.target },
     status: response.status,
@@ -141,14 +148,5 @@ export default defineRuntimeMiddleware(async (event, next) => {
   }
   ;(event.context as Record<string, unknown>)[endpointNativeSubmissionKey] = submission
 
-  const rendered = await next()
-  if (!(rendered instanceof Response)) {
-    // Nothing to restate; hand back whatever the renderer produced.
-    return rendered
-  }
-  return new Response(rendered.body, {
-    status: response.status,
-    statusText: rendered.statusText,
-    headers: rendered.headers,
-  })
+  return continueRuntimeRendering(event, next, response.status)
 })

@@ -59,16 +59,16 @@ race and does not satisfy the contract.
 The low-level write contract remains ordinary HTTP:
 
 ```ts
-export default defineRouteHandler({
+export default defineEndpoint({
   optimisticConcurrency: { validator: 'etag', required: true },
-  validate: {
+  request: {
     headers: z.object({ 'if-match': EntityTag }),
     body: UpdateArticle,
-    response: {
-      200: { body: Article, headers: { etag: StrongEntityTag } },
-      412: { body: PreconditionFailed, contentType: 'application/problem+json' },
-      428: { body: PreconditionRequired, contentType: 'application/problem+json' },
-    },
+  },
+  responses: {
+    200: { body: Article, headers: { etag: StrongEntityTag } },
+    412: { body: PreconditionFailed, contentType: 'application/problem+json' },
+    428: { body: PreconditionRequired, contentType: 'application/problem+json' },
   },
   handler: async (event) => {
     const result = await articles.updateIfVersionMatches({

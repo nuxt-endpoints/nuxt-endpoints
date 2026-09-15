@@ -14,6 +14,27 @@ const handler = (overrides: Partial<EndpointRouteHandler>): EndpointRouteHandler
   }) as EndpointRouteHandler
 
 describe('generateEndpointFormRoutes', () => {
+  it('matches an encoded page pathname and forwards to the canonical endpoint', () => {
+    const content = generateEndpointFormRoutes([
+      handler({
+        route: '/api/@submit',
+        sourceRoute: '/api/%40submit',
+        form: {
+          action: '/日本語',
+          method: 'post',
+          enctype: 'application/x-www-form-urlencoded',
+          fields: {},
+        },
+      }),
+    ])
+    expect(JSON.parse(content.replace('export const formRoutes = ', ''))).toEqual({
+      '/%E6%97%A5%E6%9C%AC%E8%AA%9E': {
+        target: '/api/@submit',
+        enctype: 'application/x-www-form-urlencoded',
+      },
+    })
+  })
+
   it('maps each declared page URL to the endpoint behind it', () => {
     const content = generateEndpointFormRoutes([
       handler({

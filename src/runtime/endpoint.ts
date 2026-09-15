@@ -28,6 +28,7 @@ import {
   validateIdempotencyTtl,
 } from './idempotency'
 import {
+  normalizeRuntimeRouteIdentity,
   createRuntimeError,
   defineRuntimeHandler,
   getRuntimeQuery,
@@ -202,7 +203,7 @@ export type EndpointIdempotencyRuntimeMarker = Record<IdempotencyRuntimeOptionKe
 // validation), which both reject hand-written normalized idempotency metadata
 // that bypassed authoring normalization and therefore carries no runtime marker.
 export function idempotencyMetadataWithoutRuntimeMessage(subject: string): string {
-  return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Declare idempotency: true in defineRouteHandler() and configure server/endpoints/runtime.ts instead of writing normalized metadata directly.`
+  return `[nuxt-endpoints] Idempotency metadata ${subject} has no matching server runtime policy. Declare idempotency: true in defineEndpoint() and configure server/endpoints/runtime.ts instead of writing normalized metadata directly.`
 }
 
 type HeaderNameFromOptions<OPTIONS> = OPTIONS extends { headerName: infer NAME extends string }
@@ -1603,7 +1604,10 @@ export function normalizeRouteIdentity(identity: EndpointRouteIdentity): Endpoin
   if (!identity.method || !identity.routeTemplate) {
     throw new TypeError('Endpoint route identity requires a method and routeTemplate')
   }
-  return { method: identity.method.toLowerCase(), routeTemplate: identity.routeTemplate }
+  return {
+    method: identity.method.toLowerCase(),
+    routeTemplate: normalizeRuntimeRouteIdentity(identity.routeTemplate),
+  }
 }
 
 function applyEndpointResponse(event: RuntimeEvent, response: EndpointRuntimeResponse): unknown {

@@ -107,7 +107,7 @@ if (result.status === 200) {
 }
 ```
 
-The first server API is the existing `defineRouteHandler` contract plus the
+The first server API is the existing `defineEndpoint` contract plus the
 smallest metadata necessary to express the idiom. A convenience helper is
 justified only when it prevents repeated, error-prone protocol wiring. It must
 still emit the same underlying HTTP contract and allow raw access.
@@ -159,7 +159,7 @@ depend on `Request`, `Response`, `Headers`, `AbortSignal`, and plain data—not 
 Vue, Nuxt composables, H3 events, or Pinia Colada. Thin edges may adapt it:
 
 ```text
-defineRouteHandler / H3 event
+defineEndpoint / normalized H3 event
         -> contract conformance helper
 
 $endpoint request / ofetch

@@ -1,8 +1,8 @@
 # Progressive enhancement for endpoint contracts
 
-Status: implemented on the Nuxt 5 line.
+Status: implemented on both the Nuxt 4 and Nuxt 5 lines.
 
-Last verified: 2026-09-04.
+Last verified: 2026-09-08.
 
 This document records how a Nuxt Endpoints route answers a native `<form>`
 submission without giving up its identity as a contract-first HTTP endpoint: the
@@ -12,8 +12,8 @@ open.
 
 The roadmap previously deferred this with "only with a concrete native-form
 requirement". That gate is what the [ecosystem findings](#ecosystem-findings)
-section replaces: the mechanism is one Nitro deliberately provides, and the Nuxt
-5 line currently has no working option at all.
+section replaces: the mechanism is one Nitro deliberately provides, and it can
+be implemented without replacing the endpoint with a framework-only action.
 
 ## The problem
 
@@ -57,8 +57,8 @@ Verified on 2026-09-03 against GitHub and the npm registry.
 | SvelteKit enhances only POST actions                                                             | [`use:enhance`](https://svelte.dev/docs/kit/form-actions#Progressive-enhancement-use-enhance) rejects GET forms; GET remains ordinary loading/navigation                                                                                                                                                                                           |
 | Next.js separates GET search forms from POST Server Actions                                      | A string [`Form` action](https://nextjs.org/docs/app/api-reference/components/form) is a GET navigation; a function action invokes a [Server Action](https://nextjs.org/docs/app/getting-started/mutating-data) over POST                                                                                                                          |
 
-Two conclusions follow. Core is unlikely to make this redundant, and on the
-Nuxt 5 line there is currently nothing that works.
+Two conclusions follow. Core is unlikely to make this redundant, and an
+endpoint-contract projection remains useful on both supported platform lines.
 
 The demand signal is nonetheless modest: nuxt#20649 has accumulated 57
 reactions over three years and nobody has taken over the stale module. That is
@@ -119,7 +119,7 @@ GET /search?q=ada                    (native form or enhanced navigation)
        ← typed status result
 ```
 
-`form.method: 'get'` projects fields from `validate.query`. During SSR,
+`form.method: 'get'` projects fields from `request.query`. During SSR,
 `useEndpointForm` uses the request-aware `useEndpoint` path to load the result.
 After hydration, `form.enhance` updates the address bar and runs the same GET
 endpoint. The URL remains the source of truth, so reload and bookmark reproduce
@@ -149,11 +149,10 @@ build-time validation and client generation. They therefore live on the route
 contract:
 
 ```ts
-defineRouteHandler({
-  form: { action: '/todos/new', redirect: '/todos/{id}' },
-  validate: { /* ... */ },
-  handler: /* ... */,
-})
+defineEndpoint({
+    form: { action: '/todos/new', redirect: '/todos/{id}' },
+    handler:  /* ... */
+});
 ```
 
 `action` names the submission URL, matching HTML's `<form action="…">`.
@@ -165,12 +164,12 @@ POST is the default. GET must be selected explicitly and declares query fields
 instead of a form body:
 
 ```ts
-defineRouteHandler({
+defineEndpoint({
   form: { action: '/search', method: 'get' },
-  validate: {
+  request: {
     query: SearchQuery,
-    response: { 200: SearchResults },
   },
+  responses: { 200: SearchResults },
   handler: ({ validated }) => search(validated.query),
 })
 ```
@@ -192,18 +191,24 @@ URLs. The type tests and module tests pin the same compatibility rules; where a
 schema cannot be inspected, the build is deliberately stricter and refuses to
 claim that a native form can satisfy it.
 
-**This feature is Nuxt 5 only, and stays that way.** The bridge cannot port:
-it rewrites the failure status by awaiting `next()`, and **h3 1.15 gives a
-handler no `next`** - the only `next` there belongs to `NodeMiddleware`.
-Progressive enhancement is therefore one of the places where the two lines
-deliberately differ. The rule is one-directional: what the Nuxt 4 line has, the
-Nuxt 5 line has too; the reverse does not follow.
+The feature code is shared across the Nuxt 4 and Nuxt 5 lines. Only the small
+middleware platform seam differs:
 
-The conversion fix is a separate matter, and it is a defect rather than a
-feature: the Nuxt 4 line asks for `mode: 'input'` in the same three places and
-drops it in the same one, so `.transform()` request bodies are documented as
-`{}` there too, and `additionalProperties: false` is stated falsely. It is
-worth fixing on its own terms, not as part of porting this.
+- on h3 v2 / Nitro 3, the bridge awaits `next()` and wraps the renderer's
+  `Response` with the endpoint failure status;
+- on h3 v1 / Nitro 2, returning `undefined` naturally continues to Nuxt's
+  catch-all renderer. The renderer runs on the same event and preserves the
+  status written before fallthrough.
+
+Nitro 2's local dispatcher also does not serialize a rebuilt `FormData` body.
+Its platform adapter therefore uses a Web `Request` to produce the matching
+multipart body and boundary before internal dispatch. These mechanics live in
+`src/runtime/platform/middleware.ts`; the contract, bridge, generated metadata,
+and client projection stay identical.
+
+The Nuxt 4 port also forwards JSON Schema's input/output direction into Zod's
+native converter. Without that fix, a transforming request schema becomes `{}`
+and cannot be projected honestly into form fields.
 
 Validation rejects loudly, in keeping with the existing rule that a declared
 contract is never silently dropped. These are build-time errors, raised
@@ -260,7 +265,7 @@ honest statement, and it appears in the OpenAPI document as one.
 So the contract declares what it accepts:
 
 ```ts
-validate: {
+request: {
   body: {
     'application/json': Todo,
     'application/x-www-form-urlencoded': formOf(Todo),
@@ -347,7 +352,7 @@ const SignupForm = SignupJson.extend({ confirmPassword: z.string() })
   // without tripping an unused-parameter lint rule.
   .transform(({ confirmPassword: _confirmPassword, ...rest }) => rest)
 
-validate: {
+request: {
   body: {
     'application/json': SignupJson,
     'application/x-www-form-urlencoded': formOf(SignupForm),
@@ -542,20 +547,20 @@ forwards the submission, and cannot send an `Idempotency-Key`. So declaring
 `form` alongside any of those is a type error, stated by
 `NativeFormProjectionConstraint` (`src/runtime/form-projection.ts`):
 
-| Declared next to `form`                       | Verdict                                       |
-| --------------------------------------------- | --------------------------------------------- |
-| no `multipart` or urlencoded body member      | refused - a browser cannot encode it          |
-| `idempotency`                                 | refused - the key is a header                 |
-| `validate.headers` requiring anything         | refused - a browser cannot send it            |
-| POST with `validate.query` requiring anything | refused - the forwarded call carries no query |
-| POST headers/query requiring nothing          | allowed                                       |
-| GET without `validate.query`                  | refused - there are no fields to project      |
-| GET with `validate.body` or `redirect`        | refused - GET uses URL query/navigation       |
-| a route template with a path parameter        | refused at build time - the path is not typed |
-| PUT, PATCH, or DELETE endpoint                | refused - no native method override is hidden |
+| Declared next to `form`                      | Verdict                                       |
+| -------------------------------------------- | --------------------------------------------- |
+| no `multipart` or urlencoded body member     | refused - a browser cannot encode it          |
+| `idempotency`                                | refused - the key is a header                 |
+| `request.headers` requiring anything         | refused - a browser cannot send it            |
+| POST with `request.query` requiring anything | refused - the forwarded call carries no query |
+| POST headers/query requiring nothing         | allowed                                       |
+| GET without `request.query`                  | refused - there are no fields to project      |
+| GET with `request.body` or `redirect`        | refused - GET uses URL query/navigation       |
+| a route template with a path parameter       | refused at build time - the path is not typed |
+| PUT, PATCH, or DELETE endpoint               | refused - no native method override is hidden |
 
 The reason is the error text, because the refusal makes the reason a required
-property name. `defineRouteHandler` is overloaded, though, and TypeScript
+property name. `defineEndpoint` is overloaded, though, and TypeScript
 reports the last overload when none match - so at the call site the author sees
 that `form` is wrong without being told why. Adding a trailing overload to fix
 that was measured to move every method-group error off its own line instead, a
@@ -696,7 +701,7 @@ server build runs after `nitro:init`, so what is served is never empty.
    against Zod, Valibot, and Effect Schema.
 3. **Done.** `useEndpointForm` is generated alongside `useEndpoint`, typed from
    the contract down to the field names.
-4. **Done.** Explicit GET forms project `validate.query`, remain URL-backed,
+4. **Done.** Explicit GET forms project `request.query`, remain URL-backed,
    and load the same typed endpoint on SSR and enhanced navigation.
 5. Add client-side schema evaluation only if the HTML layer measurably falls
    short.

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Progressive enhancement now shares its form contract, bridge, generated
+  metadata, and client API with the Nuxt 4 line; only middleware continuation
+  and internal multipart dispatch remain platform-specific.
+
 - Idempotency runtime policy now accepts explicit public-operation sentinels:
   `scope: 'global'` selects one shared namespace and
   `authorization: 'public'` states that replay needs no authorization callback.
@@ -13,7 +17,7 @@
   the typed `{ items, nextCursor? }` response, runtime validation, OpenAPI,
   and a method-safe `infiniteQueryOptions(request)` adapter for Pinia Colada.
   Pagination-owned query fields and response status 200 cannot be declared a
-  second time in `validate`; TypeScript and build discovery both reject the
+  second time in `request` / `responses`; TypeScript and build discovery both reject the
   duplicate instead of choosing an implicit winner. Non-success pages reject
   with an `EndpointPaginationError` whose `result` preserves the route's typed
   status union.
@@ -23,6 +27,12 @@
   expressible without putting callbacks in the build-time contract.
 
 ### Changed
+
+- **Breaking:** endpoint authoring is now
+  `defineEndpoint({ request, responses, handler })`. The public
+  `defineRouteHandler` name and the former root `params` / `validate.response`
+  shape have been removed without aliases. Request schemas belong under
+  `request`; status-correlated response schemas belong under `responses`.
 
 - **Breaking:** the idempotency authoring API now uses `idempotency: true` for
   the standard required `Idempotency-Key` contract. Object form is reserved for
@@ -57,7 +67,7 @@
 ### Documentation
 
 - Replaced the obsolete builder-era idempotency design log with the current
-  `defineRouteHandler` contract, runtime-policy, lease, and storage model.
+  `defineEndpoint` contract, runtime-policy, lease, and storage model.
 - Corrected stale contributor, pagination, client, and public-guide wording.
 
 ## 0.7.2 - 2026-08-29

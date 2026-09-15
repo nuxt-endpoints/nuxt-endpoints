@@ -78,7 +78,7 @@ const falseFormValues = new Set(['', '0', 'false', 'off', 'no'])
  * Wraps a schema so it accepts the string fields a form sends.
  *
  * ```ts
- * validate: {
+ * request: {
  *   body: {
  *     'application/json': User,
  *     'application/x-www-form-urlencoded': formOf(User),

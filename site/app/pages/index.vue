@@ -101,15 +101,15 @@ const pitches = [
         title: 'server/api/users/[id].get.ts',
         lang: 'ts',
         code: `import { z } from 'zod'
-import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+import { defineEndpoint } from 'nuxt-endpoints/runtime'
 
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: User,
-      404: z.object({ message: z.string() }),
-    },
+export default defineEndpoint({
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
+  responses: {
+    200: User,
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     return findUser(event.validated.params.id) ?? event.respond(404, { message: 'Not found' })
@@ -152,10 +152,10 @@ if (result.status === 200) result.body.name // User`,
       {
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
-        code: `import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+        code: `import { defineEndpoint } from 'nuxt-endpoints/runtime'
 
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
+export default defineEndpoint({
+  request: { params: z.object({ id: z.coerce.number() }) },
   handler: (event) => {
     return findUser(event.validated.params.id)
     // client types are inferred from this return value
@@ -165,11 +165,11 @@ export default defineRouteHandler({
       {
         title: 'step 2 — tighten the contract',
         lang: 'ts',
-        code: `import { defineRouteHandler } from 'nuxt-endpoints/runtime'
+        code: `import { defineEndpoint } from 'nuxt-endpoints/runtime'
 
-export default defineRouteHandler({
-  params: z.object({ id: z.coerce.number() }),
-  validate: { response: { 200: User, 404: NotFound } },
+export default defineEndpoint({
+  request: { params: z.object({ id: z.coerce.number() }) },
+  responses: { 200: User, 404: NotFound },
   handler: async (event) => {
     const user = await findUser(event.validated.params.id)
     return user ?? event.respond(404, { message: 'Not found' })
@@ -189,7 +189,7 @@ export default defineRouteHandler({
     points: [
       {
         icon: 'lucide:list-checks',
-        text: 'validate.response declares 200 and 404 — TypeScript checks handler returns',
+        text: 'responses declares 200 and 404 — TypeScript checks handler returns',
       },
       {
         icon: 'lucide:split',

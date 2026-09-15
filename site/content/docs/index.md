@@ -8,6 +8,7 @@ Nuxt Endpoints lets you describe an HTTP endpoint once, next to its handler, wit
 - **Runtime validation** — `params`, `query`, `headers`, and `body` are validated before your handler runs. Handler code sees parsed schema output, so coercion and transforms are already applied.
 - **A contract-derived client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses come from the route contract. No codegen step, no types to import.
 - **OpenAPI 3.1** — a document generated from the same schemas and served at `/_endpoints/schema`, without a separately maintained spec in the normal workflow.
+- **Progressive forms** — `useEndpointForm` projects native GET and POST forms from the same contract, including no-JavaScript submissions and typed enhanced results.
 
 ## Show me
 
@@ -16,16 +17,15 @@ One route file declares the contract and the handler:
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-import { defineRouteHandler } from 'nuxt-endpoints/runtime'
-
-export default defineRouteHandler({
+import { defineEndpoint } from 'nuxt-endpoints/runtime'
+export default defineEndpoint({
   summary: 'Get a user',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: z.object({ id: z.number(), name: z.string() }),
-      404: z.object({ message: z.string() }),
-    },
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const { params } = event.validated
@@ -57,7 +57,7 @@ document.
 
 ## Adopt at your own pace
 
-Adding the module changes nothing by itself. Only routes that directly default-export `defineRouteHandler({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
+Adding the module changes nothing by itself. Only routes that directly default-export `defineEndpoint({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
 > Status: beta. The core endpoint flow is usable, but some OpenAPI and discovery details are intentionally still conservative. See [Limits](/docs/limits).
 

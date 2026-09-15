@@ -126,7 +126,7 @@ describe('path-based endpoint client types', () => {
     expectTypeOf(form.fields.q.name).toEqualTypeOf<string>()
     expectTypeOf(form.fields.limit.name).toEqualTypeOf<string>()
     expectTypeOf(form.result.value?.status).toEqualTypeOf<200 | 400 | undefined>()
-    // @ts-expect-error fields come from validate.query, not an arbitrary name.
+    // @ts-expect-error fields come from request.query, not an arbitrary name.
     void form.fields.page
   })
 

@@ -45,14 +45,14 @@ handler module. The fixtures and playground use one canonical declaration for
 both runtime behavior and build-time metadata:
 
 ```ts
-export default defineRouteHandler({
-  params: UserParams,
-  validate: {
+export default defineEndpoint({
+  request: {
+    params: UserParams,
     query: UserQuery,
-    response: {
-      200: User,
-      404: NotFound,
-    },
+  },
+  responses: {
+    200: User,
+    404: NotFound,
   },
   handler: (event) => {
     const { params, query } = event.validated
@@ -88,7 +88,7 @@ one fetchdts `ServerRoutes` tree. NE resolves the contract with
 
 The first provider slice retained `jiti` as a compatibility fallback. That
 migration is complete: `src/discovery.ts`, its dedicated tests, and NE's direct
-`jiti`/`mlly` dependencies have been deleted. NE's `defineRouteHandler` is now
+`jiti`/`mlly` dependencies have been deleted. NE's `defineEndpoint` is now
 an application-layer adapter for the same authored shape. It delegates existing
 request/response validation, idempotency, content negotiation, OpenAPI, and
 client projection to NE's runtime without recreating build-time discovery.
@@ -447,12 +447,13 @@ because the local implementation already works.
 
 ## What Nuxt Endpoints becomes
 
-The source of truth remains the first argument to `defineRouteHandler`. H3 owns
-the contract's type interpretation, Nitro extracts and exposes it at build
-time, and Nuxt joins it to the route tree. NE consumes that shared declaration:
+The source of truth remains the first argument to `defineEndpoint`. NE
+normalizes its `request` and `responses` authoring shape into the shared H3
+contract; Nitro extracts and exposes it at build time, and Nuxt joins it to the
+route tree. NE consumes that shared declaration:
 
 ```text
-defineRouteHandler contract
+defineEndpoint contract
   -> runtime validation and response checks
   -> OpenAPI
   -> status-aware $endpoint / useEndpoint

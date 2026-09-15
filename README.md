@@ -40,6 +40,8 @@ git -C .upstream/h3 checkout --detach 7f4c1c901a15e2a6ac5c217a20fb638a740240f4
 git -C .upstream/nitro checkout --detach cc9f56fcf2cc1bc8b19d1c81408853df8b1c7b07
 git -C .upstream/nuxt checkout --detach d9dab5edf132eb2ba7882966ff21e6ca1c427a32
 
+node scripts/apply-upstream-patches.mjs
+
 (cd .upstream/fetchdts && vp install --frozen-lockfile && vp run build)
 (cd .upstream/h3 && COREPACK_ENABLE_PROJECT_SPEC=0 vp install --frozen-lockfile && vp run build)
 (cd .upstream/nitro && vp add -D typescript@npm:@typescript/typescript6@6.0.2 && vp run build)
@@ -54,6 +56,13 @@ vp install --no-frozen-lockfile -- --update-checksums
 vp run dev:prepare
 vp run check
 ```
+
+The tracked patches in `patches/upstream/` apply h3 rc.32, Nitro #4600, and the Nuxt route
+normalization handoff on top of these exact fork commits. A separate Nitro contract-authoring
+patch preserves the existing API changes required by this NE branch. The script checks all three checkouts
+before applying changes and safely accepts patches that are already applied. These changes are
+kept locally as reviewable patches until the forks publish new pins. See
+[route normalization readiness](docs/route-normalization-readiness.md) for behavior and validation.
 
 The h3, Nitro, and fetchdts dependencies link directly to those visible source trees. The Nuxt
 packages are packed locally from `.upstream/nuxt` only because their monorepo manifests use
@@ -75,17 +84,16 @@ Describe the HTTP contract once, next to the handler, with the schema library yo
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
-import { defineRouteHandler } from 'nuxt-endpoints/runtime'
-
-export default defineRouteHandler({
+import { defineEndpoint } from 'nuxt-endpoints/runtime'
+export default defineEndpoint({
   name: 'getUser',
   summary: 'Get a user',
-  params: z.object({ id: z.coerce.number() }),
-  validate: {
-    response: {
-      200: z.object({ id: z.number(), name: z.string() }),
-      404: z.object({ message: z.string() }),
-    },
+  request: {
+    params: z.object({ id: z.coerce.number() }),
+  },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
   },
   handler: (event) => {
     const { params } = event.validated
@@ -137,9 +145,9 @@ does not replace the route with a remote function.
 - ✅ OpenAPI 3.1 generation, extensible via `document` / `extend`
 - ✅ Importable path, method, request, and result helper types from `#endpoints`
 - ✅ Pinia Colada integration through typed `queryOptions(request)` / `mutationOptions(request)` adapters, with its official Nuxt SSR module
-- ✅ Contract-generated cursor pagination with a typed `infiniteQueryOptions(request)` Pinia Colada adapter — Nuxt 5 line only
+- ✅ Contract-generated cursor pagination with a typed `infiniteQueryOptions(request)` Pinia Colada adapter
 - ✅ Optional `Idempotency-Key` replay protection with an application-owned durable storage contract and a development-only memory adapter
-- ✅ Progressive enhancement: `useEndpointForm` projects GET query forms and POST mutation forms that work before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md)) — Nuxt 5 line only
+- ✅ Progressive enhancement: `useEndpointForm` projects GET query forms and POST mutation forms that work before hydration and with no JavaScript, from the same contract ([docs](./docs/progressive-enhancement.md))
 
 ## Published Nuxt 4 line
 
@@ -158,7 +166,7 @@ npm install zod
 # or: npm install effect
 ```
 
-Adding the module changes nothing by itself: only routes whose default export is a direct `defineRouteHandler({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
+Adding the module changes nothing by itself: only routes whose default export is a direct `defineEndpoint({...})` call are affected, and existing routes keep working unchanged. Create a route like the one above and call it with `$endpoint`.
 
 Module options (OpenAPI route and optional client methods) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 

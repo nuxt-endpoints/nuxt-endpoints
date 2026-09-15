@@ -12,12 +12,18 @@ export type {
 export { defineRuntimeHandler, getRuntimeMethod, getRuntimeWebRequest } from './handler'
 export type { RuntimeContractEvent, RuntimeEvent } from './handler'
 export {
+  continueRuntimeRendering,
   defineRuntimeMiddleware,
   getRuntimePathname,
   runtimeRedirect,
   runtimeServerFetch,
 } from './middleware'
-export type { RuntimeMiddleware, RuntimeMiddlewareResult } from './middleware'
+export type {
+  RuntimeMiddleware,
+  RuntimeMiddlewareNext,
+  RuntimeMiddlewareResult,
+} from './middleware'
+export { defineRuntimePlugin } from './plugin'
 export {
   getRuntimeQuery,
   getRuntimeRequestHeaders,
@@ -29,3 +35,4 @@ export {
 export { createRuntimeError, setRuntimeResponseHeaders, setRuntimeResponseStatus } from './response'
 export type { RuntimeHttpErrorOptions } from './response'
 export type { EndpointWireValue } from './wire'
+export { normalizeRuntimeRouteIdentity } from './route'
