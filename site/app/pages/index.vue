@@ -489,8 +489,10 @@ const stackItems = [
             font-size: clamp(var(--text-4xl), 4.2vw, var(--text-hero));
             line-height: 1.16;
 
-            > .value > .value.-accent {
-              color: var(--accent-strong);
+            > .value {
+              > .value.-accent {
+                color: var(--accent-strong);
+              }
             }
 
             > .value.-client {
