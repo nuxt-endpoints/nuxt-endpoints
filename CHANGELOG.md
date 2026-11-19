@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 - 2026-11-19
 
 - Add opt-in status-aware types for Nuxt 4.6 native fetch. Enable
   `experimental.routeTypedFetch` and `endpoints.client.nativeFetch` to narrow
