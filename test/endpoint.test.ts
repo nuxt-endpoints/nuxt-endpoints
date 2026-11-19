@@ -89,7 +89,7 @@ describe('DefinedEndpoint', () => {
   it('passes a validated H3 event through defineEndpoint', async () => {
     const { defineEndpoint } = await import('../src/runtime')
     const definition = {
-      request: { params: numberParams },
+      validate: { params: numberParams },
       handler: (event: any) => ({
         id: event.validated.params.id,
         ownsContract: event.routeDef.params === numberParams,
@@ -431,7 +431,7 @@ describe('DefinedEndpoint', () => {
   it('normalizes route idempotency authoring input and rejects disabled JS forms', async () => {
     const { defineEndpoint } = await import('./internal-runtime')
     const direct = defineEndpoint({
-      request: { body: userResponse },
+      validate: { body: userResponse },
       idempotency: true,
       handler: () => ({ id: 1, name: 'Tom' }),
     }) as unknown as {
@@ -439,7 +439,7 @@ describe('DefinedEndpoint', () => {
     }
     const grouped = defineEndpoint({
       post: {
-        request: { body: userResponse },
+        validate: { body: userResponse },
         idempotency: { headerName: 'X-Request-Key' },
         handler: () => ({ id: 1, name: 'Tom' }),
       },

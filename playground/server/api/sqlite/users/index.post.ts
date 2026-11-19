@@ -6,7 +6,7 @@ const PlaygroundUser = z.object({
 })
 export default defineEndpoint({
   summary: 'Persist a user in the playground SQLite database',
-  request: {
+  validate: {
     body: z.object({
       name: z.string().trim().min(1).max(80),
     }),

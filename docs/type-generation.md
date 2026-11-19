@@ -12,7 +12,7 @@ implementation is active. Both platform lines expose:
 ```ts
 export default defineEndpoint({
   name: 'getItem',
-  request: {
+  validate: {
     params: z.object({ id: z.string() }),
   },
   responses: {

@@ -54,4 +54,16 @@ export type EndpointClientCodegenOptions = {
     raw: boolean
   }
   serverRouteConfigPath?: string
+  nativeFetch?: boolean
+  otherRoutes?: { path: string; method?: string }[]
+  nativeServerRoutes?: readonly NativeServerRoute[]
+}
+
+/** Route segments supplied by Nuxt's server builder via `server:routes`. */
+export type NativeServerRoute = {
+  route?: string
+  method?: string
+  handler?: string
+  middleware?: boolean
+  segments?: readonly ({ type: 'static'; value: string } | { type: 'dynamic' | 'wildcard' })[]
 }

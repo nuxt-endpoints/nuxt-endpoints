@@ -16,13 +16,13 @@ export default defineNuxtConfig({
         {
           name: 'description',
           content:
-            'Runtime-validated contracts, status-typed clients, and OpenAPI for Nuxt server routes.',
+            'Extend Nuxt 4.6 typed fetch with status-specific JSON responses, runtime validation, and OpenAPI for your server routes.',
         },
         { property: 'og:title', content: 'Nuxt Endpoints' },
         {
           property: 'og:description',
           content:
-            'Runtime-validated contracts, status-typed clients, and OpenAPI for Nuxt server routes.',
+            'Extend Nuxt 4.6 typed fetch with status-specific JSON responses, runtime validation, and OpenAPI for your server routes.',
         },
         { property: 'og:type', content: 'website' },
         { name: 'twitter:card', content: 'summary_large_image' },

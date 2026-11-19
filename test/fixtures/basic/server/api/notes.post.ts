@@ -13,7 +13,7 @@ export default defineEndpoint({
     action: '/notes/new',
     redirect: '/notes/{id}',
   },
-  request: {
+  validate: {
     body: {
       'application/json': NoteInput,
       'application/x-www-form-urlencoded': formOf(NoteInput),

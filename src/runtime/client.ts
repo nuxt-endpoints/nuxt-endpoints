@@ -1,3 +1,4 @@
+import { createRouter, type RadixRouter } from 'radix3'
 import type {
   EndpointClientOptions,
   EndpointClientOptionsAreOptional,
@@ -956,6 +957,7 @@ export type EndpointRequestFunctions = {
 }
 
 export type EndpointRequestRuntimeOptions = {
+  resolvedPath?: string
   fetcher?: EndpointFetcherRuntime
 }
 
@@ -1183,6 +1185,139 @@ export function queryOptions(request: unknown): EndpointCallQueryOptionsRuntime 
   return options()
 }
 
+export function endpointUrlQueryOptions(
+  path: string,
+  options: { query?: unknown; headers?: unknown } | undefined,
+  fetcher?: EndpointFetcherRuntime,
+) {
+  assertSameOriginUrl(path)
+  const route = { path, method: 'get' } as const
+  const { query, headers } = options ?? {}
+  return {
+    key: createRequestQueryKey(route, { query }),
+    query: ({ signal }: { signal: AbortSignal }) =>
+      fetchResult(
+        path,
+        { method: 'get', query, headers, signal, ignoreResponseError: true },
+        fetcher,
+      ).then(toEndpointResultData),
+  }
+}
+
+function assertSameOriginUrl(path: string) {
+  const origin = 'http://nuxt-endpoints.local'
+  const url = new URL(path, origin)
+  if (!path.startsWith('/') || path.startsWith('//') || url.origin !== origin) {
+    throw new TypeError('[nuxt-endpoints] Colada URL options require a relative, same-origin URL.')
+  }
+  return url
+}
+
+type OtherRoute = { path: string; method?: string }
+
+/** Nitro 2 uses h3's radix3 router to resolve static and parameterized paths. */
+function createRouteLookup(
+  routes: EndpointClientRouteConfigInput,
+  otherRoutes: readonly OtherRoute[],
+) {
+  const routers = new Map<
+    string,
+    RadixRouter<{ path: string; route?: EndpointClientRouteConfig }>
+  >()
+  return (path: string, method: string) => {
+    let router = routers.get(method)
+    if (!router) {
+      router = createRouter()
+      for (const other of otherRoutes) {
+        if (!other.method || other.method === method)
+          router.insert(other.path, { path: other.path })
+      }
+      for (const route of routes) {
+        if (route.method === method) router.insert(route.path, { path: route.path, route })
+      }
+      routers.set(method, router)
+    }
+    return router.lookup(path)
+  }
+}
+
+export function createBuildPath(
+  routes: EndpointClientRouteConfigInput,
+  otherRoutes: readonly OtherRoute[],
+) {
+  const lookup = createRouteLookup(routes, otherRoutes)
+  // A built path can be reused with any method. Include methodless Nitro handlers too.
+  const methods = new Set([...routes, ...otherRoutes].map((route) => route.method ?? 'default'))
+  return (template: string, { params }: { params: unknown }) => {
+    const path = replaceParams(template, params)
+    if (path.includes('//') || path.endsWith('/') || assertSameOriginUrl(path).pathname !== path) {
+      throw new TypeError(`[nuxt-endpoints] Invalid path parameter for ${template}`)
+    }
+    for (const method of methods) {
+      const actual = lookup(path, method)?.path
+      if (actual !== lookup(template, method)?.path) {
+        throw new TypeError(
+          `[nuxt-endpoints] ${path} resolves to ${actual ?? 'no route'} for ${method.toUpperCase()} instead of ${template}`,
+        )
+      }
+    }
+    return path
+  }
+}
+
+export function createEndpointUrlMatcher(
+  routes: EndpointClientRouteConfigInput,
+  otherRoutes: readonly OtherRoute[] = [],
+) {
+  const lookup = createRouteLookup(routes, otherRoutes)
+  return (path: string, method: string) => {
+    const url = assertSameOriginUrl(path)
+    if (/[?#\\\s]/.test(path) || url.pathname !== path) {
+      throw new TypeError(
+        '[nuxt-endpoints] Use an encoded pathname and pass query parameters in options.query.',
+      )
+    }
+    const route = lookup(path, method)?.route
+    if (!route)
+      throw new TypeError(`[nuxt-endpoints] Unknown endpoint: ${method.toUpperCase()} ${path}`)
+    return route
+  }
+}
+
+export function endpointUrlMutationOptions(
+  matchEndpointUrl: ReturnType<typeof createEndpointUrlMatcher>,
+  path: string,
+  options: Record<string, unknown>,
+  fetcher?: EndpointFetcherRuntime,
+) {
+  const { method, body, query, headers, idempotencyKey, mediaType } = options
+  const input = { body, query, headers, idempotencyKey, mediaType }
+  const route = matchEndpointUrl(path, String(method).toLowerCase())
+  if (!['post', 'put', 'patch', 'delete'].includes(route.method)) {
+    throw new TypeError('[nuxt-endpoints] mutationOptions() requires a mutation method.')
+  }
+  const request = createEndpointRequest(route, input, { fetcher, resolvedPath: path })
+  return {
+    key: createRequestQueryKey({ ...route, path }, request.options),
+    mutation: () => request.result().then(toEndpointResultData),
+  }
+}
+
+export function endpointUrlInfiniteQueryOptions(
+  matchEndpointUrl: ReturnType<typeof createEndpointUrlMatcher>,
+  path: string,
+  options: Record<string, unknown> = {},
+  fetcher?: EndpointFetcherRuntime,
+) {
+  const route = matchEndpointUrl(path, 'get')
+  if (!route.pagination)
+    throw new TypeError(
+      '[nuxt-endpoints] infiniteQueryOptions() requires a cursor pagination contract.',
+    )
+  const { query, headers } = options
+  return createInfiniteQueryOptions(route, { query, headers }, fetcher, path)
+}
+
 /** Converts an unsafe-method endpoint request into standard Pinia Colada mutation options. */
 export function mutationOptions<
   const ROUTE extends MutationEndpointRoute,
@@ -1272,7 +1407,7 @@ export function createEndpointRequest(
   // fetcher's options.
   applyMediaTypeClientOptions(fetchOptions, mediaType)
   applyMediaResponseClientOptions(route, fetchOptions)
-  const path = replaceParams(route.path, params)
+  const path = runtimeOptions.resolvedPath ?? replaceParams(route.path, params)
   const fetcher = runtimeOptions.fetcher
 
   const result: EndpointRequestRuntime<EndpointResultRuntime> = (signal) => {
@@ -1578,7 +1713,7 @@ function createEndpointCall(
     ...(route.method === 'get' && route.pagination
       ? {
           infiniteQueryOptions: () =>
-            createInfiniteQueryOptions(route, request.options, features, queryFetcher),
+            createInfiniteQueryOptions(route, request.options, queryFetcher),
         }
       : {}),
   }
@@ -1609,20 +1744,23 @@ function createEndpointCall(
 function createInfiniteQueryOptions(
   route: EndpointClientRouteConfig,
   baseOptions: Record<string, unknown>,
-  features: EndpointClientFeatureOptions,
   fetcher: EndpointFetcherRuntime | undefined,
+  resolvedPath?: string,
 ): EndpointCallInfiniteQueryOptionsRuntime {
   const pagination = route.pagination!
   const optionsWithoutCursor = withPaginationCursor(baseOptions, pagination.cursor, undefined)
   return {
-    key: createRequestQueryKey(route, optionsWithoutCursor),
+    key: createRequestQueryKey(
+      { ...route, path: resolvedPath ?? route.path },
+      optionsWithoutCursor,
+    ),
     initialPageParam: undefined,
     query: async ({ signal, pageParam }) => {
       const options = withPaginationCursor(baseOptions, pagination.cursor, pageParam)
-      const call = createEndpointCall(route, options, features, fetcher, fetcher)
+      const request = createEndpointRequest(route, options, { fetcher, resolvedPath })
       let result: EndpointResultRuntime
       try {
-        result = await call[endpointCallRuntimeSymbol].request.result(signal)
+        result = await request.result(signal)
       } catch (cause) {
         // Colada recognizes cancellation by the original aborted rejection.
         if (signal.aborted) throw cause
@@ -1675,10 +1813,10 @@ function withPaginationCursor(
   return { ...options, query }
 }
 
-function createRequestQueryKey(
-  route: EndpointClientRouteConfig,
+function createRequestQueryKey<Method extends HttpMethod>(
+  route: { path: string; method: Method },
   options: Record<string, unknown>,
-): EndpointCacheKey {
+): EndpointCacheKey<Method> {
   const request: Record<string, unknown> = {}
   for (const key of ['params', 'query', 'body', 'mediaType', 'accept', 'idempotencyKey'] as const) {
     if (options[key] !== undefined) {

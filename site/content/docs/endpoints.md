@@ -3,16 +3,23 @@ title: Define Endpoints
 description: Declare validated request and response contracts with the canonical route-handler API.
 ---
 
-Nuxt Endpoints uses a single-definition route shape designed to align with the
-route-contract work happening in H3 and Nitro. Directly default-export
-`defineEndpoint({...})`; the handler receives parsed schema output.
+Default-export `defineEndpoint({ validate, responses, handler })` from a
+Nuxt server route. The handler reads parsed schema output from `event.validated`.
+
+The `validate` and `handler` fields follow the same pattern as H3 v2's
+experimental `defineValidatedHandler`: declare request schemas alongside the
+handler and validate incoming data before it runs. [H3 v2 implementation](https://github.com/h3js/h3/blob/v2.0.2/src/handler.ts#L64-L94).
+
+Nuxt Endpoints also declares response schemas by HTTP status. With
+[native fetch types](/docs/client#nuxt-fetch-types) enabled, those declarations
+give Nuxt's `$fetch` and `useFetch` status-aware response types.
 
 ```ts
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 export default defineEndpoint({
   name: 'getUser',
-  request: {
+  validate: {
     params: z.object({ id: z.coerce.number() }),
     query: z.object({ include: z.string().optional() }),
   },
@@ -72,11 +79,11 @@ A single-method definition accepts:
 - `idempotency`: serializable idempotency contract metadata.
 - `pagination`: an optional cursor-pagination contract for GET routes.
 - `form`: an optional native-form projection for GET or POST routes.
-- `request`: request schemas.
+- `validate`: input schemas.
 - `responses`: status-to-response schemas.
 - `handler`: the single-method handler.
 
-`request` accepts:
+`validate` accepts:
 
 - `params`: parsed route params.
 - `query`: parsed query object.
@@ -98,7 +105,7 @@ import { z } from 'zod'
 const User = z.object({ id: z.number(), name: z.string() })
 const Params = z.object({ id: z.coerce.number() })
 export default defineEndpoint({
-  request: {
+  validate: {
     params: Params,
   },
   get: {
@@ -110,7 +117,7 @@ export default defineEndpoint({
   },
   put: {
     name: 'updateUser',
-    request: {
+    validate: {
       body: z.object({ name: z.string() }),
     },
     responses: { 200: User },
@@ -127,9 +134,7 @@ would be unreachable.
 The declarable methods are `get`, `post`, `put`, `patch` and `delete`. `HEAD`
 is answered by the `get` entry with the body dropped, and `OPTIONS` answers
 `204` with an `Allow` header listing the declared methods, so neither is
-declared directly. `CONNECT` and `TRACE` are not routed. The Nuxt 5 line
-accepts all nine as explicit entries, so a route that declares one of them is
-the single case that does not port back to this line unchanged.
+declared directly. `CONNECT` and `TRACE` are not routed.
 
 ## Handler event
 
@@ -143,7 +148,7 @@ The handler receives the native H3 event, extended with the endpoint contract:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: z.object({ name: z.string().trim() }),
   },
   responses: {
@@ -222,7 +227,7 @@ Schema members are parsed; `true` members expose raw bytes.
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: {
       'application/json': z.object({ name: z.string() }),
       'multipart/form-data': z.object({ name: z.string() }),
@@ -268,7 +273,7 @@ belong in the application-wide endpoint runtime file:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: PaymentInput,
   },
   responses: { 201: Payment },
@@ -347,7 +352,7 @@ export const userContract = {
 // server/api/users/[id].get.ts
 import { userContract } from '../../../contracts/user'
 export default defineEndpoint({
-  request: {
+  validate: {
     params: userContract.params,
   },
   responses: userContract.responses,

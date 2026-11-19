@@ -22,7 +22,6 @@ watch(
   },
 )
 
-const themeIcon = computed(() => (theme.value === 'dark' ? 'lucide:sun' : 'lucide:moon'))
 const themeToggleLabel = computed(() =>
   theme.value === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
 )
@@ -88,7 +87,14 @@ function applyTheme(value: Theme) {
           :title="themeToggleLabel"
           @click="toggleTheme"
         >
-          <Icon class="pv-icon" :name="themeIcon" size="1.1rem" aria-hidden="true" />
+          <Icon
+            v-if="theme === 'dark'"
+            class="pv-icon"
+            name="lucide:sun"
+            size="1.1rem"
+            aria-hidden="true"
+          />
+          <Icon v-else class="pv-icon" name="lucide:moon" size="1.1rem" aria-hidden="true" />
         </button>
         <a
           class="link"

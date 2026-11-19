@@ -53,7 +53,7 @@ The handler context exposes both HTTP integration levels:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: RequestBody,
   },
   handler: ({ event, request, body }) => {

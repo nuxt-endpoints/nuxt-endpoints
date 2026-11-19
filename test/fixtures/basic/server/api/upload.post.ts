@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineEndpoint } from '../../../../../src/runtime'
 export default defineEndpoint({
-  request: {
+  validate: {
     body: {
       'application/json': z.object({ name: z.string() }),
       'application/x-www-form-urlencoded': z.object({ name: z.string() }),

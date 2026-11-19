@@ -21,7 +21,7 @@ async function requestRoute(
 describe('canonical defineEndpoint compatibility adapter', () => {
   it('validates a single-method route and exposes the public route definition', async () => {
     const definition = {
-      request: { params: z.object({ id: z.coerce.number() }) },
+      validate: { params: z.object({ id: z.coerce.number() }) },
       responses: { 200: z.object({ id: z.number() }) },
       handler: (event: EndpointRouteEvent<any>) => ({
         id: (event.validated.params as { id: number }).id,
@@ -41,7 +41,7 @@ describe('canonical defineEndpoint compatibility adapter', () => {
         handler: () => ({ method: 'get' as const }),
       },
       post: {
-        request: { body: z.object({ value: z.string() }) },
+        validate: { body: z.object({ value: z.string() }) },
         responses: { 201: z.object({ value: z.string() }) },
         handler: (event) => event.respond(201, { value: event.validated.body.value }),
       },
@@ -72,10 +72,13 @@ describe('canonical defineEndpoint compatibility adapter', () => {
     ).toThrow(/`params` is not supported/)
     expect(() =>
       defineEndpoint({
-        validate: { query: z.object({ q: z.string() }) },
+        request: { query: z.object({ q: z.string() }) },
         handler: () => null,
       } as never),
-    ).toThrow(/`validate` is not supported/)
+    ).toThrow(/`request` is not supported.*`validate`/)
+    expect(() =>
+      defineEndpoint({ validate: { response: { 200: z.string() } }, handler: () => null } as never),
+    ).toThrow(/under `responses` alongside `validate`/)
     expect(() =>
       defineEndpoint({ response: { 200: z.string() }, handler: () => null } as never),
     ).toThrow(/`response` is not supported/)

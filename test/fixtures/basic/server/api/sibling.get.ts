@@ -1,7 +1,7 @@
 import { defineEndpoint } from '../../../../../src/runtime'
 import { siblingContract } from '../contracts/sibling'
 export default defineEndpoint({
-  request: {
+  validate: {
     query: siblingContract.query,
   },
   responses: siblingContract.responses,

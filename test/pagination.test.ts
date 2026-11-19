@@ -37,10 +37,10 @@ describe('cursor pagination contract', () => {
     expect(() =>
       defineEndpoint({
         pagination: { kind: 'cursor', item: z.object({ id: z.number() }) },
-        request: { query: z.object({ cursor: z.string().optional() }) },
+        validate: { query: z.object({ cursor: z.string().optional() }) },
         handler: () => ({ items: [] }),
       } as never),
-    ).toThrow(/pagination owns request\.query\.cursor/)
+    ).toThrow(/pagination owns validate\.query\.cursor/)
 
     expect(() =>
       defineEndpoint({
@@ -54,7 +54,7 @@ describe('cursor pagination contract', () => {
   it('retains non-pagination query fields and non-success responses', async () => {
     const handler = defineEndpoint({
       pagination: { kind: 'cursor', item: z.object({ id: z.number() }) },
-      request: { query: z.object({ category: z.string().optional() }) },
+      validate: { query: z.object({ category: z.string().optional() }) },
       responses: { 404: z.object({ message: z.string() }) },
       handler: () => ({ items: [{ id: 1 }] }),
     }) as unknown as RuntimeRouteHandler

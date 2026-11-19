@@ -34,7 +34,7 @@ describe('defineEndpoint multi-method inference', () => {
     const Article = schema<{ id: number }>()
     const duplicateQuery = {
       pagination: { kind: 'cursor' as const, item: Article },
-      request: { query: schema<{ cursor?: string }>() },
+      validate: { query: schema<{ cursor?: string }>() },
       handler: () => ({ items: [{ id: 1 }] }),
     }
     // @ts-expect-error pagination is the sole owner of query.cursor
@@ -65,7 +65,7 @@ describe('defineEndpoint multi-method inference', () => {
   it('combines non-pagination query fields and response statuses', () => {
     defineEndpoint({
       pagination: { kind: 'cursor', item: schema<{ id: number }>() },
-      request: {
+      validate: {
         query: schema<{ category?: string }>(),
       },
       responses: { 404: schema<{ message: string }>() },
@@ -106,7 +106,7 @@ describe('defineEndpoint multi-method inference', () => {
     const duplicate = {
       get: {
         pagination: { kind: 'cursor' as const, item: schema<{ id: number }>() },
-        request: { query: schema<{ limit?: number }>() },
+        validate: { query: schema<{ limit?: number }>() },
         handler: () => ({ items: [{ id: 1 }] }),
       },
     }
@@ -131,7 +131,7 @@ describe('defineEndpoint multi-method inference', () => {
 
   it('types a direct handler as a validated H3 event', () => {
     defineEndpoint({
-      request: { params: schema<{ id: string }, { id: number }>() },
+      validate: { params: schema<{ id: string }, { id: number }>() },
       handler: (event) => {
         expectTypeOf(event.validated.params).toEqualTypeOf<{ id: number }>()
         expectTypeOf(event.routeDef.params).toEqualTypeOf<Schema<{ id: string }, { id: number }>>()
@@ -143,9 +143,9 @@ describe('defineEndpoint multi-method inference', () => {
 
   it('infers every handler from its own contract', () => {
     const handler = defineEndpoint({
-      request: { params: schema<{ id: string }, { id: number }>() },
+      validate: { params: schema<{ id: string }, { id: number }>() },
       get: {
-        request: {
+        validate: {
           query: schema<{ search: string }, { search: string; limit: number }>(),
         },
         responses: { 200: schema<{ id: number; name: string }>() },
@@ -161,7 +161,7 @@ describe('defineEndpoint multi-method inference', () => {
         },
       },
       put: {
-        request: {
+        validate: {
           body: schema<{ name: string }>(),
         },
         responses: {
@@ -211,7 +211,7 @@ describe('defineEndpoint multi-method inference', () => {
 
   it('allows only shared params in the method group request', () => {
     defineEndpoint({
-      request: {
+      validate: {
         params: schema<{ id: string }, { id: number }>(),
         // @ts-expect-error headers belong to a method request, not the shared route request.
         headers: schema<{ authorization: string }>(),
@@ -264,13 +264,13 @@ describe('defineEndpoint multi-method inference', () => {
 
   it('accepts shorthand authoring and normalizes inferred route metadata', () => {
     const direct = defineEndpoint({
-      request: { body: schema<{ text: string }>() },
+      validate: { body: schema<{ text: string }>() },
       idempotency: true,
       handler: () => ({ ok: true }),
     })
     const grouped = defineEndpoint({
       post: {
-        request: { body: schema<{ text: string }>() },
+        validate: { body: schema<{ text: string }>() },
         idempotency: true,
         handler: () => ({ ok: true }),
       },
@@ -350,14 +350,20 @@ describe('defineEndpoint multi-method inference', () => {
       params: schema<{ id: string }>(),
       handler: () => ({ ok: true }),
     }
-    // @ts-expect-error params moved under request.
+    // @ts-expect-error params moved under validate.
     defineEndpoint(legacyParams)
-    const legacyValidate = {
-      validate: { query: schema<{ q: string }>() },
+    const legacyRequest = {
+      request: { query: schema<{ q: string }>() },
       handler: () => ({ ok: true }),
     }
-    // @ts-expect-error validate was replaced by request and responses.
-    defineEndpoint(legacyValidate)
+    // @ts-expect-error request was renamed to validate.
+    defineEndpoint(legacyRequest)
+    const nestedResponse = {
+      validate: { query: schema<{ q: string }>(), response: { 200: schema<string>() } },
+      handler: () => 'ok',
+    }
+    // @ts-expect-error status schemas belong in responses alongside validate.
+    defineEndpoint(nestedResponse)
     const legacyResponse = {
       response: { 200: schema<{ ok: true }>() },
       handler: () => ({ ok: true }),

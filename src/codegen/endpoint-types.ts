@@ -1,4 +1,5 @@
 import { toImportPath } from './shared'
+import { generateNativeFetchTypes } from './native-fetch-types'
 import type { EndpointClientCodegenOptions, EndpointRouteHandler, ResolvePath } from './types'
 
 function buildEndpointRouteEntry(
@@ -67,6 +68,9 @@ export function generateEndpointTypes(
   const serverRouteConfigImport = options.serverRouteConfigPath
     ? `\nimport type { ServerRouteResponsesFor } from '${toImportPath(resolve('./runtime'))}'`
     : ''
+  const nativeFetchTypes = options.nativeFetch
+    ? generateNativeFetchTypes(resolve, handlers, options.nativeServerRoutes ?? [])
+    : ''
 
   return `
 import type { EndpointClient, EndpointDefinitionFromRoute, EndpointHandlerReturnFromRoute, EndpointMappedClient, EndpointMappedPathCall, EndpointMappedUseClient, EndpointPathCall, EndpointRouteMapEntry, EndpointRouteMapValue, HttpMethod, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient } from '${toImportPath(resolve('./runtime'))}'
@@ -90,5 +94,6 @@ export type $UseEndpointForm = UseEndpointFormClient<EndpointRouteEntry>
 export type $UseEndpointPathCall<PATH extends EndpointPath, METHOD extends EndpointMethod<PATH>> = ReturnType<UseEndpointClientMethod<EndpointRouteForPathMethod<PATH, METHOD>, EndpointClientFeatures>>
 ${rawResponseType}
 export type { EndpointClient, EndpointPathCall, UseEndpointClient, UseEndpointClientMethod, UseEndpointFormClient }
+${nativeFetchTypes}
 `.trimStart()
 }

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEndpointClient, createUseEndpoint } from '../src/runtime'
+import {
+  createBuildPath,
+  createEndpointUrlMatcher,
+  endpointUrlInfiniteQueryOptions,
+  endpointUrlMutationOptions,
+  endpointUrlQueryOptions,
+} from '../src/runtime/client'
 import type { EndpointCallInfiniteQueryOptionsRuntime } from '../src/runtime/client'
 import {
   EndpointPaginationError,
@@ -33,6 +40,20 @@ describe('createEndpointClient', () => {
     vi.stubGlobal('$fetch', Object.assign(fetchMock, { raw: fetchRawMock }))
   })
 
+  it('builds encoded paths and rejects parameters that select another route', () => {
+    const pattern = '/api/teams/:team/users/:id'
+    const buildPath = createBuildPath(
+      [{ path: pattern, method: 'get' }],
+      [{ path: '/api/teams/:team/users/me', method: 'put' }],
+    )
+    const build = (id: string) => buildPath(pattern, { params: { team: 'a b', id } })
+    expect(build('a/b?c')).toBe('/api/teams/a%20b/users/a%2Fb%3Fc')
+    expect(() => build('me')).toThrow(/resolves to .*users\/me for PUT/)
+    for (const invalid of ['', '.', '..']) expect(() => build(invalid)).toThrow(/Invalid path/)
+    expect(() => buildPath(pattern, { params: { team: 'a' } })).toThrow(/Missing path parameter/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('replaces path params and forwards fetch options', async () => {
     fetchMock.mockResolvedValue({ id: 123, name: 'Tom' })
 
@@ -57,6 +78,107 @@ describe('createEndpointClient', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/users/456', {
       method: 'get',
     })
+  })
+
+  it('builds a lazy URL query with a stable key and returns an HTTP error as data', async () => {
+    const headers = { cookie: 'session=test' }
+    const raw = vi.fn().mockResolvedValue({
+      status: 404,
+      ok: false,
+      headers: new Headers(),
+      _data: { reason: 'not_found' },
+    })
+    const query = endpointUrlQueryOptions(
+      '/api/users/42',
+      { query: { page: 1, includePosts: true }, headers },
+      Object.assign(vi.fn(), { raw }),
+    )
+    const sameQuery = endpointUrlQueryOptions('/api/users/42', {
+      query: { includePosts: true, page: 1 },
+    })
+
+    expect(query.key).toEqual(sameQuery.key)
+    expect(raw).not.toHaveBeenCalled()
+    const signal = new AbortController().signal
+    await expect(query.query({ signal })).resolves.toEqual({
+      status: 404,
+      ok: false,
+      body: { reason: 'not_found' },
+    })
+    expect(raw).toHaveBeenCalledWith('/api/users/42', {
+      method: 'get',
+      query: { includePosts: true, page: 1 },
+      headers,
+      signal,
+      ignoreResponseError: true,
+    })
+    expect(() => endpointUrlQueryOptions('//example.com/api/users/42', { headers })).toThrow(
+      /same-origin URL/,
+    )
+  })
+
+  it('keeps a mutation key for retries and resolves the metadata for the concrete URL', async () => {
+    const routes = [
+      {
+        path: '/api/users/:id',
+        method: 'put',
+        idempotency: { headerName: 'X-Key', required: true },
+      },
+      { path: '/api/users/me', method: 'put' },
+    ] as const
+    const options = { method: 'PUT', body: { name: 'Ada' } }
+    const match = createEndpointUrlMatcher(routes, [{ path: '/api/users/admin', method: 'put' }])
+    expect(() => match('/api/users/admin', 'put')).toThrow(/Unknown endpoint/)
+    const update = endpointUrlMutationOptions(match, '/api/users/a:b', options)
+    expect(fetchMock).not.toHaveBeenCalled()
+    await update.mutation()
+    await update.mutation()
+    await endpointUrlMutationOptions(match, '/api/users/a:b', options).mutation()
+    await endpointUrlMutationOptions(match, '/api/users/me', options).mutation()
+    const keys = fetchMock.mock.calls.map(([, input]) => input.headers?.['X-Key'])
+    expect(keys[0]).toEqual(expect.any(String))
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+    expect(keys[3]).toBeUndefined()
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/users/a:b')
+  })
+
+  it('forwards the cursor and abort signal for a paginated URL', async () => {
+    const routes = [
+      {
+        path: '/api/teams/:id/articles',
+        method: 'get',
+        pagination: {
+          kind: 'cursor',
+          status: 200,
+          cursor: 'cursor',
+          limit: 'limit',
+          items: 'items',
+          next: 'nextCursor',
+        },
+      },
+    ] as const
+    const pages = endpointUrlInfiniteQueryOptions(
+      createEndpointUrlMatcher(routes),
+      '/api/teams/42/articles',
+      {
+        query: { limit: 1 },
+      },
+    )
+    const signal = new AbortController().signal
+    fetchMock
+      .mockResolvedValueOnce({ items: [1], nextCursor: 'two' })
+      .mockResolvedValueOnce({ items: [2] })
+    const first = await pages.query({ signal, pageParam: undefined })
+    const last = await pages.query({ signal, pageParam: pages.getNextPageParam(first) })
+    expect(pages.getNextPageParam(last)).toBeUndefined()
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/teams/42/articles',
+      expect.objectContaining({
+        signal,
+        query: { limit: 1, cursor: 'two' },
+      }),
+    )
   })
 
   it('projects a declared name to the same endpoint request', async () => {

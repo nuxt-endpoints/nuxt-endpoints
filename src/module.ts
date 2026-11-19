@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import {
@@ -6,9 +7,12 @@ import {
   addServerImports,
   addServerPlugin,
   addServerTemplate,
+  addTemplate,
+  addTypeTemplate,
   createResolver,
   defineNuxtModule,
   findPath,
+  getNuxtVersion,
   useLogger,
 } from '@nuxt/kit'
 import type { Nuxt, NuxtModule } from '@nuxt/schema'
@@ -32,7 +36,7 @@ import { idempotencyRuntimeOptionKeys } from './runtime/idempotency'
 import { isMediaResponseContract } from './runtime/response'
 import { findFormBodyMember } from './runtime/body-media-type'
 import { formFieldAttributes } from './runtime/form-schema'
-import type { EndpointFormRouteMetadata } from './codegen/types'
+import type { EndpointFormRouteMetadata, NativeServerRoute } from './codegen/types'
 import type { DefinedEndpoint, EndpointIdempotencyRuntimeMarker } from './runtime/endpoint'
 import type {
   EndpointDefinition,
@@ -84,6 +88,8 @@ export type EndpointsOpenApiModuleOptions = {
 
 export type EndpointsClientModuleOptions = {
   raw?: boolean
+  /** Extend the Nuxt 4.6+ auto-imports when routeTypedFetch is enabled. */
+  nativeFetch?: boolean
 }
 
 type ResolvedEndpointsModuleOptions = {
@@ -189,6 +195,48 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const runtimeFile = resolve(nuxt.options.buildDir, `${moduleName}.ts`)
     const resolvedOptions = resolveModuleOptions(options, nuxt.options.dev)
     const logger = useLogger('nuxt-endpoints')
+    const [major, minor] = getNuxtVersion(nuxt).split('.').map(Number)
+    const nativeFetch =
+      options.client?.nativeFetch === true &&
+      major === 4 &&
+      minor >= 6 &&
+      'routeTypedFetch' in nuxt.options.experimental &&
+      nuxt.options.experimental.routeTypedFetch === true
+    if (options.client?.nativeFetch && !nativeFetch) {
+      logger.warn(
+        'client.nativeFetch requires Nuxt 4.6+ with experimental.routeTypedFetch enabled.',
+      )
+    }
+    const coladaModule = resolve('./runtime/colada')
+    let coladaAlias = coladaModule
+    if (nativeFetch) {
+      // A separate declaration at the build root gives both generated import
+      // files a relative module specifier for the same native fetch types.
+      const nativeFetchTypes = addTypeTemplate({
+        filename: 'endpoints-native-fetch.d.ts',
+        getContents: () => "export { $fetch, useFetch } from './types/endpoints'\n",
+      })
+      coladaAlias = addTemplate({
+        filename: 'endpoints-colada.ts',
+        write: true,
+        getContents: () =>
+          `export * from ${JSON.stringify(toImportPath(coladaModule))}\nexport { __endpointQueryOptions as queryOptions, __endpointMutationOptions as mutationOptions, __endpointInfiniteQueryOptions as infiniteQueryOptions } from './endpoints'\n`,
+      }).dst
+      nuxt.hook('imports:sources', (presets) => {
+        for (const preset of presets) {
+          if (!('from' in preset && 'imports' in preset)) continue
+          if (preset.from !== '#build/fetch' && preset.from !== '#app/composables/fetch') continue
+          preset.imports = preset.imports.map((entry) => {
+            const name = preset.from === '#build/fetch' ? '$fetch' : 'useFetch'
+            if (entry === name) return { name, typeFrom: nativeFetchTypes.dst }
+            if (typeof entry === 'object' && 'name' in entry && entry.name === name) {
+              return { ...entry, typeFrom: nativeFetchTypes.dst }
+            }
+            return entry
+          })
+        }
+      })
+    }
     let endpointHandlerManifest: EndpointRouteHandler[] | undefined
     // An explicit module option resolves immediately; the convention lookup is
     // deferred to `nitro:init` so it can walk Nitro's own resolved scanDirs
@@ -281,6 +329,56 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           logger.warn(message),
         )
       }
+      // Nuxt's route type generator reads one default export per method. Give
+      // it declaration-only projections of the dispatcher; Nitro still runs
+      // the original handler for every request.
+      let projections = new Map<string, { method: string; file: string }[]>()
+      let nativeServerRoutes: NativeServerRoute[] = []
+      const methodDeclarations = '@nuxt-endpoints/generated-methods'
+      if (nativeFetch) {
+        // Nuxt emits a bare specifier for type handlers inside its build dir.
+        nuxt.options.alias[methodDeclarations + '/*'] = join(
+          nuxt.options.buildDir,
+          methodDeclarations,
+          '*',
+        )
+        // All server builders have registered their route providers by Nuxt ready.
+        nuxt.hooks.hookOnce('ready', () => {
+          const register = nuxt.hook as unknown as (
+            name: 'server:routes',
+            callback: (routes: NativeServerRoute[]) => void,
+          ) => void
+          register('server:routes', async (routes) => {
+            nativeServerRoutes = []
+            const typedRoutes = routes.flatMap((route) => {
+              const methods =
+                !route.method &&
+                !route.middleware &&
+                projections.get(JSON.stringify([route.route, route.handler]))
+              if (!methods) {
+                nativeServerRoutes.push(route)
+                return [route]
+              }
+              return methods.map(({ method, file }) => {
+                nativeServerRoutes.push({ ...route, method })
+                return { ...route, method, handler: file }
+              })
+            })
+            routes.splice(0, routes.length, ...typedRoutes)
+            if (endpointHandlerManifest) await writeEndpointTypes(endpointHandlerManifest)
+          })
+        })
+      }
+      const writeEndpointTypes = (handlers: EndpointRouteHandler[]) =>
+        writeGenerated(
+          typeFile,
+          generateEndpointTypes(resolve, handlers, {
+            ...resolvedOptions,
+            serverRouteConfigPath,
+            nativeFetch,
+            nativeServerRoutes,
+          }),
+        )
       const generateArtifacts = async () => {
         if (!options.runtime?.path) {
           runtimePath = await resolveConventionPath(
@@ -298,22 +396,39 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
           )
           serverRouteConfigPathResolved = true
         }
-        const handlers = await composeHandlers(
-          collectNitroRouteHandlers(nitro),
-          loaders,
-          runtimePath !== undefined,
-        )
+        const serverHandlers = collectNitroRouteHandlers(nitro)
+        const handlers = await composeHandlers(serverHandlers, loaders, runtimePath !== undefined)
+        if (nativeFetch) {
+          const nextProjections = new Map<string, { method: string; file: string }[]>()
+          for (const { route, handler, method, methodGroup } of handlers) {
+            if (!methodGroup) continue
+            const key = JSON.stringify([route, handler])
+            const id = createHash('sha256').update(key).digest('hex').slice(0, 20)
+            const file = join(nuxt.options.buildDir, methodDeclarations, id + '-' + method)
+            await writeGenerated(
+              file + '.d.ts',
+              `import type { NativeGroupHandler } from ${JSON.stringify(toImportPath(resolve('./runtime/route-handler')))}\n` +
+                `declare const handler: NativeGroupHandler<typeof import(${JSON.stringify(toImportPath(handler))}).default['~routeDef'], '${method}'>\nexport default handler\n`,
+            )
+            const entries = nextProjections.get(key) ?? []
+            entries.push({ method, file })
+            nextProjections.set(key, entries)
+          }
+          projections = nextProjections
+        }
         endpointHandlerManifest = handlers
-        await writeGenerated(
-          typeFile,
-          generateEndpointTypes(resolve, handlers, {
-            ...resolvedOptions,
-            serverRouteConfigPath,
-          }),
-        )
+        await writeEndpointTypes(handlers)
         await writeGenerated(
           runtimeFile,
-          generateEndpointClient(resolve, handlers, resolvedOptions),
+          generateEndpointClient(resolve, handlers, {
+            ...resolvedOptions,
+            nativeFetch,
+            otherRoutes: nativeFetch
+              ? serverHandlers.flatMap(({ route, method, middleware }) =>
+                  route && !middleware ? [{ path: route, method }] : [],
+                )
+              : undefined,
+          }),
         )
       }
 
@@ -343,6 +458,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     ])
 
     addImports([
+      ...(nativeFetch ? [{ from: runtimeFile, name: 'buildPath' }] : []),
       { from: runtimeFile, name: '$endpoint' },
       { from: runtimeFile, name: 'useEndpoint' },
       { from: runtimeFile, name: 'useEndpointForm' },
@@ -358,7 +474,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
 
     nuxt.options.alias = {
       ...nuxt.options.alias,
-      '#endpoints/colada': resolve('./runtime/colada'),
+      '#endpoints/colada': coladaAlias,
       '#endpoints': typeFile,
     }
   },
@@ -631,12 +747,12 @@ function assertNativeFormCanSatisfy(
   const { inspectable, required } = inspectValidatorInputObject(schema)
   if (!inspectable) {
     throw new Error(
-      `[nuxt-endpoints] ${reason}, and request.${slot} on a route declaring \`form\` could not be inspected to prove it requires none.`,
+      `[nuxt-endpoints] ${reason}, and validate.${slot} on a route declaring \`form\` could not be inspected to prove it requires none.`,
     )
   }
   if (required.length > 0) {
     throw new Error(
-      `[nuxt-endpoints] ${reason}, so request.${slot} on a route declaring \`form\` cannot require any. Required: ${required.join(', ')}.`,
+      `[nuxt-endpoints] ${reason}, so validate.${slot} on a route declaring \`form\` cannot require any. Required: ${required.join(', ')}.`,
     )
   }
 }
@@ -658,7 +774,7 @@ function resolveFormMetadata(
   }
   if (/[?#]/.test(form.action)) {
     throw new Error(
-      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in request.query for GET, or in the form-encoded body for POST.`,
+      `[nuxt-endpoints] form.action must be a page pathname without a query string or fragment. Received ${JSON.stringify(form.action)}. Declare form fields in validate.query for GET, or in the form-encoded body for POST.`,
     )
   }
   const method = form.method ?? 'post'
@@ -681,12 +797,12 @@ function resolveFormMetadata(
   if (method === 'get') {
     if (definition.body !== undefined) {
       throw new Error(
-        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `request.body`.',
+        '[nuxt-endpoints] A GET form sends its fields in the query string, so its endpoint cannot declare `validate.body`.',
       )
     }
     if (definition.query === undefined) {
       throw new Error(
-        '[nuxt-endpoints] A GET form needs `request.query` to declare the fields the browser places in the URL.',
+        '[nuxt-endpoints] A GET form needs `validate.query` to declare the fields the browser places in the URL.',
       )
     }
     if ('redirect' in form && form.redirect !== undefined) {
@@ -705,7 +821,7 @@ function resolveFormMetadata(
   const member = findFormBodyMember(definition.body)
   if (!member) {
     throw new Error(
-      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`request.body\` - \`formOf()\` derives one from the JSON member.`,
+      `[nuxt-endpoints] A route declaring \`form\` must accept an encoding a browser can submit. Declare an 'application/x-www-form-urlencoded' or 'multipart/form-data' member on \`validate.body\` - \`formOf()\` derives one from the JSON member.`,
     )
   }
   assertNativeFormCanSatisfy(

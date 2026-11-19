@@ -14,14 +14,13 @@ export const docsNavSections = [
     items: [
       { label: 'Introduction', to: '/docs' },
       { label: 'Getting Started', to: '/docs/getting-started' },
-      { label: 'Nuxt 5 Progress', to: '/docs/nuxt5-progress' },
+      { label: 'Calling endpoints', to: '/docs/client' },
     ],
   },
   {
     label: 'Guides',
     items: [
       { label: 'Define Endpoints', to: '/docs/endpoints' },
-      { label: 'Generated Client', to: '/docs/client' },
       { label: 'Responses', to: '/docs/responses' },
       { label: 'Pinia Colada', to: '/docs/pinia-colada' },
       { label: 'OpenAPI', to: '/docs/openapi' },
@@ -38,6 +37,7 @@ export const docsNavSections = [
       { label: 'Why Nuxt Endpoints?', to: '/docs/why-nuxt-endpoints' },
       { label: 'Comparison', to: '/docs/comparison' },
       { label: 'Limits', to: '/docs/limits' },
+      { label: 'Nuxt 5 prototype', to: '/docs/nuxt5-progress' },
     ],
   },
 ] as const satisfies readonly DocsNavSection[]

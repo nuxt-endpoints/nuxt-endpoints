@@ -9,7 +9,7 @@ export default defineEndpoint({
     action: '/form-pe/search',
     method: 'get',
   },
-  request: {
+  validate: {
     query: SearchQuery,
   },
   responses: {

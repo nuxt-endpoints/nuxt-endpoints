@@ -7,25 +7,11 @@ In a few minutes you will have a Nuxt route that validates its input at runtime,
 
 ## Compatibility
 
-Nuxt Endpoints currently supports Nuxt 4.5+ with Nitro 2 and H3 1. It brings the
-route-contract direction being developed for the Nuxt 5 generation to Nuxt 4
-today, while implementing the missing lower-level pieces inside the module.
-
-`$endpoint` and `useEndpoint` are stable application-facing concepts owned by
-Nuxt Endpoints. As H3, Nitro, and Nuxt expose suitable upstream primitives, the
-module will adopt them behind that UX and retain only the missing integration.
-Upstream APIs are evolving, so necessary changes remain possible, but preserving
-application code is an explicit design goal.
-
-The experimental implementation is developed in public. See
-[Nuxt 5 integration progress](/docs/nuxt5-progress) for the Nuxt Endpoints
-branch and its matching H3, Nitro, and fetchdts forks.
-
-This section is the single source for the supported platform line; other pages link here instead of restating it.
+The examples below use the development version of Nuxt Endpoints with Nuxt 4.6, Nitro 2, and H3 1. Nuxt’s experimental route-typed fetch checks declared body and query inputs and infers successful responses. The module adds request header types and associates each declared HTTP status with its JSON body. On Nuxt 4.5, use the generated `$endpoint` and `useEndpoint` clients.
 
 ## Install
 
-Add Nuxt Endpoints through the Nuxt CLI:
+The Nuxt CLI installs the published module. The `validate` syntax and `client.nativeFetch` examples on this page require a build containing those changes.
 
 ```bash
 npx nuxt module add nuxt-endpoints
@@ -49,6 +35,16 @@ Install with Effect Schema:
 npm install effect
 ```
 
+Enable both options for the native fetch examples in this guide:
+
+```ts
+export default defineNuxtConfig({
+  modules: ['nuxt-endpoints'],
+  experimental: { routeTypedFetch: true },
+  endpoints: { client: { nativeFetch: true } },
+})
+```
+
 ## Your first endpoint
 
 Create an explicit, file-based Nuxt server route and default-export a
@@ -60,12 +56,17 @@ adds the contract-aware handler API inside it.
 import { z } from 'zod'
 export default defineEndpoint({
   summary: 'Get a user',
-  request: {
+  validate: {
     params: z.object({ id: z.coerce.number() }),
   },
-  responses: { 200: z.object({ id: z.number(), name: z.string() }) },
+  responses: {
+    200: z.object({ id: z.number(), name: z.string() }),
+    404: z.object({ message: z.string() }),
+  },
   handler: (event) => {
-    return { id: event.validated.params.id, name: 'Tom' } // params.id is a number — validated and coerced
+    const id = event.validated.params.id
+    if (id === 1) return { id, name: 'Tom' }
+    return event.respond(404, { message: 'User not found' })
   },
 })
 ```
@@ -74,12 +75,10 @@ Call it from any component. Request options and the response type are inferred �
 
 ```vue
 <script setup lang="ts">
-const result = await $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '1' },
-})
+const { data, error } = await useFetch('/api/users/2')
 
-if (result.status === 200) result.body.name.toUpperCase()
+if (error.value?.status === 404) console.log(error.value.data?.message)
+else if (data.value) console.log(data.value.name)
 </script>
 ```
 
@@ -90,7 +89,7 @@ While the dev server is running, the generated OpenAPI 3.1 document for this rou
 From here:
 
 - [Define Endpoints](/docs/endpoints) covers the full contract surface: validated request parts, multiple response statuses, and response validation.
-- [Generated Client](/docs/client) covers everything `$endpoint` and `useEndpoint` can do.
+- [Calling endpoints](/docs/client) covers `$fetch.raw`, `useFetch`, and the generated clients.
 
 ## Configure Nuxt
 
@@ -99,13 +98,14 @@ The Nuxt CLI adds `nuxt-endpoints` to `modules`. The generated OpenAPI route and
 ```ts
 export default defineNuxtConfig({
   modules: ['nuxt-endpoints'],
+  experimental: { routeTypedFetch: true },
   endpoints: {
     openApi: {
       path: '/_endpoints/schema',
       title: 'Example API',
       version: '1.0.0',
     },
-    client: { raw: true },
+    client: { nativeFetch: true, raw: true },
   },
 })
 ```

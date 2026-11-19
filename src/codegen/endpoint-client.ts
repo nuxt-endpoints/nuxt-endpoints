@@ -15,8 +15,31 @@ export function generateEndpointClient(
   // Direct `$endpoint` awaits mirror `$fetch`; Pinia Colada adapters and
   // `useEndpoint` use `captureFetcher` to forward SSR request headers.
   const clientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`
-  const asyncDataClientOptions = `, { features: ${JSON.stringify(clientFeatures)}, captureFetcher }`
-  const asyncDataRuntime = '__useEndpointAsyncData'
+  const coladaUrlAdapters = options.nativeFetch
+    ? `
+import { createBuildPath, createEndpointUrlMatcher, createEndpointInfiniteQueryOptions, endpointUrlInfiniteQueryOptions, endpointUrlMutationOptions, endpointUrlQueryOptions, mutationOptions, queryOptions } from '${clientRuntimeImportPath}'
+import type { BuildPath, NativeInfiniteQueryOptions, NativeMutationOptions, NativeQueryOptions } from '#endpoints'
+
+const otherRoutes = ${JSON.stringify(options.otherRoutes ?? [])} as const
+const matchEndpointUrl = createEndpointUrlMatcher(routes, otherRoutes)
+export const buildPath = createBuildPath(routes, otherRoutes) as BuildPath
+
+export const __endpointQueryOptions = ((request: unknown, options?: { query?: unknown; headers?: unknown }) =>
+  typeof request === 'string'
+    ? endpointUrlQueryOptions(request, options, captureFetcher())
+    : queryOptions(request as Parameters<typeof queryOptions>[0])) as NativeQueryOptions
+
+export const __endpointMutationOptions = ((request: unknown, options = {}) =>
+  typeof request === 'string'
+    ? endpointUrlMutationOptions(matchEndpointUrl, request, options, captureFetcher())
+    : mutationOptions(request as Parameters<typeof mutationOptions>[0])) as NativeMutationOptions
+
+export const __endpointInfiniteQueryOptions = ((request: unknown, options = {}) =>
+  typeof request === 'string'
+    ? endpointUrlInfiniteQueryOptions(matchEndpointUrl, request, options, captureFetcher())
+    : createEndpointInfiniteQueryOptions(request)) as NativeInfiniteQueryOptions
+`
+    : ''
   return `
 import { createUseAsyncData } from '#app/composables/asyncData'
 import { navigateTo, useRequestEvent, useRequestFetch, useRequestHeaders, useState } from 'nuxt/app'
@@ -52,7 +75,8 @@ const captureFetcher = () => {
 const formBindings = { ref, computed, useState, useRequestEvent, navigateTo }
 
 export const $endpoint = createEndpointClient(routes${clientOptions}) as unknown as $EndpointClient
-export const useEndpoint = createUseEndpoint(routes, ${asyncDataRuntime}${asyncDataClientOptions}) as unknown as $UseEndpoint
+export const useEndpoint = createUseEndpoint(routes, __useEndpointAsyncData${clientOptions}) as unknown as $UseEndpoint
 export const useEndpointForm = createUseEndpointForm(routes, { ...formBindings, useEndpoint: useEndpoint as unknown as UseEndpointClientRuntimeValue }, { captureFetcher }) as unknown as $UseEndpointForm
+${coladaUrlAdapters}
 `.trimStart()
 }

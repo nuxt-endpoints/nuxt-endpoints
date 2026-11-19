@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineEndpoint } from '../../../../../src/runtime'
 export default defineEndpoint({
-  request: {
+  validate: {
     query: z.object({ id: z.coerce.number<string>() }),
   },
   responses: {

@@ -13,7 +13,7 @@ const users = {
   '2': { id: 2, name: 'Jane', age: 22 },
 } as const
 export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({
       id: z.string(),
     }),

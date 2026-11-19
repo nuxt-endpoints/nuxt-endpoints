@@ -244,7 +244,7 @@ export type EndpointFormContract =
       redirect?: string
     })
   | (EndpointFormContractBase & {
-      /** GET projects `request.query` into a URL-backed search/filter form. */
+      /** GET projects `validate.query` into a URL-backed search/filter form. */
       method: 'get'
       /** A GET submission already navigates to its destination. */
       redirect?: never

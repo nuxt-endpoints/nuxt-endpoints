@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { javascript } from '@codemirror/lang-javascript'
+import { Compartment } from '@codemirror/state'
+import { oneDark } from '@codemirror/theme-one-dark'
 import { basicSetup, EditorView } from 'codemirror'
 
 type PlaygroundFile = 'server' | 'client'
@@ -40,7 +42,7 @@ type PlaygroundRelatedInformation = {
 type TypeScriptModule = typeof import('typescript')
 
 const defaultServerCode = `export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   responses: { 200: z.object({ id: z.number(), name: z.string() }) },
   handler: (event) => {
     return { id: event.validated.params.id, name: 'Ada' }
@@ -55,7 +57,7 @@ const defaultClientCode = `const result = await $endpoint('/api/users/:id', {
 console.log(\`id: \${result.body.id}, name: \${result.body.name}\`)`
 
 const inferServerCode = `export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   handler: (event) => {
     // no response schema: the client's type is inferred from this return
     return { id: event.validated.params.id, name: 'Ada', role: 'admin' }
@@ -70,7 +72,7 @@ const inferClientCode = `const result = await $endpoint('/api/users/:id', {
 console.log(\`\${result.body.name} (\${result.body.role})\`)`
 
 const schemaServerCode = `export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   responses: { 200: z.object({ id: z.number(), name: z.string(), role: z.string() }) },
   handler: (event) => {
     // error: the schema declares \`role\`, so this return no longer satisfies it
@@ -173,6 +175,15 @@ let typeScript: TypeScriptModule | undefined
 let checkTimer: ReturnType<typeof setTimeout> | undefined
 let serverEditor: EditorView | undefined
 let clientEditor: EditorView | undefined
+const siteTheme = useState<'light' | 'dark'>('site-theme', () => 'light')
+const editorColors = new Compartment()
+const currentEditorColors = computed(() => (siteTheme.value === 'dark' ? oneDark : []))
+
+watch(currentEditorColors, (colors) => {
+  for (const editor of [serverEditor, clientEditor]) {
+    editor?.dispatch({ effects: editorColors.reconfigure(colors) })
+  }
+})
 
 const playgroundEditorTheme = EditorView.theme({
   '&': {
@@ -199,16 +210,17 @@ const playgroundEditorTheme = EditorView.theme({
     backgroundColor: 'transparent',
   },
   '&.cm-focused .cm-activeLine': {
-    backgroundColor: 'rgba(5, 150, 105, 0.06)',
+    backgroundColor: 'var(--diagnostic-item-bg)',
   },
   '&.cm-focused .cm-activeLineGutter': {
-    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+    backgroundColor: 'var(--indicator-active-bg)',
   },
   '&.cm-focused': {
-    outline: '2px solid rgba(5, 150, 105, 0.2)',
+    outline: '2px solid var(--accent-strong)',
+    outlineOffset: '-2px',
   },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(5, 150, 105, 0.18)',
+    backgroundColor: 'color-mix(in srgb, var(--accent-strong) 28%, var(--code-bg))',
   },
 })
 
@@ -270,6 +282,7 @@ function createPlaygroundEditor(
       basicSetup,
       javascript({ typescript: true }),
       playgroundEditorTheme,
+      editorColors.of(currentEditorColors.value),
       EditorView.lineWrapping,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -587,7 +600,7 @@ declare function defineEndpoint<
     | ResponsesOutput<Responses>
     | Promise<ResponsesOutput<Responses>> = ResponsesOutput<Responses>,
 >(definition: {
-  request?: { params?: Params }
+  validate?: { params?: Params }
   responses?: Responses
   handler: (event: { validated: { params: ParamsOutput<Params> } }) => Return
 }): Endpoint<Params, Responses, AwaitedLike<Return>>
@@ -841,7 +854,7 @@ declare function $endpoint(
           }
 
           &[data-status='error'] {
-            color: var(--accent-strong);
+            color: var(--code-error);
           }
         }
 
@@ -952,7 +965,7 @@ declare function $endpoint(
                   white-space: pre;
 
                   &[data-marker='true'] {
-                    color: var(--accent-strong);
+                    color: var(--code-error);
                   }
                 }
               }

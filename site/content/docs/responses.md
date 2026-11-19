@@ -3,6 +3,12 @@ title: Responses
 description: Work with status-aware endpoint results or raw Web Responses.
 ---
 
+## Reading a JSON error in Nuxt 4.6
+
+With [native fetch types enabled](/docs/client#nuxt-fetch-types), `useFetch` keeps the successful body in `data.value`. For a route that declares a `404` with a `message` field, check `error.value?.status === 404` before reading `error.value.data?.message`. For both success and error branches in a single response object, use `$fetch.raw` with `ignoreResponseError: true`.
+
+## Generated endpoint requests
+
 `$endpoint(...)` creates a lazy request object. No network request starts until the object is awaited, executed by `useEndpoint`, or passed to a query or mutation function.
 
 ## Status-aware result

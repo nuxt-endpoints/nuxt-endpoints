@@ -20,7 +20,7 @@ Effect Schema can be passed directly to endpoint definitions. Runtime parsing us
 ```ts
 import { Schema } from 'effect'
 defineEndpoint({
-  request: {
+  validate: {
     params: Schema.Struct({
       id: Schema.NumberFromString,
     }),
@@ -45,7 +45,7 @@ For Valibot, request-side OpenAPI schemas use input mode and response-side schem
 import * as v from 'valibot'
 const Id = v.pipe(v.string(), v.transform(Number), v.number())
 defineEndpoint({
-  request: {
+  validate: {
     body: v.object({ id: Id }),
   },
   responses: { 200: v.object({ id: Id }) },

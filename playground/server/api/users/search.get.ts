@@ -13,7 +13,7 @@ const User = v.object({
 // handler runs, and the OpenAPI schema reflects the input (string) side.
 export default defineEndpoint({
   summary: 'Search users by name',
-  request: {
+  validate: {
     query: v.object({
       q: v.pipe(v.string(), v.minLength(1)),
       limit: v.optional(

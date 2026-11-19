@@ -7,7 +7,7 @@ useHead({
     {
       name: 'description',
       content:
-        'HTTP is the contract. Use Nuxt 5-generation route contracts on Nuxt 4 today, with runtime validation, status-aware clients, Pinia Colada, and OpenAPI.',
+        'Extend Nuxt 4.6 typed fetch with status-specific JSON responses from your server routes. Use the same endpoint schemas for validation and OpenAPI.',
     },
   ],
 })
@@ -27,11 +27,11 @@ const queryPitch = {
   key: 'query',
   title: 'Your contract,',
   titleAccent: 'now query-ready.',
-  lead: 'The same $endpoint request object plugs directly into Pinia Colada. Colada owns server-state behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and status-aware response types aligned with the server contract.',
+  lead: 'Pass an endpoint URL to a Pinia Colada adapter. Colada manages the cache and Nuxt Endpoints types the result from the server contract.',
   points: [
     {
       icon: 'lucide:list-checks',
-      text: 'GET and HEAD expose query options; unsafe methods expose mutation options',
+      text: 'Use queryOptions for JSON GET routes and mutationOptions for writes',
     },
     {
       icon: 'lucide:repeat',
@@ -53,20 +53,17 @@ const queryPitch = {
       lang: 'ts',
       code: `export default defineNuxtConfig({
   modules: ['@pinia/nuxt', '@pinia/colada-nuxt', 'nuxt-endpoints'],
+  experimental: { routeTypedFetch: true },
+  endpoints: { client: { nativeFetch: true } },
 })`,
     },
     {
-      title: 'pages/users/[id].vue',
+      title: 'app/pages/user.vue',
       lang: 'ts',
       code: `import { useQuery } from '@pinia/colada'
 import { queryOptions } from '#endpoints/colada'
 
-const route = useRoute()
-const request = $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: String(route.params.id) },
-})
-const user = useQuery(queryOptions(request))
+const user = useQuery(queryOptions('/api/users/1'))
 
 if (user.data.value?.status === 200) {
   user.data.value.body.name // User
@@ -88,11 +85,11 @@ const pitches = [
       },
       {
         icon: 'lucide:sparkles',
-        text: 'Check result.status and TypeScript narrows result.body to the matching response schema',
+        text: 'Check error.value.status in useFetch to narrow the parsed error body',
       },
       {
         icon: 'lucide:package',
-        text: 'Runtime validation, $endpoint, useEndpoint, and OpenAPI derive from the same contract',
+        text: 'The same schemas validate HTTP inputs and describe them in OpenAPI',
       },
     ],
     cta: { label: 'Define your first endpoint', to: '/docs/getting-started' },
@@ -103,7 +100,7 @@ const pitches = [
         code: `import { z } from 'zod'
 
 export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   responses: {
     200: User,
     404: z.object({ message: z.string() }),
@@ -116,12 +113,12 @@ export default defineEndpoint({
       {
         title: 'app code — nothing to import',
         lang: 'ts',
-        code: `const result = await $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '1' },
-})
+        code: `const { data, error } = await useFetch('/api/users/1')
 
-if (result.status === 200) result.body.name // User`,
+if (error.value?.status === 404) {
+  console.log(error.value.data?.message)
+}
+data.value?.name // successful body`,
       },
     ],
   },
@@ -150,7 +147,7 @@ if (result.status === 200) result.body.name // User`,
         title: 'step 1 — ship it without a schema',
         lang: 'ts',
         code: `export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   handler: (event) => {
     return findUser(event.validated.params.id)
     // client types are inferred from this return value
@@ -161,7 +158,7 @@ if (result.status === 200) result.body.name // User`,
         title: 'step 2 — tighten the contract',
         lang: 'ts',
         code: `export default defineEndpoint({
-  request: { params: z.object({ id: z.coerce.number() }) },
+  validate: { params: z.object({ id: z.coerce.number() }) },
   responses: { 200: User, 404: NotFound },
   handler: async (event) => {
     const user = await findUser(event.validated.params.id)
@@ -186,30 +183,24 @@ if (result.status === 200) result.body.name // User`,
       },
       {
         icon: 'lucide:split',
-        text: 'Awaiting the request narrows the response body by status',
+        text: 'Check response.status to narrow response._data',
       },
       {
         icon: 'lucide:file-json',
-        text: '.raw() returns the native Web Response for streaming or low-level access',
+        text: 'With ignoreResponseError enabled, HTTP errors reach the same status check',
       },
     ],
     cta: { label: 'Responses', to: '/docs/responses' },
     blocks: [
       {
-        title: 'status-typed result',
+        title: 'Reading a raw response',
         lang: 'ts',
-        code: `const result = await $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '123' },
+        code: `const response = await $fetch.raw('/api/users/123', {
+  ignoreResponseError: true,
 })
 
-if (result.status === 200) {
-  result.body.name // User
-}
-
-if (result.status === 404) {
-  result.body.message // typed from the 404 schema
-}`,
+if (response.status === 200) console.log(response._data?.name)
+if (response.status === 404) console.log(response._data?.message)`,
       },
     ],
   },
@@ -277,7 +268,7 @@ const stackItems = [
     tone: 'valibot',
   },
   {
-    label: 'Effect',
+    label: 'Effect Schema',
     icon: 'simple-icons:effect',
     tone: 'effect',
   },
@@ -303,10 +294,15 @@ const stackItems = [
     <section class="section -hero">
       <div class="unit -copy">
         <h1 class="title">
-          <span class="value">HTTP is the contract.</span><br />
-          <span class="value">Let it drive the whole stack.</span>
+          <span class="value">Stronger types</span><br />
+          <span class="value">for <span class="value -accent">Nuxt API Calls</span></span
+          ><br />
+          <span class="value -client">with your existing client code.</span>
         </h1>
-        <p class="p -positioning">The Nuxt way.</p>
+        <p class="p -positioning">
+          Add schemas to your server routes to validate requests and give <code>$fetch</code> and
+          <code>useFetch</code> status-aware response types.
+        </p>
         <div class="seg -stack" aria-label="Nuxt Endpoints stack">
           <span class="value">Tech stack</span>
           <ul class="list">
@@ -324,19 +320,19 @@ const stackItems = [
           </ul>
         </div>
 
-        <NuxtLink class="link -nuxt5" to="/docs/nuxt5-progress">
+        <NuxtLink class="link -native-fetch" to="/docs/client#nuxt-fetch-types">
           <span class="seg">
             <span class="fr -heading">
               <Icon class="pv-icon" name="simple-icons:nuxt" size="2.7rem" aria-hidden="true" />
-              <strong class="strong">Nuxt 5</strong>
+              <strong class="strong">Nuxt 4.6</strong>
             </span>
-            <span class="text -status">Preview in progress</span>
+            <span class="text -status">Typed fetch</span>
           </span>
           <span class="text">
-            Nuxt 4 is available today. Nuxt 5 integration is following upstream H3 v2 and Nitro 3
-            work, and we plan to keep the public API stable.
+            Enable route-typed fetch and the module’s native fetch types to narrow a JSON response
+            by its HTTP status.
             <span class="value -detail">
-              View details
+              View configuration
               <Icon class="pv-icon" name="lucide:arrow-right" size="0.8rem" aria-hidden="true" />
             </span>
           </span>
@@ -407,8 +403,10 @@ const stackItems = [
 .ne-index-page {
   --local-hero-padding-start: 7rem;
   --local-hero-padding-end: 6rem;
-  --local-nuxt5-card-shadow: 0 18px 42px color-mix(in srgb, var(--stack-nuxt) 9%, transparent);
-  --local-nuxt5-card-highlight: inset 0 1px 0 color-mix(in srgb, var(--surface) 58%, transparent);
+  --local-native-fetch-card-shadow: 0 18px 42px
+    color-mix(in srgb, var(--stack-nuxt) 9%, transparent);
+  --local-native-fetch-card-highlight: inset 0 1px 0
+    color-mix(in srgb, var(--surface) 58%, transparent);
   overflow: hidden;
   isolation: isolate;
 
@@ -480,32 +478,28 @@ const stackItems = [
 
           > .p.-positioning {
             margin: var(--space-150) 0 var(--space-350);
-            color: var(--accent-strong);
-            font-size: var(--text-sm);
-            font-weight: 800;
-            letter-spacing: var(--tracking-label);
-            text-transform: uppercase;
+            max-width: 40rem;
+            color: var(--ink);
+            font-size: var(--text-lg);
           }
 
           > .title {
             max-width: none;
-            background: linear-gradient(
-              100deg,
-              var(--hero-title-start) 0%,
-              var(--hero-title-end) 100%
-            );
-            background-clip: text;
-            color: transparent;
+            color: var(--ink);
             font-size: clamp(var(--text-4xl), 4.2vw, var(--text-hero));
-            -webkit-background-clip: text;
+            line-height: 1.16;
 
-            > .value {
-              white-space: nowrap;
+            .value.-accent {
+              color: var(--accent-strong);
+            }
+
+            > .value.-client {
+              font-size: 0.82em;
             }
           }
 
           > .link {
-            &.-nuxt5 {
+            &.-native-fetch {
               display: grid;
               width: min(100%, 36rem);
               justify-items: center;
@@ -523,7 +517,8 @@ const stackItems = [
                 ),
                 color-mix(in srgb, var(--surface) 88%, transparent);
               color: inherit;
-              box-shadow: var(--local-nuxt5-card-shadow), var(--local-nuxt5-card-highlight);
+              box-shadow:
+                var(--local-native-fetch-card-shadow), var(--local-native-fetch-card-highlight);
               padding: var(--space-200) clamp(var(--space-200), 4vw, var(--space-300));
               text-decoration: none;
 
@@ -867,10 +862,6 @@ const stackItems = [
         > .unit.-copy {
           > .title {
             font-size: clamp(var(--text-hero-mobile-min), 7.7vw, var(--text-hero-mobile-max));
-
-            > .value {
-              white-space: normal;
-            }
           }
 
           > .seg {

@@ -4,9 +4,13 @@
 // `H3Event` — that one alias is what keeps the h3 major version a detail of
 // this directory. See README.md for where each call goes on h3 v2.
 import { defineEventHandler, toWebRequest } from 'h3'
-import type { H3Event } from 'h3'
+import type { EventHandlerRequest, H3Event } from 'h3'
 
 export type RuntimeEvent = H3Event
+export type RuntimeRouteEvent<Body, Query> = H3Event<{
+  body: Body
+  query: Extract<Query, NonNullable<EventHandlerRequest['query']>>
+}>
 
 export function defineRuntimeHandler<RESPONSE>(
   handler: (event: RuntimeEvent) => RESPONSE,

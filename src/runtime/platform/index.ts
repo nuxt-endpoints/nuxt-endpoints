@@ -3,7 +3,7 @@
 // call answers each function is this directory's concern. README.md maps the
 // files and predicts what h3 v2 / Nitro 3 absorb.
 export { defineRuntimeHandler, getRuntimeMethod, getRuntimeWebRequest } from './handler'
-export type { RuntimeEvent } from './handler'
+export type { RuntimeEvent, RuntimeRouteEvent } from './handler'
 export {
   continueRuntimeRendering,
   defineRuntimeMiddleware,

@@ -113,3 +113,19 @@ if (output !== '') {
 } else {
   console.log(`fixture types check clean (${files.length} generated files)`)
 }
+
+const [nuxtMajor, nuxtMinor] = require('nuxt/package.json').version.split('.').map(Number)
+if (nuxtMajor === 4 && nuxtMinor >= 6) {
+  const fixture = 'test/fixtures/native-fetch'
+  await run(join(repositoryRoot, 'node_modules/.bin/nuxi'), ['prepare', fixture])
+  await run(process.execPath, [
+    tsc,
+    '--pretty',
+    'false',
+    '-p',
+    join(fixture, '.nuxt/tsconfig.app.json'),
+    '--noUncheckedIndexedAccess',
+    'false',
+  ])
+  console.log('native fetch fixture types check clean')
+}

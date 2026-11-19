@@ -64,6 +64,22 @@ jobs:
       - name: Build package
         run: vp run build
 
+  native-fetch:
+    name: Native fetch / Nuxt 4.6.4
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 24
+          run-install: false
+      - run: vp install --frozen-lockfile
+      - run: vp add -D nuxt@4.6.4
+      - run: vp run test:fixture-types
+      - run: vp run test:e2e:browser:install
+      - run: NUXT_ENDPOINTS_NATIVE_E2E=1 vp exec vitest run test/integration/native-fetch.test.ts
+
   site:
     name: Generate documentation site
     runs-on: ubuntu-latest

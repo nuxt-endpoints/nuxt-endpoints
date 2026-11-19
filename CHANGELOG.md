@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in status-aware types for Nuxt 4.6 native fetch. Enable
+  `experimental.routeTypedFetch` and `endpoints.client.nativeFetch` to narrow
+  `useFetch` error bodies by `error.value.status`, or check `response.status`
+  with `$fetch.raw(url, { ignoreResponseError: true })`.
+- Add `buildPath` to select a dynamic endpoint and check for static route
+  collisions. Pinia Colada query, mutation, and infinite query options now
+  accept URLs with native fetch types enabled.
+
+- **Breaking:** Rename `request` to `validate` in `defineEndpoint` declarations,
+  including shared route params and individual method entries. Keep HTTP status
+  schemas in the `responses` field of each handler.
+
 ## 0.12.0 - 2026-09-09
 
 ### Added

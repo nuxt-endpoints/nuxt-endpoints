@@ -13,7 +13,7 @@ body. Request validation still applies; callers should use `.raw()`.
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({ id: z.string() }),
   },
   handler: (event) => new Response(`raw response for ${event.validated.params.id}`),
@@ -37,7 +37,7 @@ Use a media response when the representation is known:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({ id: z.string() }),
   },
   responses: {
@@ -70,7 +70,7 @@ bytes for selected members:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: {
       'multipart/form-data': z.object({ name: z.string() }),
       'application/pdf': true,
@@ -95,7 +95,7 @@ Redirect semantics belong to HTTP rather than a JSON response schema:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     query: z.object({ to: z.string().startsWith('/') }),
   },
   handler: (event) =>
@@ -115,7 +115,7 @@ route actually reads and validates the upstream body:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({ path: z.string() }),
   },
   handler: (event) => {

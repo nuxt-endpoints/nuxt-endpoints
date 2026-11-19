@@ -101,7 +101,7 @@ export default defineServerRouteConfig({
     `import { z } from 'zod'
 
 export default defineEndpoint({
-  request: {
+  validate: {
     body: z.object({ message: z.string() }),
   },
   responses: {
@@ -119,7 +119,7 @@ export default defineEndpoint({
     `import { z } from 'zod'
 
 export default defineEndpoint({
-  request: {
+  validate: {
     body: {
       'multipart/form-data': z.object({
         name: z.string(),

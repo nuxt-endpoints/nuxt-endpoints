@@ -226,7 +226,7 @@ const Article = schema<{ id: number; field${index}: string }>()
 
 export default defineEndpoint({
   pagination: { kind: 'cursor', item: Article },
-  request: {
+  validate: {
     query: schema<{ category?: string }>(),
   },
   responses: { 404: schema<{ message: string; route: ${index} }>() },

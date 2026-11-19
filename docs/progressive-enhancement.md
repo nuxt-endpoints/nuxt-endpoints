@@ -119,7 +119,7 @@ GET /search?q=ada                    (native form or enhanced navigation)
        ← typed status result
 ```
 
-`form.method: 'get'` projects fields from `request.query`. During SSR,
+`form.method: 'get'` projects fields from `validate.query`. During SSR,
 `useEndpointForm` uses the request-aware `useEndpoint` path to load the result.
 After hydration, `form.enhance` updates the address bar and runs the same GET
 endpoint. The URL remains the source of truth, so reload and bookmark reproduce
@@ -166,7 +166,7 @@ instead of a form body:
 ```ts
 defineEndpoint({
   form: { action: '/search', method: 'get' },
-  request: {
+  validate: {
     query: SearchQuery,
   },
   responses: { 200: SearchResults },
@@ -265,7 +265,7 @@ honest statement, and it appears in the OpenAPI document as one.
 So the contract declares what it accepts:
 
 ```ts
-request: {
+validate: {
   body: {
     'application/json': Todo,
     'application/x-www-form-urlencoded': formOf(Todo),
@@ -352,7 +352,7 @@ const SignupForm = SignupJson.extend({ confirmPassword: z.string() })
   // without tripping an unused-parameter lint rule.
   .transform(({ confirmPassword: _confirmPassword, ...rest }) => rest)
 
-request: {
+validate: {
   body: {
     'application/json': SignupJson,
     'application/x-www-form-urlencoded': formOf(SignupForm),
@@ -547,17 +547,17 @@ forwards the submission, and cannot send an `Idempotency-Key`. So declaring
 `form` alongside any of those is a type error, stated by
 `NativeFormProjectionConstraint` (`src/runtime/form-projection.ts`):
 
-| Declared next to `form`                      | Verdict                                       |
-| -------------------------------------------- | --------------------------------------------- |
-| no `multipart` or urlencoded body member     | refused - a browser cannot encode it          |
-| `idempotency`                                | refused - the key is a header                 |
-| `request.headers` requiring anything         | refused - a browser cannot send it            |
-| POST with `request.query` requiring anything | refused - the forwarded call carries no query |
-| POST headers/query requiring nothing         | allowed                                       |
-| GET without `request.query`                  | refused - there are no fields to project      |
-| GET with `request.body` or `redirect`        | refused - GET uses URL query/navigation       |
-| a route template with a path parameter       | refused at build time - the path is not typed |
-| PUT, PATCH, or DELETE endpoint               | refused - no native method override is hidden |
+| Declared next to `form`                       | Verdict                                       |
+| --------------------------------------------- | --------------------------------------------- |
+| no `multipart` or urlencoded body member      | refused - a browser cannot encode it          |
+| `idempotency`                                 | refused - the key is a header                 |
+| `validate.headers` requiring anything         | refused - a browser cannot send it            |
+| POST with `validate.query` requiring anything | refused - the forwarded call carries no query |
+| POST headers/query requiring nothing          | allowed                                       |
+| GET without `validate.query`                  | refused - there are no fields to project      |
+| GET with `validate.body` or `redirect`        | refused - GET uses URL query/navigation       |
+| a route template with a path parameter        | refused at build time - the path is not typed |
+| PUT, PATCH, or DELETE endpoint                | refused - no native method override is hidden |
 
 The reason is the error text, because the refusal makes the reason a required
 property name. `defineEndpoint` is overloaded, though, and TypeScript
@@ -701,7 +701,7 @@ server build runs after `nitro:init`, so what is served is never empty.
    against Zod, Valibot, and Effect Schema.
 3. **Done.** `useEndpointForm` is generated alongside `useEndpoint`, typed from
    the contract down to the field names.
-4. **Done.** Explicit GET forms project `request.query`, remain URL-backed,
+4. **Done.** Explicit GET forms project `validate.query`, remain URL-backed,
    and load the same typed endpoint on SSR and enhanced navigation.
 5. Add client-side schema evaluation only if the HTML layer measurably falls
    short.

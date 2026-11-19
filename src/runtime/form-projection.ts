@@ -55,20 +55,20 @@ export type NativeFormProjectionConstraint<FORM, QUERY, HEADERS, BODY, IDEMPOTEN
   method: 'get'
 }
   ? QUERY extends undefined
-    ? NativeFormRefusal<'A GET form needs request.query to declare its fields.'>
+    ? NativeFormRefusal<'A GET form needs validate.query to declare its fields.'>
     : BODY extends undefined
       ? IDEMPOTENCY extends undefined
         ? RequiresNothing<HEADERS> extends false
-          ? NativeFormRefusal<'A native <form> cannot send request headers, so request.headers cannot require any.'>
+          ? NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
           : unknown
         : NativeFormRefusal<'A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare form.'>
-      : NativeFormRefusal<'A GET form sends fields in the query string, so request.body must be omitted.'>
+      : NativeFormRefusal<'A GET form sends fields in the query string, so validate.body must be omitted.'>
   : BrowserSubmittableBody<BODY> extends false
-    ? NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on request.body - formOf() derives it from the JSON member.">
+    ? NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on validate.body - formOf() derives it from the JSON member.">
     : IDEMPOTENCY extends undefined
       ? RequiresNothing<HEADERS> extends false
-        ? NativeFormRefusal<'A native <form> cannot send request headers, so request.headers cannot require any.'>
+        ? NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
         : RequiresNothing<QUERY> extends false
-          ? NativeFormRefusal<'A POST form reaches the endpoint with no query string, so request.query cannot require any.'>
+          ? NativeFormRefusal<'A POST form reaches the endpoint with no query string, so validate.query cannot require any.'>
           : unknown
       : NativeFormRefusal<'A native <form> cannot send an Idempotency-Key header, so an idempotent route cannot declare form.'>

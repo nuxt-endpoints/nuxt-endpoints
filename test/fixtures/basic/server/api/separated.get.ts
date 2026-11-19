@@ -1,7 +1,7 @@
 import { defineEndpoint } from '../../../../../src/runtime'
 import { separatedContract } from '../contracts/separated'
 export default defineEndpoint({
-  request: {
+  validate: {
     query: separatedContract.query,
   },
   responses: separatedContract.responses,

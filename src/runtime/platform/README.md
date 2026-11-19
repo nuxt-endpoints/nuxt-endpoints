@@ -56,6 +56,6 @@ This branch tests the future boundary directly:
 values, normalizing H3's query container to a plain record, and reading
 media-type-specific bodies. Validation semantics delegate to H3.
 
-NE owns the concise `defineEndpoint({ request, responses, handler })` authoring
+NE owns the concise `defineEndpoint({ validate, responses, handler })` authoring
 shape. This compatibility line evaluates and normalizes that declaration
 itself while keeping the resulting HTTP contract aligned with the Nuxt 5 line.

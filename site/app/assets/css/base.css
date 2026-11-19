@@ -83,6 +83,7 @@
   --code-border: #d0d7de;
   --code-ink: #1f2328;
   --code-muted: #59636e;
+  --code-error: #a62928;
   --inline-code-bg: rgba(0, 170, 105, 0.1);
   --shadow: 0 18px 42px rgba(31, 41, 55, 0.08);
   --diagnostic-item-bg: rgba(0, 170, 105, 0.04);
@@ -135,6 +136,7 @@
   --code-border: #31423b;
   --code-ink: #e6edf3;
   --code-muted: #9fb7ae;
+  --code-error: #ffa8a1;
   --inline-code-bg: rgba(0, 220, 130, 0.16);
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --diagnostic-item-bg: rgba(0, 220, 130, 0.08);

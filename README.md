@@ -30,7 +30,7 @@ import { z } from 'zod'
 export default defineEndpoint({
   name: 'getUser',
   summary: 'Get a user',
-  request: {
+  validate: {
     params: z.object({ id: z.coerce.number() }),
   },
   responses: {

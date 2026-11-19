@@ -8,7 +8,7 @@ const User = z.object({
   name: z.string(),
 })
 export default defineEndpoint({
-  request: {
+  validate: {
     body: UserInput,
   },
   responses: {

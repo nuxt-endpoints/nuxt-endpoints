@@ -7,31 +7,9 @@ Nuxt Endpoints adds a typed, validated contract around ordinary Nuxt server rout
 
 ## Plain Nuxt `$fetch` typing
 
-Nuxt already infers server route return types for `$fetch`. What it does not provide:
+On Nuxt 4.6, `experimental.routeTypedFetch` uses the server route and method to type `$fetch` and `useFetch`. Nuxt checks body and query inputs when their types are exposed by the handler and infers its successful response. [Nuxt 4.6 release notes](https://github.com/nuxt/nuxt/releases/tag/v4.6.0).
 
-- Request validation. `getQuery`, `readBody`, and route params reach the handler unvalidated.
-- Typed request input. Params, query, headers, and body are untyped on the caller side.
-- Typed non-2xx responses. Error bodies are `unknown`.
-- OpenAPI output.
-
-Nuxt Endpoints keeps that workflow — routes stay ordinary files under `server/api`, and plain `$fetch` continues to work — and adds the contract on top for the routes that opt in. See [Incremental Adoption](/docs/incremental-adoption).
-
-On the current Nitro 2 support line, Nuxt Endpoints generates its richer contract types independently, then applies Nitro's JSON wire mapping to client responses. Integration tests compare every generated endpoint success body directly with Nitro's generated `InternalApi`. Awaited `$endpoint` requests preserve status-specific non-2xx bodies outside `InternalApi`'s success-return model, and `.raw()` exposes the native response.
-
-## Nuxt typed fetch and fetchdts
-
-Nuxt's typed-fetch work and [`fetchdts`](https://github.com/unjs/fetchdts) are complementary to endpoint contracts. `fetchdts` is a type-generation engine, not by itself a Nuxt route declaration API: the detail it can generate depends on the contract metadata supplied by its integration.
-
-Inferring a route's return type does not by itself define runtime request validation, header schemas, distinct response-status bodies, idempotency policy, or OpenAPI metadata. The canonical `defineEndpoint` contract supplies that information. Its consumers can change without changing route authoring.
-
-For the Nuxt 5 generation, the preferred direction is to contribute endpoint
-metadata to Nuxt's generated fetch schema through a public integration point,
-then let Nuxt clients and Nuxt Endpoints consume the same successful response
-projection. `$endpoint` keeps the richer per-status result and `useEndpoint`
-keeps its Nuxt async-data UX; upstream primitives replace duplicated plumbing
-rather than those application-facing APIs. Until that integration is covered
-by the package test matrix, this remains a migration direction rather than a
-Nuxt 5 support claim.
+Nuxt Endpoints supplies those input types from `defineEndpoint({ validate, responses, handler })`. With native fetch types enabled, the module also types declared request headers and connects each declared status to its JSON body. For example, `error.value?.status === 409` narrows `error.value.data` in `useFetch`. The same contract validates incoming requests and generates OpenAPI. [Configuration and examples](/docs/client#nuxt-fetch-types).
 
 ## tRPC
 

@@ -33,14 +33,16 @@ import {
 } from './endpoint'
 import { normalizeEndpointIdempotencyMetadata } from './idempotency-contract'
 import { defineEndpointMethodHandlers, defineEndpointMethods } from './endpoint-methods'
-import type { RuntimeEvent } from './platform'
-import type { ValidatorSchema } from './validator'
+import type { RuntimeEvent, RuntimeRouteEvent } from './platform'
+import type { InferInput, ValidatorSchema } from './validator'
 
 type EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY> = {
   params?: PARAMS
   query?: QUERY
   headers?: HEADERS
   body?: BODY
+  response?: never
+  responses?: never
 }
 
 // The contract carries only portable metadata. Request-time settings have no
@@ -88,10 +90,10 @@ type RouteHandlerInput<
   ACTUAL_RETURN,
 > = {
   name?: string
-  request?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
+  validate?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
   responses?: RESPONSES
   params?: never
-  validate?: never
+  request?: never
   response?: never
   summary?: SUMMARY
   description?: DESCRIPTION
@@ -118,7 +120,7 @@ type RuntimeMethodRequest = EndpointRequestInput<
 >
 
 type RuntimeMethodDefinition = RuntimeMethodMetadata & {
-  request?: RuntimeMethodRequest
+  validate?: RuntimeMethodRequest
   responses?: EndpointResponsesContract
   pagination?: EndpointPaginationContract
   handler: (event: EndpointRouteEvent<any>) => unknown
@@ -127,7 +129,7 @@ type RuntimeMethodDefinition = RuntimeMethodMetadata & {
 type RuntimeMethodsDefinition = {
   handler?: never
   name?: never
-  request?: { params?: ValidatorSchema }
+  validate?: { params?: ValidatorSchema }
   responses?: never
   get?: RuntimeMethodDefinition
   post?: RuntimeMethodDefinition
@@ -144,8 +146,8 @@ type PropertyOf<Value, Key extends PropertyKey> = Value extends unknown
     : undefined
   : never
 
-type RequestPropertyOf<Value, Key extends PropertyKey> = PropertyOf<
-  PropertyOf<Value, 'request'>,
+type ValidationSchemaOf<Value, Key extends PropertyKey> = PropertyOf<
+  PropertyOf<Value, 'validate'>,
   Key
 >
 
@@ -158,9 +160,9 @@ type PaginationOf<Value> = Value extends {
 type EndpointDefinitionOf<Method, Params> = {
   name: PropertyOf<Method, 'name'>
   params: Params
-  query: ApplyPaginationQuery<RequestPropertyOf<Method, 'query'>, PaginationOf<Method>>
-  headers: RequestPropertyOf<Method, 'headers'>
-  body: RequestPropertyOf<Method, 'body'>
+  query: ApplyPaginationQuery<ValidationSchemaOf<Method, 'query'>, PaginationOf<Method>>
+  headers: ValidationSchemaOf<Method, 'headers'>
+  body: ValidationSchemaOf<Method, 'body'>
   responses: ApplyPaginationResponses<PropertyOf<Method, 'responses'>, PaginationOf<Method>>
   summary: PropertyOf<Method, 'summary'>
   description: PropertyOf<Method, 'description'>
@@ -175,7 +177,7 @@ type RouteMethodKeys<Definition> = Extract<keyof Definition, RouteMethodKey>
 type ResolvedEndpointDefinition<Definition, Method extends RouteMethodKeys<Definition>> =
   EndpointDefinitionOf<
     Definition[Method],
-    RequestPropertyOf<Definition, 'params'>
+    ValidationSchemaOf<Definition, 'params'>
   > extends infer MethodDefinition extends EndpointDefinition
     ? MethodDefinition
     : never
@@ -208,10 +210,10 @@ type InferredRuntimeMethod<
   ActualReturn,
   Pagination extends EndpointPaginationContract | undefined = undefined,
 > = Metadata & {
-  request?: Request
+  validate?: Request
   responses?: Responses
   params?: never
-  validate?: never
+  request?: never
   response?: never
   pagination?: Pagination &
     PaginationContractConstraint<Pagination, PropertyOf<Request, 'query'>, Responses>
@@ -249,7 +251,7 @@ type NormalizeMethodRouteAuthoringDefinition<Definition> = {
 export type EndpointDefinitionFromRoute<Definition, Method extends string | undefined = undefined> =
   Method extends RouteMethodKeys<Definition>
     ? ResolvedEndpointDefinition<Definition, Method>
-    : EndpointDefinitionOf<Definition, RequestPropertyOf<Definition, 'params'>>
+    : EndpointDefinitionOf<Definition, ValidationSchemaOf<Definition, 'params'>>
 
 /**
  * Cursor pagination is an NE contract constructor, so generated route types
@@ -289,9 +291,30 @@ export type EndpointHandlerReturnFromRoute<
       : WidenCapturedReturn<RawHandlerReturnFromRoute<Definition, Method>>
     : RawHandlerReturnFromRoute<Definition, Method>
 
-type EndpointRouteEventHandler<Definition, Return> = ((event: RuntimeEvent) => Promise<Return>) & {
+type RouteSchemaInput<Schema> = Schema extends ValidatorSchema ? InferInput<Schema> : never
+
+type EndpointRouteEventHandler<Definition, Return> = ((
+  event: RuntimeRouteEvent<
+    RouteSchemaInput<ValidationSchemaOf<Definition, 'body'>>,
+    RouteSchemaInput<
+      ApplyPaginationQuery<ValidationSchemaOf<Definition, 'query'>, PaginationOf<Definition>>
+    >
+  >,
+) => Promise<Return>) & {
   readonly '~routeDef': NormalizeRouteAuthoringDefinition<Definition>
 }
+
+export type NativeGroupHandler<Definition, Method extends RouteMethodKeys<Definition>> = (
+  event: RuntimeRouteEvent<
+    RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['body']>,
+    RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['query']>
+  >,
+) => Promise<
+  EndpointHandlerSuccessBody<
+    ResolvedEndpointDefinition<Definition, Method>,
+    RouteMethodHandlerReturns<Definition>[Method]
+  >
+>
 
 export type EndpointRouteMethodsEventHandler<
   Definition,
@@ -343,10 +366,10 @@ type CursorPaginatedRouteHandlerInput<
   ACTUAL_RETURN,
 > = {
   name?: string
-  request?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
+  validate?: EndpointRequestInput<PARAMS, QUERY, HEADERS, BODY>
   responses?: RESPONSES
   params?: never
-  validate?: never
+  request?: never
   response?: never
   summary?: SUMMARY
   description?: DESCRIPTION
@@ -358,11 +381,7 @@ type CursorPaginatedRouteHandlerInput<
   handler: CapturedRouteHandler<NoInfer<DEFINITION>, ACTUAL_RETURN>
 } & RouteContractIdempotencyConstraint<IDEMPOTENCY>
 
-/**
- * Nuxt Endpoints adapter for H3's unified route-handler authoring shape.
- * Nitro treats the direct call as a compiler macro; at runtime this adapter
- * keeps only NE's application-level context, idempotency, and response policy.
- */
+/** Creates an H3 handler and exposes its endpoint definition for build-time route discovery. */
 export function defineEndpoint<
   const PARAMS extends ValidatorSchema | undefined = undefined,
   const QUERY extends ValidatorSchema | undefined = undefined,
@@ -593,8 +612,10 @@ export function defineEndpoint<
     handler?: never
     /** A name identifies one HTTP method, so declare it inside the method entry. */
     name?: never
-    request?: {
+    validate?: {
       params?: Params
+      response?: never
+      responses?: never
       query?: never
       headers?: never
       body?: never
@@ -605,7 +626,7 @@ export function defineEndpoint<
     /** Responses are per method: declare them inside each method entry. */
     responses?: never
     params?: never
-    validate?: never
+    request?: never
     response?: never
     get?: InferredRuntimeMethod<
       Params,
@@ -636,7 +657,7 @@ export function defineEndpoint<
   },
 ): EndpointRouteMethodsEventHandler<
   Definition & {
-    request?: { params?: Params }
+    validate?: { params?: Params }
     get?: InferredRuntimeMethod<
       Params,
       GetMetadata,
@@ -684,8 +705,7 @@ export function defineEndpoint(
   for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
     const entry = methodsDefinition[method]
     if (!entry) continue
-    assertEndpointAuthoringShape(entry, 'method')
-    const contract = toEndpointDefinition(entry, definition.request?.params, 'method')
+    const contract = toEndpointDefinition(entry, definition.validate?.params, 'method')
     endpoints[method] = createEndpoint(contract)
     handlers[method] = (context) => entry.handler(toEndpointRouteEvent(context, contract))
   }
@@ -735,20 +755,20 @@ function routeHandlerRuntimeOptions(definition: EndpointDefinition): EndpointRun
 
 function toEndpointDefinition(
   definition: RuntimeMethodDefinition,
-  params: ValidatorSchema | undefined = definition.request?.params,
-  requestLocation: 'single' | 'method' = 'single',
+  params: ValidatorSchema | undefined = definition.validate?.params,
+  definitionLocation: 'single' | 'method' = 'single',
 ): EndpointDefinition {
-  assertEndpointAuthoringShape(definition, requestLocation)
-  const { handler: _handler, request, responses: authoredResponses, ...metadata } = definition
-  const query = request?.query
+  assertEndpointAuthoringShape(definition, definitionLocation)
+  const { handler: _handler, validate, responses: authoredResponses, ...metadata } = definition
+  const query = validate?.query
   const responses = normalizeResponses(authoredResponses)
   const contract: EndpointDefinition = {
     ...metadata,
     idempotency: normalizeEndpointIdempotencyMetadata(metadata.idempotency),
     params,
     query,
-    headers: request?.headers,
-    body: request?.body,
+    headers: validate?.headers,
+    body: validate?.body,
     responses,
   }
   if (metadata.pagination?.kind === 'cursor') {
@@ -761,36 +781,41 @@ function toEndpointDefinition(
 
 function assertEndpointAuthoringShape(
   definition: Record<string, unknown>,
-  requestLocation: 'single' | 'shared' | 'method',
+  definitionLocation: 'single' | 'shared' | 'method',
 ): void {
-  if (requestLocation === 'shared' && 'responses' in definition) {
+  if (definitionLocation === 'shared' && 'responses' in definition) {
     throw new TypeError(
       'A method-group endpoint must declare `responses` inside each method entry.',
     )
   }
-  for (const removed of ['params', 'validate', 'response']) {
+  for (const removed of ['params', 'request', 'response']) {
     if (removed in definition) {
       throw new TypeError(
-        `Endpoint contract \`${removed}\` is not supported. Declare request schemas under \`request\` and status responses under \`responses\`.`,
+        `Endpoint contract \`${removed}\` is not supported. Declare input schemas under \`validate\` and status responses under \`responses\`.`,
       )
     }
   }
-  const request = definition.request
-  if (request === undefined) return
-  if (typeof request !== 'object' || request === null || Array.isArray(request)) {
-    throw new TypeError('Endpoint contract `request` must be an object.')
+  const validate = definition.validate
+  if (validate === undefined) return
+  if (typeof validate !== 'object' || validate === null || Array.isArray(validate)) {
+    throw new TypeError('Endpoint contract `validate` must be an object.')
   }
   const allowed = new Set(
-    requestLocation === 'single'
+    definitionLocation === 'single'
       ? ['params', 'query', 'headers', 'body']
-      : requestLocation === 'shared'
+      : definitionLocation === 'shared'
         ? ['params']
         : ['query', 'headers', 'body'],
   )
-  const unknown = Object.keys(request).find((key) => !allowed.has(key))
-  if (unknown) {
+  const unknown = Object.keys(validate).find((key) => !allowed.has(key))
+  if (unknown === 'response' || unknown === 'responses') {
     throw new TypeError(
-      `Endpoint contract request field \`${unknown}\` is not supported in this location.`,
+      'Declare status schemas under `responses` alongside `validate` in the method handler.',
+    )
+  }
+  if (unknown !== undefined) {
+    throw new TypeError(
+      `Endpoint contract validate field \`${unknown}\` is not supported in this location.`,
     )
   }
 }

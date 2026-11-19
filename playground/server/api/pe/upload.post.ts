@@ -11,7 +11,7 @@ export default defineEndpoint({
     action: '/form-pe/upload',
     redirect: '/form-pe/upload?stored={name}&size={size}&session={session}',
   },
-  request: {
+  validate: {
     body: {
       'multipart/form-data': z.object({
         name: z.string().trim().min(1).max(80),

@@ -32,7 +32,7 @@ Add the contract and handler in one call, replacing the plain event handler:
 // server/api/users/[id].get.ts
 import { z } from 'zod'
 export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({
       id: z.coerce.number(),
     }),

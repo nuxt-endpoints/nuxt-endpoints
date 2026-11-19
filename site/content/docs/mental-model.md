@@ -15,11 +15,15 @@ Zod, Valibot, and Effect Schema definitions describe the data that crosses the H
 
 ## 3. Route paths become client calls
 
-Each endpoint route is generated onto `$endpoint('/path', { method })` calls with typed request options. A route may also declare a unique `name` for a shorter `$endpoint.getUser({ params })` alias. The alias keeps the same explicit HTTP input slots and returns the same lazy request, which can be awaited, passed to Pinia Colada, or read as a raw Web Response. Path and method remain the canonical HTTP identity.
+On Nuxt 4.6, call a concrete URL such as `/api/users/1` with `$fetch` or `useFetch`. Enable [native fetch types](/docs/client#nuxt-fetch-types) for status-aware JSON responses.
+
+Each endpoint route is also generated onto `$endpoint('/path', { method })` calls with typed request options. A route may also declare a unique `name` for a shorter `$endpoint.getUser({ params })` alias. The alias keeps the same explicit HTTP input slots and returns the same lazy request, which can be awaited, passed to Pinia Colada, or read as a raw Web Response. Path and method remain the canonical HTTP identity.
 
 ## 4. Response handling is explicit
 
-Await the request to receive a typed status union. Use `.raw()` only when code needs a low-level Web `Response`. `useEndpoint` and the Pinia Colada options keep the same status-aware data shape while omitting native headers.
+With `useFetch`, `data.value` holds the successful body. Check `error.value?.status` to narrow its error data. With `$fetch.raw` and `ignoreResponseError: true`, check `response.status` to narrow `response._data`.
+
+With `$endpoint`, await the request to receive a typed status union. Use `.raw()` only when code needs a low-level Web `Response`. `useEndpoint` and the Pinia Colada options keep the same status-aware data shape while omitting native headers.
 
 ## 5. OpenAPI is generated from the same source
 
@@ -27,4 +31,4 @@ The module can serve an OpenAPI 3.1 document without maintaining a separate rout
 
 ## 6. Server-state adapters remain optional
 
-Endpoint request objects expose ordinary query or mutation options for Pinia Colada. Colada owns cache behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and response types aligned with the server contract.
+On Nuxt 4.6 with native fetch types enabled, pass an endpoint URL to `queryOptions`, `mutationOptions`, or `infiniteQueryOptions`. These adapters also accept `$endpoint` request objects. Colada owns cache behavior while Nuxt Endpoints keeps request identity, HTTP idempotency, and response types aligned with the server contract.

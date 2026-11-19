@@ -7,7 +7,7 @@ const SerializedErrorResponse = z.object({
   rejectedAt: z.date(),
 })
 export default defineEndpoint({
-  request: {
+  validate: {
     query: z.object({ fail: z.literal('true').optional() }),
   },
   responses: { 200: SerializedResponse, 422: SerializedErrorResponse },

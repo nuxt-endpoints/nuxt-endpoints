@@ -19,7 +19,7 @@ The normal route API is one line:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: z.object({ text: z.string() }),
   },
   idempotency: true,
@@ -38,7 +38,7 @@ Method groups use the same declaration inside the relevant method:
 ```ts
 export default defineEndpoint({
   post: {
-    request: {
+    validate: {
       body: z.object({ text: z.string() }),
     },
     idempotency: true,

@@ -1,12 +1,12 @@
 ---
 title: Introduction
-description: Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one endpoint definition.
+description: Validate a Nuxt route and get status-aware response types in $fetch and useFetch.
 ---
 
-Nuxt Endpoints lets you describe an HTTP endpoint once, next to its handler, with the schema library you already use — Zod, Valibot, or Effect Schema. Everything else is derived from that single definition:
+Start with one server route. Declare its inputs and HTTP responses with Zod, Valibot, or Effect Schema. The same schemas drive validation on the server, types in your Nuxt client, and the OpenAPI document.
 
 - **Runtime validation** — `params`, `query`, `headers`, and `body` are validated before your handler runs. Handler code sees parsed schema output, so coercion and transforms are already applied.
-- **A fully typed client** — `$endpoint` and `useEndpoint` are generated from your routes. Request options, success bodies, and declared error responses are all inferred. No codegen step, no types to import.
+- **Nuxt 4.6 typed fetch** — Nuxt infers declared body and query inputs and successful responses. Enable the module’s native fetch types to narrow declared JSON error bodies by HTTP status.
 - **OpenAPI 3.1** — a document generated from the same schemas, served at `/_endpoints/schema`. There is no separate spec to maintain, so it cannot go stale.
 - **Progressive forms** — `useEndpointForm` projects native GET and POST forms from the same contract, including no-JavaScript submissions and typed enhanced results.
 
@@ -19,7 +19,7 @@ One route file declares the contract and the handler:
 import { z } from 'zod'
 export default defineEndpoint({
   summary: 'Get a user',
-  request: {
+  validate: {
     params: z.object({ id: z.coerce.number() }),
   },
   responses: {
@@ -35,17 +35,13 @@ export default defineEndpoint({
 })
 ```
 
-Every component can now call it with full inference — including typed error branches:
+With [native fetch types enabled](/docs/client#nuxt-fetch-types), a component can read the declared 404 body:
 
 ```vue
 <script setup lang="ts">
-const result = await $endpoint('/api/users/:id', {
-  method: 'get',
-  params: { id: '1' },
-})
-
-if (result.status === 404) {
-  result.body.message // typed as the 404 schema
+const { error } = await useFetch('/api/users/1')
+if (error.value?.status === 404) {
+  console.log(error.value.data?.message)
 }
 </script>
 ```
@@ -58,17 +54,10 @@ document.
 
 Adding the module changes nothing by itself. Only routes that directly default-export `defineEndpoint({...})` are affected; every other route keeps working exactly as before. See [Incremental Adoption](/docs/incremental-adoption).
 
-> Nuxt Endpoints supports Nuxt 4.5+ today and is designed to adopt the
-> route-contract primitives being developed for the Nuxt 5 generation. The
-> `$endpoint` / `useEndpoint` UX remains the stable boundary while lower-level
-> implementation moves upstream. See [Compatibility](/docs/getting-started#compatibility)
-> and follow the [Nuxt 5 integration progress](/docs/nuxt5-progress).
-
 ## Next steps
 
 - [Getting Started](/docs/getting-started) — install the module and define your first endpoint.
-- [Nuxt 5 Progress](/docs/nuxt5-progress) — follow the public integration branches and current status.
 - [Define Endpoints](/docs/endpoints) — the full contract surface: request parts, multiple responses, validation options.
-- [Generated Client](/docs/client) — everything `$endpoint` and `useEndpoint` can do.
+- [Calling endpoints](/docs/client) — status-aware `$fetch.raw`, `useFetch`, and generated clients.
 
 Curious how it works and why it is designed this way? Read the [Mental Model](/docs/mental-model) and [Why Nuxt Endpoints?](/docs/why-nuxt-endpoints), or see how it [compares to alternatives](/docs/comparison).

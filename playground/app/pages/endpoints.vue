@@ -262,7 +262,7 @@ type TryOperation = {
 }
 
 const getUserContract = `export default defineEndpoint({
-  request: {
+  validate: {
     params: z.object({ id: z.string() }),
     query: z.object({ includeAge: z.coerce.boolean().optional() }),
     headers: z.object({ 'x-client-version': z.string().min(1) }),
@@ -272,7 +272,7 @@ const getUserContract = `export default defineEndpoint({
 })`
 
 const createUserContract = `export default defineEndpoint({
-  request: {
+  validate: {
     body: z.object({
       name: z.string().min(1),
       age: z.number().int().nonnegative().optional(),
@@ -363,7 +363,7 @@ if (result.status === 201) result.body.id`,
     method: 'GET',
     path: '/api/users/search?q=ja&limit=99',
     contract: `export default defineEndpoint({
-  request: {
+  validate: {
     query: v.object({
       q: v.pipe(v.string(), v.minLength(1)),
       limit: v.optional(v.pipe(

@@ -9,7 +9,7 @@ const ErrorResponse = z.object({
 })
 export default defineEndpoint({
   name: 'getUser',
-  request: {
+  validate: {
     params: z.object({
       id: z.string(),
     }),

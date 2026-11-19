@@ -14,7 +14,7 @@ export default defineEndpoint({
     action: '/form-pe',
     redirect: '/form-pe?created={id}',
   },
-  request: {
+  validate: {
     body: {
       'application/json': UserInput,
       'application/x-www-form-urlencoded': UserFormInput,

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { defineEndpoint } from '../../../../../src/runtime'
 let executionCount = 0
 export default defineEndpoint({
-  request: {
+  validate: {
     body: {
       'multipart/form-data': z.object({
         name: z.string(),

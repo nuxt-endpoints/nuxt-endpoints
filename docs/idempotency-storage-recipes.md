@@ -249,7 +249,7 @@ export default defineEndpointRuntime({
 ```ts
 // server/api/points/grants.post.ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: GrantPointsBody,
   },
   responses: { 201: GrantPointsResult },

@@ -1,9 +1,78 @@
 ---
-title: Generated Client
-description: Call server routes by typed path and method.
+title: Calling endpoints
+description: Use Nuxt 4.6 typed fetch to read success and error bodies, or call the generated endpoint client.
 ---
 
-Nuxt Endpoints generates `$endpoint` and `#endpoints` types from discovered endpoint definitions.
+Call a JSON endpoint with Nuxt’s `$fetch` or `useFetch`. The module also generates `$endpoint` and `useEndpoint` for applications using its request objects.
+
+## Nuxt fetch types
+
+On Nuxt 4.6, enable `routeTypedFetch` and opt into `client.nativeFetch` to
+use a route's endpoint contract with Nuxt's auto-imported `$fetch` and
+`useFetch` (also available from `#imports`).
+
+```ts
+export default defineNuxtConfig({
+  modules: ['nuxt-endpoints'],
+  experimental: { routeTypedFetch: true },
+  endpoints: { client: { nativeFetch: true } },
+})
+```
+
+Nuxt infers the body, query, and successful response for each declared method,
+including methods grouped in one route file. For JSON endpoints the module
+also types request headers and links HTTP statuses to their parsed bodies.
+Dynamic URLs such as `/api/users/${id}` use Nuxt's route matching rules. When
+TypeScript can resolve the URL and method to a single endpoint contract, a
+raw call opts into receiving HTTP errors as responses:
+
+```ts
+const response = await $fetch.raw('/api/bookings', {
+  method: 'POST',
+  body: { slotId: 'slot-42' },
+  ignoreResponseError: true,
+})
+
+if (response.status === 409) {
+  console.log(response._data?.reason)
+}
+```
+
+If `/api/users/me` and `/api/users/:id` both exist, a URL built from a
+string ID could reach either route. Use the auto-imported `buildPath` to
+select the dynamic contract and keep status-aware types:
+
+```ts
+const { data, error } = await useFetch(buildPath('/api/users/:id', { params: { id } }))
+```
+
+`buildPath` encodes the parameters and returns a relative path you can also
+pass to `$fetch` or `$fetch.raw`. If `id` is `'me'`, it throws before the
+request. The check covers every registered method because the same path can
+be reused for different requests. To call the fixed route, pass
+`'/api/users/me'` directly.
+
+`useFetch` keeps the successful body in `data`. Branch on `error.value.status`
+to narrow the error body:
+
+```ts
+const { error } = await useFetch('/api/bookings', {
+  method: 'POST',
+  body: { slotId: 'slot-42' },
+})
+
+if (error.value?.status === 409) {
+  console.log(error.value.data?.reason)
+}
+```
+
+Nuxt 4.6 permits omitting the whole query option. A supplied query is checked against its schema, and the server validates each incoming request. With `ignoreResponseError: true`, check the HTTP status before reading fields from `response._data`: an undeclared status can carry an unknown body.
+
+A single `onResponse` callback also narrows the response body by status.
+Undeclared statuses have an unknown body. `error.value.data` stays unknown
+for status `500` because Nuxt can assign that status to failures without an
+HTTP response. Calls with custom parsing, a custom base URL, or `useFetch`
+transforms use Nuxt's original overloads.
 
 ## Client calls
 

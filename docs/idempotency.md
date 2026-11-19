@@ -19,7 +19,7 @@ A route opts in with serializable contract metadata:
 
 ```ts
 export default defineEndpoint({
-  request: {
+  validate: {
     body: CreatePayment,
   },
   responses: { 201: Payment },

@@ -22,7 +22,7 @@ describe('form projection compatibility', () => {
   it('accepts a contract a native form can satisfy', () => {
     const handler = defineEndpoint({
       form: { action: '/todos/new', redirect: '/todos/{id}' },
-      request: {
+      validate: {
         body: { 'application/json': Todo, 'application/x-www-form-urlencoded': TodoForm },
       },
       responses: { 201: z.object({ id: z.number() }) },
@@ -33,7 +33,7 @@ describe('form projection compatibility', () => {
   it('accepts a multipart-only contract', () => {
     defineEndpoint({
       form: { action: '/uploads' },
-      request: {
+      validate: {
         body: { 'multipart/form-data': z.object({ file: z.file() }) },
       },
       responses: { 201: z.object({ ok: z.boolean() }) },
@@ -44,7 +44,7 @@ describe('form projection compatibility', () => {
     defineEndpoint({
       post: {
         form: { action: '/todos/new', redirect: '/todos/{id}' },
-        request: {
+        validate: {
           body: { 'application/x-www-form-urlencoded': TodoForm },
         },
         responses: { 201: z.object({ id: z.number() }) },
@@ -55,7 +55,7 @@ describe('form projection compatibility', () => {
   it('accepts an explicitly selected GET form and types its query', () => {
     defineEndpoint({
       form: { action: '/search', method: 'get' },
-      request: {
+      validate: {
         query: z.object({ q: z.string(), page: z.coerce.number().optional() }),
       },
       responses: { 200: z.object({ items: z.array(z.string()) }) },
@@ -71,7 +71,7 @@ describe('form projection compatibility', () => {
   it('refuses body and redirect declarations on a GET form', () => {
     const definition = {
       form: { action: '/search', method: 'get' as const, redirect: '/done' },
-      request: {
+      validate: {
         query: z.object({ q: z.string() }),
         body: { 'application/x-www-form-urlencoded': TodoForm },
       },
@@ -87,7 +87,7 @@ describe('form projection compatibility', () => {
   it('refuses a body no browser can encode', () => {
     const definition = {
       form: { action: '/todos/new' },
-      request: {
+      validate: {
         body: { 'application/json': Todo },
       },
       responses: { 201: z.object({ id: z.number() }) },
@@ -99,7 +99,7 @@ describe('form projection compatibility', () => {
   it('refuses a single-schema body, which is JSON by definition', () => {
     const definition = {
       form: { action: '/todos/new' },
-      request: { body: Todo },
+      validate: { body: Todo },
       responses: { 201: z.object({ id: z.number() }) },
       handler: () => ({ id: 1 }),
     }
@@ -109,7 +109,7 @@ describe('form projection compatibility', () => {
   it('refuses a required request header', () => {
     const definition = {
       form: { action: '/todos/new' },
-      request: {
+      validate: {
         headers: z.object({ 'x-tenant': z.string() }),
         body: { 'application/x-www-form-urlencoded': TodoForm },
       },
@@ -124,7 +124,7 @@ describe('form projection compatibility', () => {
     // a valid request.
     defineEndpoint({
       form: { action: '/todos/new' },
-      request: {
+      validate: {
         headers: OptionalHeaders,
         body: { 'application/x-www-form-urlencoded': TodoForm },
       },
@@ -135,7 +135,7 @@ describe('form projection compatibility', () => {
   it('refuses a required query parameter', () => {
     const definition = {
       form: { action: '/todos/new' },
-      request: {
+      validate: {
         query: z.object({ list: z.string() }),
         body: { 'application/x-www-form-urlencoded': TodoForm },
       },
@@ -149,7 +149,7 @@ describe('form projection compatibility', () => {
     const definition = {
       form: { action: '/todos/new' },
       idempotency: true,
-      request: {
+      validate: {
         body: { 'application/x-www-form-urlencoded': TodoForm },
       },
       responses: { 201: z.object({ id: z.number() }) },
@@ -215,33 +215,33 @@ describe('which rule refused', () => {
         }
       >
     >().toEqualTypeOf<
-      NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on request.body - formOf() derives it from the JSON member.">
+      NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on validate.body - formOf() derives it from the JSON member.">
     >()
   })
   it('names the header rule, and only for a required header', () => {
     expectTypeOf<Constraint<undefined, typeof Todo>>().toEqualTypeOf<
-      NativeFormRefusal<'A native <form> cannot send request headers, so request.headers cannot require any.'>
+      NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
     >()
     expectTypeOf<Constraint<undefined, typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
     // The GET branch carries its own copy of this refusal, so it is pinned on
     // its own: a reword or a broken branch on one side must fail a test.
     expectTypeOf<GetConstraint<typeof Todo, typeof Todo>>().toEqualTypeOf<
-      NativeFormRefusal<'A native <form> cannot send request headers, so request.headers cannot require any.'>
+      NativeFormRefusal<'A native <form> cannot send request headers, so validate.headers cannot require any.'>
     >()
     expectTypeOf<GetConstraint<typeof Todo, typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
   })
   it('names the query rule, and only for a required parameter', () => {
     expectTypeOf<Constraint<typeof Todo>>().toEqualTypeOf<
-      NativeFormRefusal<'A POST form reaches the endpoint with no query string, so request.query cannot require any.'>
+      NativeFormRefusal<'A POST form reaches the endpoint with no query string, so validate.query cannot require any.'>
     >()
     expectTypeOf<Constraint<typeof OptionalHeaders>>().toEqualTypeOf<unknown>()
   })
   it('requires a query contract and no body for GET', () => {
     expectTypeOf<GetConstraint<undefined>>().toEqualTypeOf<
-      NativeFormRefusal<'A GET form needs request.query to declare its fields.'>
+      NativeFormRefusal<'A GET form needs validate.query to declare its fields.'>
     >()
     expectTypeOf<GetConstraint<typeof Todo, undefined, FormBody>>().toEqualTypeOf<
-      NativeFormRefusal<'A GET form sends fields in the query string, so request.body must be omitted.'>
+      NativeFormRefusal<'A GET form sends fields in the query string, so validate.body must be omitted.'>
     >()
   })
   it('names the idempotency rule', () => {
@@ -286,7 +286,7 @@ describe('which rule refused', () => {
         }
       >
     >().toEqualTypeOf<
-      NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on request.body - formOf() derives it from the JSON member.">
+      NativeFormRefusal<"A native <form> can only send 'application/x-www-form-urlencoded' or 'multipart/form-data'. Declare one on validate.body - formOf() derives it from the JSON member.">
     >()
   })
 })
