@@ -24,7 +24,7 @@ try {
   await mkdir(join(smokeRoot, 'server/api'), { recursive: true })
   await mkdir(join(smokeRoot, 'server/endpoints'), { recursive: true })
 
-  await writeFile(join(smokeRoot, '.node-version'), '22.19.0\n')
+  await writeFile(join(smokeRoot, '.node-version'), `${process.versions.node}\n`)
   await writeFile(
     join(smokeRoot, 'pnpm-workspace.yaml'),
     `allowBuilds:
