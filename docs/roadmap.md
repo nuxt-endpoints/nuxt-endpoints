@@ -29,17 +29,12 @@ Compatibility is a design constraint, not an absolute promise. If an upstream
 change makes a public adjustment unavoidable, ship it as an explicit migration
 instead of silently changing semantics.
 
-## Current branches
+## Development and prototype history
 
-| Branch  | Purpose                                                                 |
-| ------- | ----------------------------------------------------------------------- |
-| `main`  | Published Nuxt 4.5+ line using Nitro 2 and H3 1 compatibility adapters  |
-| `nuxt5` | Integration prototype against the H3/Nitro/fetchdts route-contract work |
-
-The two branches keep the same mainstream application-facing API, including
-progressive enhancement. Explicit `HEAD` / `OPTIONS` / `CONNECT` / `TRACE`
-authoring remains a Nuxt 5 platform capability; other differences belong
-behind the platform adapter and build-time metadata boundary.
+`main` is the published Nuxt 4.5+ line using Nitro 2 and H3 1 compatibility
+adapters. The [archived Nuxt 5 prototype](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/archive/nuxt5-prototype)
+records the experimental integration with the H3, Nitro, and fetchdts forks.
+Nuxt 4.7 provides an experimental Nitro 3 setup for further compatibility work.
 
 ## Implemented
 
@@ -121,8 +116,8 @@ contain.
    event.
 2. Turn the Nitro route-contract prototype into a small reviewable upstream
    proposal.
-3. Keep `main` and `nuxt5` API fixtures identical and isolate only platform
-   integration differences.
+3. Verify the existing API fixtures on Nuxt 4.7 with experimental Nitro 3 and
+   isolate platform integration differences.
 4. Add released Nuxt 5 packages to the support matrix once the required public
    integration points stabilize.
 5. Continue compatibility, storage-conformance, and OpenAPI edge-case testing.

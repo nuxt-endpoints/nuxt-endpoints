@@ -3,7 +3,7 @@
 This walkthrough uses cursor pagination on both Nuxt 4 and the Nuxt 5
 prototype. The API is available in the published package from v0.9.0 and uses
 the function-based `#endpoints/colada` adapters. Nuxt 5 additionally requires
-the pinned prototype setup in the `nuxt5` branch README.
+the pinned setup in the [archived prototype README](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/archive/nuxt5-prototype#readme).
 
 ## Run the existing demo
 
