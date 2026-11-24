@@ -9,7 +9,7 @@ Typed APIs, generated clients, and OpenAPI for Nuxt server routes — from one e
 
 - [📖 Documentation](https://nuxt-endpoints.github.io/nuxt-endpoints/)
 - [🎮 Browser type playground](https://nuxt-endpoints.github.io/nuxt-endpoints/playground)
-- [🧪 Nuxt 5 integration progress](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
+- [🧪 Nuxt 5 prototype archive](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
 
 > Nuxt 4 today, designed for the Nuxt 5 generation. Nuxt Endpoints provides the
 > `$endpoint` / `useEndpoint` experience now and will adopt H3, Nitro, and Nuxt
@@ -126,8 +126,8 @@ Upstream APIs are still evolving, so an absolutely change-free migration cannot
 be promised. Compatibility at the Nuxt Endpoints boundary is nevertheless a
 design constraint, and any unavoidable change will be documented as a migration.
 
-The work is public: follow the [Nuxt 5 integration progress](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
-for the Nuxt Endpoints branch and the matching H3, Nitro, and fetchdts forks.
+The [Nuxt 5 prototype archive](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/nuxt5-progress)
+preserves the September 2026 experiment and links to its H3, Nitro, and fetchdts forks.
 
 Module options (OpenAPI route and optional client methods) are configured under `endpoints` in `nuxt.config.ts` — see [Getting Started](https://nuxt-endpoints.github.io/nuxt-endpoints/docs/getting-started).
 

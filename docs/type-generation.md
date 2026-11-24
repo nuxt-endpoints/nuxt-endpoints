@@ -70,9 +70,9 @@ route contract. Response body/header schema traversal defaults to development;
 `always` and `never` override that without changing generated types or the
 declared-status check.
 
-## Nuxt 5 prototype branch
+## Archived Nuxt 5 prototype
 
-The `nuxt5` branch verifies a smaller integration:
+The [September 2026 prototype](https://github.com/nuxt-endpoints/nuxt-endpoints/tree/archive/nuxt5-prototype) verified a smaller integration:
 
 1. H3 owns the canonical route definition.
 2. Nitro extracts the contract and exposes it through a build-time provider.
