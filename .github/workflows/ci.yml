@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         node-version:
-          - 22.19.0
+          - 22.22.3
           - 22
 
     steps:
@@ -46,15 +46,15 @@ jobs:
         run: vp run check
 
       - name: Install Chromium for browser E2E
-        if: matrix.node-version == '22.19.0'
+        if: matrix.node-version == '22.22.3'
         run: vp run test:e2e:browser:install
 
       - name: Browser E2E
-        if: matrix.node-version == '22.19.0'
+        if: matrix.node-version == '22.22.3'
         run: vp run test:e2e:browser 2>&1 | tee browser-e2e.log
 
       - name: Upload Browser E2E log
-        if: always() && matrix.node-version == '22.19.0'
+        if: always() && matrix.node-version == '22.22.3'
         uses: actions/upload-artifact@v7
         with:
           name: browser-e2e-node-${{ matrix.node-version }}
@@ -65,9 +65,15 @@ jobs:
         run: vp run build
 
   native-fetch:
-    name: Native fetch / Nuxt 4.6.4
+    name: Native fetch / Nuxt ${{ matrix.nuxt-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        nuxt-version:
+          - '4.6.4'
+          - '4.7.0'
     steps:
       - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1
@@ -75,7 +81,7 @@ jobs:
           node-version: 24
           run-install: false
       - run: vp install --frozen-lockfile
-      - run: vp add -D nuxt@4.6.4
+      - run: vp add -D 'nuxt@${{ matrix.nuxt-version }}'
       - run: vp run test:fixture-types
       - run: vp run test:e2e:browser:install
       - run: NUXT_ENDPOINTS_NATIVE_E2E=1 vp exec vitest run test/integration/native-fetch.test.ts
@@ -92,7 +98,7 @@ jobs:
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 22.19.0
+          node-version: 22.22.3
           cache: true
           run-install: false
 
@@ -109,9 +115,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nuxt-version:
-          - '4.5.0'
-          - '^4.5.0'
+        include:
+          - nuxt-version: '4.5.0'
+            node-version: 22.19.0
+          - nuxt-version: '^4.5.0'
+            node-version: 22.22.3
 
     steps:
       - name: Checkout
@@ -120,7 +128,7 @@ jobs:
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 22.19.0
+          node-version: 22.22.3
           cache: true
           run-install: false
 
@@ -131,4 +139,6 @@ jobs:
         run: vp pm pack --out /tmp/nuxt-endpoints.tgz
 
       - name: Test packed artifact
-        run: vp run test:package /tmp/nuxt-endpoints.tgz '${{ matrix.nuxt-version }}'
+        run: |
+          vp env install 'node@${{ matrix.node-version }}'
+          vp env exec --node '${{ matrix.node-version }}' node scripts/smoke-packed-package.mjs /tmp/nuxt-endpoints.tgz '${{ matrix.nuxt-version }}'

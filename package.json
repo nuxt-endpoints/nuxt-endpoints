@@ -97,6 +97,7 @@
     "@iconify-json/simple-icons": "^1.2.86",
     "@nagi-labs/eslint-plugin-nagi-css": "^0.3.0",
     "@nuxt/content": "^3.14.0",
+    "@nuxt/devtools": "3.4.4",
     "@nuxt/eslint": "^1.17.0",
     "@nuxt/icon": "^2.5.1",
     "@nuxt/module-builder": "^1.0.2",
@@ -111,7 +112,7 @@
     "codemirror": "^6.0.2",
     "effect": "^3.21.3",
     "eslint": "^10.9.1",
-    "nuxt": "^4.5.0",
+    "nuxt": "^4.7.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
     "oxlint-tsgolint": "^7.0.2001",
@@ -121,7 +122,7 @@
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "valibot": "^1.4.1",
     "vitest": "^2.1.9",
-    "vue": "^3.5.42",
+    "vue": "^3.5.46",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
