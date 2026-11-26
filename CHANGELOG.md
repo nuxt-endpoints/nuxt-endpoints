@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 - 2026-11-26
 
 - Support the experimental Nitro 3 server on Nuxt 4.7 with Nuxt's default
   `nitroLegacy` compatibility layer. Nuxt Endpoints follows the server Nuxt
