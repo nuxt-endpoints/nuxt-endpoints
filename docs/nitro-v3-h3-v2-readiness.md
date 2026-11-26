@@ -1,6 +1,8 @@
 # Nitro v3 and H3 v2 Readiness
 
-Status: maintainer migration note; this is not a Nitro v3 or H3 v2 compatibility claim.
+Status: historical maintainer notes on a native Nitro 3 and H3 2 migration.
+For current support with Nuxt's compatibility layer, see the
+[compatibility guide](../site/content/docs/getting-started.md#compatibility).
 
 > This document preserves a dated package/API measurement. Its adapter tables
 > are evidence, not the current public authoring guide. The current product
@@ -25,11 +27,12 @@ The code this document describes is `src/runtime/platform/` — its
 [README](../src/runtime/platform/README.md) maps the files, grades what core
 is expected to absorb, and links back here for the per-call tables.
 
-## Current support boundary
+## Platform baseline
 
-The current package baseline is Nitro 2 and H3 1. The `nitropack` dependency is
-intentionally limited to `^2.10.0` until the runtime behavior described below
-has been verified against Nitro 3.
+Nuxt Endpoints uses Nitro 2 and H3 1 as its package baseline. On Nuxt 4.7,
+Nuxt's `nitroLegacy` layer provides the legacy server APIs when the app selects
+Nitro 3. The tables below describe work towards using native Nitro 3 and H3 2
+APIs directly.
 
 The preparation already in the codebase is intended to keep the endpoint API
 stable while version-sensitive Nitro and H3 integration is replaced behind

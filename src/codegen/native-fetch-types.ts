@@ -194,11 +194,9 @@ type NativeResult<Path extends NativePath, Method extends HttpMethod> = Contract
 
 type QueryInputs<Path extends NativePath> = Pick<TypedFetchOptions<Path, 'get'>, 'query' | 'headers'>
 type SchemaInputs<Path extends NativePath> = Exclude<EndpointClientOptions<MatchedRoute<Path, 'get'>['definition']>, void>
-type RequiredQueryFields<Input> = {
-  [Key in Extract<keyof Input, 'query' | 'headers'>]: {} extends NonNullable<Input[Key]> ? never : Key
-}[Extract<keyof Input, 'query' | 'headers'>]
-type ColadaQueryInputs<Path extends NativePath> = QueryInputs<Path> &
-  Required<Pick<QueryInputs<Path>, RequiredQueryFields<SchemaInputs<Path>>>>
+type ColadaQueryFields<Path extends NativePath> = Extract<keyof SchemaInputs<Path>, 'query' | 'headers'>
+type ColadaQueryInputs<Path extends NativePath> = Omit<QueryInputs<Path>, ColadaQueryFields<Path>> &
+  Pick<SchemaInputs<Path>, ColadaQueryFields<Path>>
 type ColadaQueryArgs<Path extends NativePath> = {} extends ColadaQueryInputs<Path>
   ? [options?: ColadaQueryInputs<Path>] : [options: ColadaQueryInputs<Path>]
 

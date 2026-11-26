@@ -183,10 +183,9 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       expect(html).toContain('Rejected with 400')
       // The page mapped the original Zod issue, including fields beyond
       // path/message/code. This is the SSR/native half of resolveMessage.
-      // Zod's issue details differ slightly between the versions available on
-      // the two support lines; the code, path and server message are stable.
+      // The custom message does not depend on Zod's bundled locale.
       expect(html).toContain('[too_small] name')
-      expect(html).toContain('expected string to have')
+      expect(html).toContain('Name cannot be blank')
       // The value the user typed is redisplayed.
       expect(html).toContain('value="36"')
     })

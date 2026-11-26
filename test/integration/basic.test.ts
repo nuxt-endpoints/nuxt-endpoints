@@ -558,7 +558,7 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       const buildDir = getBuildDir(useTestContext)
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
       const endpointClient = await readFile(join(buildDir, 'endpoints.ts'), 'utf8')
-      const nitroRoutes = await readFile(join(buildDir, 'types/nitro-routes.d.ts'), 'utf8')
+      const nitro3 = usesNitro3(useTestContext().nuxt?.options)
 
       expect(endpointTypes).toContain("path: '/api/users/:id'")
       expect(endpointTypes).toContain("method: 'get'")
@@ -578,8 +578,17 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
         'EndpointMappedClient<EndpointRouteMap, EndpointClientFeatures>',
       )
       expect(endpointTypes).toContain('raw: true')
-      expect(nitroRoutes).toContain('interface InternalApi')
-      expect(nitroRoutes).toContain("'/api/users/:id'")
+      const routeTypes = await readFile(
+        join(buildDir, nitro3 ? 'server-routes.d.ts' : 'types/nitro-routes.d.ts'),
+        'utf8',
+      )
+      if (nitro3) {
+        expect(routeTypes).toContain('interface GeneratedServerRoutes')
+        expect(routeTypes).toContain('server/api/users/[id].get')
+      } else {
+        expect(routeTypes).toContain('interface InternalApi')
+        expect(routeTypes).toContain("'/api/users/:id'")
+      }
     })
 
     it('uses endpoint request Query adapters without generated Query factories', async () => {
@@ -591,22 +600,24 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
       await expect(access(join(buildDir, 'types/endpoints-query.d.ts'))).rejects.toThrow()
     })
 
-    it('agrees with the generated Nitro InternalApi for every route', async () => {
+    it('agrees with the generated server types for every route', async () => {
       const buildDir = getBuildDir(useTestContext)
+      const nitro3 = usesNitro3(useTestContext().nuxt?.options)
       const tsconfigPath = join(buildDir, 'endpoints-typecheck.json')
       const internalApiAgreementPath = join(buildDir, 'internal-api-agreement.ts')
       const nuxtRoot = dirname(require.resolve('nuxt/package.json'))
+      const resolveNuxtDependency = createRequire(join(nuxtRoot, 'package.json')).resolve
       const endpointTypes = await readFile(join(buildDir, 'types/endpoints.d.ts'), 'utf8')
       await writeFile(
         internalApiAgreementPath,
-        generateInternalApiAgreementTypecheck(endpointTypes),
+        generateServerTypeAgreement(endpointTypes, nitro3),
         'utf8',
       )
       // Deliberately without `typecheck.ts`: `scripts/typecheck-fixture.mjs`
       // compiles it against the same generated types, and both run in
       // `pnpm check`, so including it here was the same tsc pass twice. What is
-      // only provable with a real Nitro build stays - the generated
-      // `InternalApi` this agreement file compares against.
+      // only provable with a real build stays: the generated Nuxt or Nitro
+      // route types this agreement file compares against.
       const generatedTypeFiles = await existingFiles([
         join(buildDir, 'types/imports.d.ts'),
         join(buildDir, 'types/nitro-routes.d.ts'),
@@ -623,8 +634,16 @@ if (process.env.NUXT_ENDPOINTS_E2E === '1') {
           skipLibCheck: true,
           types: ['node'],
           paths: {
-            '#app/composables/asyncData': [join(nuxtRoot, 'dist/app/composables/asyncData.d.ts')],
+            '#app/*': [join(nuxtRoot, 'dist/app/*')],
             '#endpoints': ['./types/endpoints.d.ts'],
+            ...(nitro3
+              ? {
+                  '@nuxt/schema': [resolveNuxtDependency('@nuxt/schema')],
+                  '@nuxt/nitro-v3-server/request-types': [
+                    resolveNuxtDependency('@nuxt/nitro-v3-server/request-types'),
+                  ],
+                }
+              : {}),
           },
         },
         files: generatedTypeFiles,
@@ -708,7 +727,11 @@ function getBuildDir(useTestContext: () => { nuxt?: { options: { buildDir?: stri
   return buildDir
 }
 
-function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
+function usesNitro3(options: object | undefined): boolean {
+  return options !== undefined && '_nitroMajor' in options && options._nitroMajor === 3
+}
+
+function generateServerTypeAgreement(endpointTypes: string, nitro3: boolean): string {
   // Each indexed method entry is one line. A method argument after `~routeDef` marks
   // the multi-method form. Nitro 2 types a method-suffix-free route file under
   // `InternalApi[path]['default']`, so those paths are compared as the union
@@ -723,7 +746,7 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
     })
     .filter((route) => route.path !== undefined && route.method !== undefined)
   if (routes.length === 0) {
-    throw new Error('No generated endpoint routes were available for InternalApi comparison.')
+    throw new Error('No generated endpoint routes were available for server type comparison.')
   }
 
   const groupMethodsByPath = new Map<string, string[]>()
@@ -734,11 +757,15 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
     groupMethodsByPath.set(route.path, methods)
   }
 
+  const serverResponse = (path: string, method: string) =>
+    nitro3
+      ? `ServerResponse<${JSON.stringify(path.replace(/:[^/]+/g, 'example'))}, ${JSON.stringify(method.toUpperCase())}>`
+      : `InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]`
   const singleAssertions = routes
     .filter((route) => !route.group)
     .map(
       ({ path, method }, index) =>
-        `type RouteAgreement${index} = Assert<Agrees<SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>, InternalApi[${JSON.stringify(path)}][${JSON.stringify(method)}]>>`,
+        `type RouteAgreement${index} = Assert<Agrees<SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>, ${serverResponse(path, method)}>>`,
     )
   const groupAssertions = Array.from(groupMethodsByPath, ([path, methods], index) => {
     const union = methods
@@ -747,12 +774,12 @@ function generateInternalApiAgreementTypecheck(endpointTypes: string): string {
           `SuccessBody<$EndpointPathResponse<${JSON.stringify(path)}, ${JSON.stringify(method)}>>`,
       )
       .join(' | ')
-    return `type GroupRouteAgreement${index} = Assert<Agrees<${union}, InternalApi[${JSON.stringify(path)}]['default']>>`
+    return `type GroupRouteAgreement${index} = Assert<Agrees<${union}, ${serverResponse(path, nitro3 ? 'get' : 'default')}>>`
   })
   const assertions = [...singleAssertions, ...groupAssertions].join('\n')
 
   return `import type { $EndpointPathResponse } from '#endpoints'
-import type { InternalApi } from 'nitropack/types'
+${nitro3 ? "import type { Response as ServerResponse } from './server-routes'" : "import type { InternalApi } from 'nitropack/types'"}
 
 // Mutual structural assignability is the contract here. Generated route
 // helpers intentionally retain conditional aliases around the same concrete

@@ -108,6 +108,31 @@ jobs:
       - name: Generate site
         run: vp run site:generate
 
+  nitro3:
+    name: Nitro 3 / Nuxt 4.7
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NITRO_VERSION: 3.0.261103-rc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 22.22.3
+          run-install: false
+      - run: vp install --frozen-lockfile
+      - name: Enable Nitro 3 in the integration fixtures
+        run: |
+          vp add -D "nitro@$NITRO_VERSION"
+          for fixture in playground test/fixtures/basic test/fixtures/native-fetch test/fixtures/query-auto; do
+            printf '{"private":true,"type":"module","dependencies":{"nitro":"%s"}}\n' "$NITRO_VERSION" > "$fixture/package.json"
+          done
+      - run: vp run test:fixture-types
+      - run: vp run test:e2e:browser:install
+      - run: NUXT_ENDPOINTS_NATIVE_E2E=1 vp run test:e2e:browser
+      - run: vp pm pack --out /tmp/nuxt-endpoints-nitro3.tgz
+      - run: vp run test:package /tmp/nuxt-endpoints-nitro3.tgz 4.7.0 "$NITRO_VERSION"
+
   package-smoke:
     name: Packed package / Nuxt ${{ matrix.nuxt-version }}
     runs-on: ubuntu-latest
