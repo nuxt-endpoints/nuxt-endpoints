@@ -298,7 +298,8 @@ type EndpointRouteEventHandler<Definition, Return> = ((
     RouteSchemaInput<ValidationSchemaOf<Definition, 'body'>>,
     RouteSchemaInput<
       ApplyPaginationQuery<ValidationSchemaOf<Definition, 'query'>, PaginationOf<Definition>>
-    >
+    >,
+    RouteSchemaInput<ValidationSchemaOf<Definition, 'headers'>>
   >,
 ) => Promise<Return>) & {
   readonly '~routeDef': NormalizeRouteAuthoringDefinition<Definition>
@@ -307,7 +308,8 @@ type EndpointRouteEventHandler<Definition, Return> = ((
 export type NativeGroupHandler<Definition, Method extends RouteMethodKeys<Definition>> = (
   event: RuntimeRouteEvent<
     RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['body']>,
-    RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['query']>
+    RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['query']>,
+    RouteSchemaInput<ResolvedEndpointDefinition<Definition, Method>['headers']>
   >,
 ) => Promise<
   EndpointHandlerSuccessBody<

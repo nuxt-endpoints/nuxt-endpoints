@@ -9,6 +9,8 @@ In a few minutes you will have a Nuxt route that validates its input at runtime,
 
 The examples below use the development version of Nuxt Endpoints with Nuxt 4.6, Nitro 2, and H3 1. Nuxt’s experimental route-typed fetch checks declared body and query inputs and infers successful responses. The module adds request header types and associates each declared HTTP status with its JSON body. On Nuxt 4.5, use the generated `$endpoint` and `useEndpoint` clients.
 
+On Nuxt 4.7, you can also use the [experimental Nitro 3 setup](https://nuxt.com/docs/4.x/getting-started/upgrade#testing-nitro-v3). Add `nitro` to your app’s dependencies and keep Nuxt’s default `nitroLegacy` compatibility layer enabled. Nuxt Endpoints follows the Nitro version Nuxt selects for the app. The tested Nitro 3 version is `3.0.261103-rc`.
+
 ## Install
 
 The Nuxt CLI installs the published module. The `validate` syntax and `client.nativeFetch` examples on this page require a build containing those changes.

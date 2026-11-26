@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Support the experimental Nitro 3 server on Nuxt 4.7 with Nuxt's default
+  `nitroLegacy` compatibility layer. Nuxt Endpoints follows the server Nuxt
+  selects and supports generated clients, native fetch, OpenAPI, and progressive
+  forms on Nitro 2 and Nitro 3.
+
 ## 0.13.0 - 2026-11-19
 
 - Add opt-in status-aware types for Nuxt 4.6 native fetch. Enable

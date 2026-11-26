@@ -195,6 +195,8 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     const runtimeFile = resolve(nuxt.options.buildDir, `${moduleName}.ts`)
     const resolvedOptions = resolveModuleOptions(options, nuxt.options.dev)
     const logger = useLogger('nuxt-endpoints')
+    // Nuxt resolves this for the app, including workspace and layer configuration.
+    const nitro3 = '_nitroMajor' in nuxt.options && nuxt.options._nitroMajor === 3
     const [major, minor] = getNuxtVersion(nuxt).split('.').map(Number)
     const nativeFetch =
       options.client?.nativeFetch === true &&
@@ -323,7 +325,7 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     })
 
     const hook = nuxt.hook as unknown as EndpointsNuxtHook
-    hook('nitro:init', async (nitro) => {
+    hook('nitro:init', (nitro) => {
       if (resolvedOptions.openApi.enabled) {
         assertOpenApiRoutesDoNotOverlap(nitro, resolvedOptions.openApi.path, (message) =>
           logger.warn(message),
@@ -432,8 +434,19 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
         )
       }
 
-      await generateArtifacts()
-      nitro.hooks.hook('types:extend', generateArtifacts)
+      // Generate after the CLI clears the build directory and before Nuxt
+      // reads the server routes for its own templates.
+      nuxt.hooks.hookOnce('app:templates', async () => {
+        await generateArtifacts()
+        if (nitro3 && nuxt.options.dev) nuxt.hook('app:templates', generateArtifacts)
+      })
+      if (!nitro3 && nuxt.options.dev) {
+        // Nitro 2 can rescan routes without regenerating the app templates.
+        // Register here so projections refresh before Nuxt reads the new types.
+        nitro.hooks.hook('types:extend', () => {
+          if (endpointHandlerManifest) return generateArtifacts()
+        })
+      }
     })
 
     nuxt.options.build.transpile.push(resolve('./runtime'))
@@ -441,7 +454,11 @@ const nuxtEndpointsModule: NuxtEndpointsModule = defineNuxtModule<EndpointsModul
     addServerPlugin(resolve('./runtime/form-plugin'))
     // With no route declaring `form`, the generated map is empty and this
     // middleware returns after one pathname lookup.
-    addServerHandler({ middleware: true, handler: resolve('./runtime/form-bridge') })
+    addServerHandler({
+      ...(nitro3 ? { route: '/**' } : {}),
+      middleware: true,
+      handler: resolve('./runtime/form-bridge'),
+    })
     if (resolvedOptions.openApi.enabled) {
       addServerHandler({
         route: resolvedOptions.openApi.path,

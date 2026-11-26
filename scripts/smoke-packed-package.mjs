@@ -7,10 +7,10 @@ import { pathToFileURL } from 'node:url'
 
 const arguments_ = process.argv.slice(2)
 if (arguments_[0] === '--') arguments_.shift()
-const [tarballArgument, nuxtVersion = '4.5.0'] = arguments_
+const [tarballArgument, nuxtVersion = '4.5.0', nitroVersion] = arguments_
 
 if (!tarballArgument) {
-  throw new Error('Usage: smoke-packed-package.mjs <package.tgz> [nuxt-version]')
+  throw new Error('Usage: smoke-packed-package.mjs <package.tgz> [nuxt-version] [nitro-version]')
 }
 
 const tarballPath = isAbsolute(tarballArgument)
@@ -42,6 +42,7 @@ try {
         packageManager: 'pnpm@11.8.0',
         dependencies: {
           nuxt: nuxtVersion,
+          ...(nitroVersion ? { nitro: nitroVersion } : {}),
           'nuxt-endpoints': pathToFileURL(tarballPath).href,
           zod: '^4.4.3',
         },
@@ -141,7 +142,10 @@ export default defineEndpoint({
   run('vp', ['exec', 'nuxi', 'prepare'], smokeRoot)
 
   const endpointTypes = await readFile(join(smokeRoot, '.nuxt/types/endpoints.d.ts'), 'utf8')
-  const serverImports = await readFile(join(smokeRoot, '.nuxt/types/nitro-imports.d.ts'), 'utf8')
+  const serverImports = await readFile(
+    join(smokeRoot, '.nuxt/types', nitroVersion ? 'server-imports.d.ts' : 'nitro-imports.d.ts'),
+    'utf8',
+  )
 
   assertIncludes(endpointTypes, "path: '/api/echo'", 'generated endpoint path')
   assertIncludes(
@@ -178,7 +182,8 @@ export default defineEndpoint({
     applicationOutput += chunk
   })
 
-  const schema = await fetchSchema(`http://127.0.0.1:${port}/_endpoints/schema`)
+  const baseURL = `http://127.0.0.1:${port}`
+  const schema = await fetchSchema(`${baseURL}/_endpoints/schema`)
   const file =
     schema.paths['/api/upload'].post.requestBody.content['multipart/form-data'].schema.properties
       .file
@@ -194,7 +199,17 @@ export default defineEndpoint({
     'unavailable',
     'application response OpenAPI schema',
   )
-  console.log(`Packed artifact smoke test passed with Nuxt ${nuxtVersion}.`)
+  const echo = await fetch(`${baseURL}/api/echo`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'idempotency-key': 'packed-smoke' },
+    body: JSON.stringify({ message: 'hello' }),
+  })
+  assertEqual(echo.status, 201, 'endpoint response status')
+  assertEqual((await echo.json()).message, 'hello', 'endpoint response body')
+  const platform = nitroVersion
+    ? `Nuxt ${nuxtVersion} and Nitro ${nitroVersion}`
+    : `Nuxt ${nuxtVersion}`
+  console.log(`Packed artifact smoke test passed with ${platform}.`)
 } finally {
   await stopApplication(application)
   await rm(smokeRoot, { recursive: true, force: true })

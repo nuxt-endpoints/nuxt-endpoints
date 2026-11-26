@@ -64,7 +64,7 @@ const captureFetcher = () => {
     // Nuxt 4's local request fetcher does not expose ofetch's raw helper.
     // Recreate the same request forwarding on the global server $fetch so
     // status-aware calls can retain status and headers.
-    return $fetch.create({ headers: useRequestHeaders() }) as EndpointFetcherRuntime
+    return $fetch.create({ headers: useRequestHeaders() }) as unknown as EndpointFetcherRuntime
   } catch {
     return undefined
   }
